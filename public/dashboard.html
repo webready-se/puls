@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Puls</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f8fafc; --card: #fff; --border: #e2e8f0;
+    --text: #1e293b; --muted: #64748b; --light: #94a3b8;
+    --accent: #6366f1; --accent2: #8b5cf6; --accent-light: #818cf8;
+    --green: #059669; --green-bg: #ecfdf5;
+    --red: #dc2626; --red-bg: #fef2f2;
+    --radius: 14px;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+  }
+
+  /* Header */
+  .header {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 14px 28px; display: flex; align-items: center;
+    justify-content: space-between; position: sticky; top: 0; z-index: 10;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+  }
+  .logo-icon svg { width: 18px; height: 18px; }
+  .logo-text { font-weight: 700; font-size: 18px; color: var(--text); }
+  .live-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--green); font-weight: 600;
+    background: var(--green-bg); padding: 4px 12px; border-radius: 20px;
+    margin-left: 12px;
+  }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .site-select, .logout-btn {
+    padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border);
+    font-size: 13px; color: var(--text); background: var(--card);
+    cursor: pointer; font-weight: 500; outline: none;
+  }
+  .site-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .logout-btn { color: var(--muted); text-decoration: none; }
+  .logout-btn:hover { color: var(--red); border-color: var(--red); }
+  .period-group { display: flex; background: #f1f5f9; border-radius: 10px; padding: 3px; }
+  .period-btn {
+    padding: 7px 14px; border-radius: 8px; border: none; font-size: 13px;
+    cursor: pointer; font-weight: 400; background: transparent;
+    color: var(--muted); transition: all 0.15s;
+  }
+  .period-btn:hover { color: var(--text); }
+  .period-btn.active {
+    background: var(--card); color: var(--text); font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  @media (max-width: 600px) {
+    .header { flex-direction: column; gap: 10px; padding: 12px 16px; align-items: stretch; }
+    .logo { justify-content: center; }
+    .controls { justify-content: center; }
+    .period-btn { padding: 7px 10px; font-size: 12px; }
+  }
+
+  /* Layout */
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 24px 24px 40px; }
+  @media (max-width: 600px) { .wrap { padding: 14px 12px 30px; } }
+
+  /* Stat cards */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  @media (max-width: 800px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 400px) { .stats { grid-template-columns: 1fr; gap: 10px; } }
+  .stat {
+    background: var(--card); border-radius: var(--radius); padding: 18px 22px;
+    border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .stat-top { display: flex; justify-content: space-between; align-items: center; }
+  .stat-label { font-size: 12px; color: var(--light); font-weight: 500; margin-bottom: 4px; }
+  .stat-value { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+  @media (max-width: 600px) { .stat-value { font-size: 22px; } }
+  .stat-icon {
+    width: 40px; height: 40px; border-radius: 10px; background: #f1f5f9;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stat-icon svg { width: 20px; height: 20px; color: var(--accent); }
+
+  /* Chart */
+  .card {
+    background: var(--card); border-radius: var(--radius); padding: 22px;
+    border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    margin-bottom: 14px;
+  }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .card-subtitle { font-size: 12px; color: var(--light); }
+  .chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 0 4px; overflow-x: auto; }
+  @media (max-width: 600px) { .chart { height: 130px; gap: 3px; } }
+  .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; min-width: 28px; }
+  .chart-val { font-size: 10px; color: var(--muted); font-weight: 600; }
+  .chart-bar {
+    width: 100%; border-radius: 6px 6px 0 0; min-height: 4px;
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-light) 100%);
+    transition: height 0.4s ease; position: relative; cursor: pointer;
+  }
+  .chart-bar:hover { filter: brightness(1.1); }
+  .chart-bar .tip {
+    display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%); background: var(--text); color: #fff;
+    padding: 6px 12px; border-radius: 8px; font-size: 11px; white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .chart-bar .tip::after {
+    content: ''; position: absolute; top: 100%; left: 50%;
+    transform: translateX(-50%); border: 5px solid transparent;
+    border-top-color: var(--text);
+  }
+  .chart-bar:hover .tip { display: block; }
+  .chart-date { font-size: 10px; color: var(--light); }
+
+  /* Grid */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) { .grid-2 { gap: 10px; margin-bottom: 10px; } }
+
+  /* Table rows */
+  .trow { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+  .trow-label {
+    width: 160px; min-width: 80px; font-size: 13px; color: #475569; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  @media (max-width: 600px) { .trow-label { width: 100px; font-size: 12px; } }
+  .trow-bar { flex: 1; height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+  .trow-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+  .trow-val { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: #475569; }
+
+  /* Donut */
+  .donut-wrap { display: flex; align-items: center; gap: 24px; margin-top: 8px; flex-wrap: wrap; }
+  .donut-legend { display: flex; flex-direction: column; gap: 6px; }
+  .donut-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .donut-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .donut-pct { color: var(--light); font-weight: 600; }
+
+  /* Snippet */
+  .snippet {
+    background: linear-gradient(135deg, #1e1b4b, #312e81);
+    border-radius: var(--radius); padding: 24px; margin-bottom: 14px;
+  }
+  .snippet h3 { color: #e0e7ff; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .snippet p { color: #a5b4fc; font-size: 12px; margin-bottom: 12px; }
+  .snippet pre {
+    background: rgba(0,0,0,0.3); border-radius: 10px; padding: 16px;
+    font-size: 12px; line-height: 1.7; color: #c7d2fe; overflow-x: auto;
+    word-break: break-all; white-space: pre-wrap;
+  }
+
+  /* Footer */
+  .footer { text-align: center; padding: 16px 0; font-size: 12px; color: var(--light); }
+
+  /* Empty + Loading */
+  .empty { text-align: center; padding: 80px 20px; color: var(--muted); }
+  .empty svg { width: 48px; height: 48px; color: var(--border); margin-bottom: 16px; }
+  .empty p { max-width: 360px; margin: 0 auto; }
+  .loading { text-align: center; padding: 100px 20px; color: var(--muted); }
+  .loading-spinner {
+    width: 32px; height: 32px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
+      </svg>
+    </div>
+    <span class="logo-text">Puls</span>
+    <span class="live-badge" id="live-badge" style="display:none">
+      <span class="live-dot"></span><span id="live-count">0</span> online nu
+    </span>
+  </div>
+  <div class="controls">
+    <select class="site-select" id="site-select">
+      <option value="">Alla sajter</option>
+    </select>
+    <div class="period-group" id="period-group">
+      <button class="period-btn" data-days="1">24h</button>
+      <button class="period-btn active" data-days="7">7 dagar</button>
+      <button class="period-btn" data-days="30">30 dagar</button>
+      <button class="period-btn" data-days="90">90 dagar</button>
+    </div>
+    <a href="/?logout" class="logout-btn">Logga ut</a>
+  </div>
+</div>
+
+<div class="wrap" id="app">
+  <div class="loading">
+    <div class="loading-spinner"></div>
+    Laddar statistik...
+  </div>
+</div>
+
+<script>
+(function() {
+  // --- Config ---
+  const API = '/';
+  const COLORS = ['#6366f1','#8b5cf6','#a78bfa','#c4b5fd','#ddd6fe','#94a3b8'];
+
+  // --- State ---
+  let currentDays = 7;
+  let currentSite = '';
+  let sites = [];
+
+  // --- Elements ---
+  const app = document.getElementById('app');
+  const siteSelect = document.getElementById('site-select');
+  const periodGroup = document.getElementById('period-group');
+  const liveBadge = document.getElementById('live-badge');
+  const liveCount = document.getElementById('live-count');
+
+  // --- SVG Icons ---
+  const icons = {
+    eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+    users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>',
+    zap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>',
+    chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>',
+  };
+
+  // --- Helpers ---
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function num(n) { return Number(n || 0).toLocaleString('sv-SE'); }
+  function decode(s) { try { return decodeURIComponent(s); } catch(e) { return s; } }
+
+  function formatDay(dateStr) {
+    const dt = new Date(dateStr + 'T00:00:00');
+    return dt.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric' });
+  }
+
+  // --- Events ---
+  siteSelect.addEventListener('change', function() {
+    currentSite = this.value;
+    load(currentDays);
+  });
+
+  periodGroup.addEventListener('click', function(e) {
+    const btn = e.target.closest('.period-btn');
+    if (!btn) return;
+    periodGroup.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    load(+btn.dataset.days);
+  });
+
+  // --- Data loading ---
+  function load(days) {
+    currentDays = days;
+    let url = API + '?api&days=' + days;
+    if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+    fetch(url)
+      .then(function(r) {
+        if (r.status === 401) { location.href = '/?login'; return; }
+        return r.json();
+      })
+      .then(function(data) { if (data) render(data); })
+      .catch(function() {
+        app.innerHTML = '<div class="empty">' + icons.chart +
+          '<p>Kunde inte ladda data. Kontrollera att allt är korrekt konfigurerat.</p></div>';
+      });
+  }
+
+  // Load sites, then data
+  fetch(API + '?api&sites')
+    .then(function(r) {
+      if (r.status === 401) { location.href = '/?login'; return; }
+      return r.json();
+    })
+    .then(function(s) {
+      if (!s) return;
+      sites = s;
+      s.forEach(function(name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        siteSelect.appendChild(opt);
+      });
+      if (s.length <= 1) siteSelect.style.display = 'none';
+      load(7);
+    })
+    .catch(function() { load(7); });
+
+  // --- Render ---
+  function render(d) {
+    if (d.error) {
+      app.innerHTML = '<div class="empty"><p>' + esc(d.error) + '</p></div>';
+      return;
+    }
+
+    // Live badge
+    if (d.live > 0) {
+      liveBadge.style.display = 'inline-flex';
+      liveCount.textContent = d.live;
+    } else {
+      liveBadge.style.display = 'none';
+    }
+
+    var hasData = d.totals && +d.totals.views > 0;
+
+    if (!hasData) {
+      app.innerHTML = '<div class="empty">' + icons.chart +
+        '<p>Ingen data ännu. Lägg till tracking-scriptet nedan för att börja samla in besöksstatistik.</p></div>' +
+        renderSnippet(d.site);
+      return;
+    }
+
+    var totalViews = +d.totals.views;
+    var totalVisitors = +d.totals.visitors;
+    var pagesPerVisitor = totalVisitors > 0 ? (totalViews / totalVisitors).toFixed(1) : '—';
+
+    app.innerHTML =
+      renderStats(totalViews, totalVisitors, pagesPerVisitor, d.live) +
+      renderChart(d) +
+      '<div class="grid-2">' +
+        renderTable('Populära sidor', d.pages, 'path', 'views', '#6366f1') +
+        renderTable('Trafikkällor', d.referrers, 'source', 'visitors', '#8b5cf6') +
+      '</div>' +
+      '<div class="grid-2">' +
+        renderDonut('Webbläsare', d.browsers) +
+        renderDonut('Enheter', d.devices) +
+      '</div>' +
+      '<div class="grid-2">' +
+        renderUtm(d.utm) +
+        renderDonut('Språk', d.languages) +
+      '</div>' +
+      renderBotSection(d) +
+      renderSnippet(d.site);
+  }
+
+  function renderStats(views, visitors, pagesPerVisitor, live) {
+    return '<div class="stats">' +
+      statCard('Sidvisningar', num(views), icons.eye) +
+      statCard('Unika besökare', num(visitors), icons.users) +
+      statCard('Sidor / besökare', pagesPerVisitor, icons.layers) +
+      statCard('Live nu', num(live), icons.zap) +
+    '</div>';
+  }
+
+  function statCard(label, value, icon) {
+    return '<div class="stat"><div class="stat-top"><div>' +
+      '<div class="stat-label">' + label + '</div>' +
+      '<div class="stat-value">' + value + '</div>' +
+      '</div><div class="stat-icon">' + icon + '</div></div></div>';
+  }
+
+  function renderChart(d) {
+    if (!d.pageviews || !d.pageviews.length) return '';
+    var maxViews = Math.max.apply(null, d.pageviews.map(function(p) { return +p.views; }).concat([1]));
+    var siteName = currentSite || 'alla sajter';
+
+    var bars = '';
+    d.pageviews.forEach(function(p) {
+      var h = Math.max(4, (+p.views / maxViews) * 140);
+      var label = formatDay(p.date);
+      bars += '<div class="chart-col">' +
+        '<span class="chart-val">' + num(p.views) + '</span>' +
+        '<div class="chart-bar" style="height:' + h + 'px">' +
+          '<div class="tip">' + label + ': ' + num(p.views) + ' visningar, ' + num(p.visitors) + ' besökare</div>' +
+        '</div>' +
+        '<span class="chart-date">' + label + '</span>' +
+      '</div>';
+    });
+
+    return '<div class="card">' +
+      '<div class="card-header">' +
+        '<span class="card-title">Sidvisningar per dag</span>' +
+        '<span class="card-subtitle">' + siteName + ' — senaste ' + currentDays + ' dagarna</span>' +
+      '</div>' +
+      '<div class="chart">' + bars + '</div>' +
+    '</div>';
+  }
+
+  function renderTable(title, rows, labelKey, valKey, color) {
+    if (!rows || !rows.length) {
+      return '<div class="card"><span class="card-title">' + title + '</span>' +
+        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p></div>';
+    }
+    var max = Math.max.apply(null, rows.map(function(r) { return +r[valKey]; }));
+    var prefix = '';
+    if (labelKey === 'path' && currentSite && rows.length > 1) {
+      var parts = decode(rows[0][labelKey]).split('/');
+      for (var i = 1; i < parts.length; i++) {
+        var candidate = parts.slice(0, i + 1).join('/') + '/';
+        var base = candidate.slice(0, -1);
+        if (rows.every(function(r) { var p = decode(r[labelKey]); return p === base || p.indexOf(candidate) === 0; })) {
+          prefix = candidate;
+        } else break;
+      }
+    }
+    var html = '<div class="card"><span class="card-title">' + title + (prefix ? ' <span style="font-weight:400;color:var(--light);font-size:12px">' + esc(prefix) + '</span>' : '') + '</span><div style="margin-top:14px">';
+    rows.forEach(function(r) {
+      var pct = (+r[valKey] / max) * 100;
+      var full = decode(r[labelKey]);
+      var label = prefix ? full.substring(prefix.length) || '/' : full;
+      html += '<div class="trow">' +
+        '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<span class="trow-val">' + num(r[valKey]) + '</span>' +
+      '</div>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderDonut(title, items) {
+    if (!items || !items.length) {
+      return '<div class="card"><span class="card-title">' + title + '</span>' +
+        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p></div>';
+    }
+
+    var cum = 0;
+    var total = items.reduce(function(s, i) { return s + (+i.pct || 0); }, 0) || 1;
+    var paths = '';
+    items.forEach(function(item, idx) {
+      var start = cum;
+      var pct = +item.pct || 0;
+      cum += pct;
+      var r = 16;
+      if (pct >= total) {
+        paths += '<circle cx="18" cy="18" r="' + r + '" fill="' + COLORS[idx % COLORS.length] + '"/>';
+        return;
+      }
+      var s = (start / total) * 360 - 90;
+      var e = (cum / total) * 360 - 90;
+      var large = (pct / total) > 0.5 ? 1 : 0;
+      var x1 = 18 + r * Math.cos(s * Math.PI / 180);
+      var y1 = 18 + r * Math.sin(s * Math.PI / 180);
+      var x2 = 18 + r * Math.cos(e * Math.PI / 180);
+      var y2 = 18 + r * Math.sin(e * Math.PI / 180);
+      paths += '<path d="M18,18 L' + x1 + ',' + y1 + ' A' + r + ',' + r + ' 0 ' + large + ',1 ' + x2 + ',' + y2 + ' Z" fill="' + COLORS[idx % COLORS.length] + '"/>';
+    });
+
+    var legend = '';
+    items.forEach(function(item, idx) {
+      legend += '<div class="donut-item">' +
+        '<span class="donut-dot" style="background:' + COLORS[idx % COLORS.length] + '"></span>' +
+        esc(item.name) + ' <span class="donut-pct">' + item.pct + '%</span>' +
+      '</div>';
+    });
+
+    return '<div class="card"><span class="card-title">' + title + '</span>' +
+      '<div class="donut-wrap">' +
+        '<svg viewBox="0 0 36 36" width="96" height="96">' + paths +
+        '<circle cx="18" cy="18" r="9" fill="white"/></svg>' +
+        '<div class="donut-legend">' + legend + '</div>' +
+      '</div></div>';
+  }
+
+  function renderUtm(rows) {
+    if (!rows || !rows.length) {
+      return '<div class="card"><span class="card-title">UTM-kampanjer</span>' +
+        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p></div>';
+    }
+    var max = Math.max.apply(null, rows.map(function(r) { return +r.visitors; }));
+    var html = '<div class="card"><span class="card-title">UTM-kampanjer</span><div style="margin-top:14px">';
+    rows.forEach(function(r) {
+      var pct = (+r.visitors / max) * 100;
+      var label = esc(r.source) + (r.medium ? ' / ' + esc(r.medium) : '') + (r.campaign ? ' — ' + esc(r.campaign) : '');
+      html += '<div class="trow">' +
+        '<span class="trow-label" title="' + label + '">' + label + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#059669"></div></div>' +
+        '<span class="trow-val">' + num(r.visitors) + '</span>' +
+      '</div>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderBotSection(d) {
+    var bots = d.bots || [];
+    var cats = d.botCategories || [];
+    var pages = d.botPages || [];
+    var totalVisits = bots.reduce(function(s, b) { return s + (+b.visits); }, 0);
+
+    if (!totalVisits) {
+      return '<div class="card" style="margin-bottom:14px">' +
+        '<span class="card-title" style="font-size:16px">Botar & crawlers</span>' +
+        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen botaktivitet ännu</p></div>';
+    }
+
+    var catColors = { 'AI': '#dc2626', 'Sökmotor': '#2563eb', 'Social': '#7c3aed', 'SEO': '#d97706', 'Monitor': '#059669', 'Övrigt': '#94a3b8' };
+    var badges = '';
+    cats.forEach(function(c) {
+      var color = catColors[c.category] || catColors['Övrigt'];
+      badges += '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;background:' + color + '15;color:' + color + '">' +
+        esc(c.category) + ' <span style="opacity:0.7">' + num(c.visits) + '</span></span> ';
+    });
+
+    var html = '<div style="margin-top:28px;margin-bottom:14px;padding-top:20px;border-top:2px solid var(--border)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+        '<span style="font-size:16px;font-weight:700">Botar & crawlers</span>' +
+        '<span style="font-size:13px;color:var(--muted)">' + num(totalVisits) + ' besök totalt</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' + badges + '</div>' +
+      '<div class="grid-2">';
+
+    html += renderTable('Aktiva botar', bots, 'name', 'visits', '#dc2626');
+    html += renderTable('Mest crawlade sidor', pages, 'path', 'visits', '#2563eb');
+
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderSnippet(site) {
+    var host = location.origin;
+    return '<div class="snippet">' +
+      '<h3>Tracking-snippet</h3>' +
+      '<p>Klistra in före &lt;/body&gt; — anpassa data-site per sajt.</p>' +
+      '<p>Pixeln (img) fångar botar som inte kör JS. Sätt <strong>p=</strong> till aktuell sökväg.</p>' +
+      '<pre>&lt;script src="' + host + '/?js" data-site="min-sajt" defer&gt;&lt;/script&gt;\n' +
+      '&lt;img src="' + host + '/?pixel&amp;s=min-sajt&amp;p=/aktuell-sida" alt="" width="1" height="1"\n' +
+      '     style="position:absolute;opacity:0" /&gt;</pre>' +
+    '</div>' +
+    '<div class="footer">Puls — One file. No cookies. Full picture.</div>';
+  }
+})();
+</script>
+</body>
+</html>

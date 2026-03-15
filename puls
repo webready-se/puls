@@ -1,0 +1,172 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Puls CLI
+ *
+ * Usage:
+ *   php puls key:generate                        Generate a new APP_KEY
+ *   php puls user:add <name> [--sites=a,b]       Add a user
+ *   php puls user:remove <name>                  Remove a user
+ *   php puls user:list                           List all users
+ */
+
+$config = require __DIR__ . '/config.php';
+$command = $argv[1] ?? 'help';
+
+match ($command) {
+    'key:generate' => generateKey(),
+    'user:add'     => userAdd($config['users_file'], $argv[2] ?? null, $argv),
+    'user:remove'  => userRemove($config['users_file'], $argv[2] ?? null),
+    'user:list'    => userList($config['users_file']),
+    default        => printHelp(),
+};
+
+// =====================================================================
+// key:generate
+// =====================================================================
+
+function generateKey(): void
+{
+    $key = 'base64:' . base64_encode(random_bytes(32));
+    $envFile = __DIR__ . '/.env';
+
+    if (!file_exists($envFile)) {
+        $example = __DIR__ . '/.env.example';
+        if (file_exists($example)) {
+            copy($example, $envFile);
+        } else {
+            file_put_contents($envFile, "APP_KEY=\n");
+        }
+    }
+
+    $contents = file_get_contents($envFile);
+
+    if (preg_match('/^APP_KEY=.*$/m', $contents)) {
+        $contents = preg_replace('/^APP_KEY=.*$/m', "APP_KEY={$key}", $contents);
+    } else {
+        $contents = "APP_KEY={$key}\n" . $contents;
+    }
+
+    file_put_contents($envFile, $contents);
+    echo "APP_KEY set: {$key}\n";
+}
+
+// =====================================================================
+// user:add
+// =====================================================================
+
+function userAdd(string $file, ?string $username, array $argv): void
+{
+    if (!$username) {
+        echo "Usage: php puls user:add <username> [--sites=site1,site2]\n";
+        exit(1);
+    }
+
+    $users = loadUsers($file);
+
+    echo "Password for {$username}: ";
+    system('stty -echo');
+    $password = trim(fgets(STDIN));
+    system('stty echo');
+    echo "\n";
+
+    if (strlen($password) < 8) {
+        echo "Password must be at least 8 characters.\n";
+        exit(1);
+    }
+
+    // Parse --sites flag
+    $sites = [];
+    foreach ($argv as $arg) {
+        if (str_starts_with($arg, '--sites=')) {
+            $sites = array_filter(explode(',', substr($arg, 8)));
+        }
+    }
+
+    $users[$username] = [
+        'password' => password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]),
+        'sites' => $sites,
+    ];
+
+    saveUsers($file, $users);
+    $scope = $sites ? implode(', ', $sites) : 'alla sajter';
+    echo "User '{$username}' added (access: {$scope}).\n";
+}
+
+// =====================================================================
+// user:remove
+// =====================================================================
+
+function userRemove(string $file, ?string $username): void
+{
+    if (!$username) {
+        echo "Usage: php puls user:remove <username>\n";
+        exit(1);
+    }
+
+    $users = loadUsers($file);
+
+    if (!isset($users[$username])) {
+        echo "User '{$username}' not found.\n";
+        exit(1);
+    }
+
+    unset($users[$username]);
+    saveUsers($file, $users);
+    echo "User '{$username}' removed.\n";
+}
+
+// =====================================================================
+// user:list
+// =====================================================================
+
+function userList(string $file): void
+{
+    $users = loadUsers($file);
+
+    if (empty($users)) {
+        echo "No users configured. Run: php puls user:add <username>\n";
+        return;
+    }
+
+    echo sprintf("%-20s %s\n", 'USERNAME', 'SITES');
+    echo str_repeat('-', 50) . "\n";
+    foreach ($users as $name => $data) {
+        $sites = !empty($data['sites']) ? implode(', ', $data['sites']) : 'alla';
+        echo sprintf("%-20s %s\n", $name, $sites);
+    }
+}
+
+// =====================================================================
+// Helpers
+// =====================================================================
+
+function printHelp(): void
+{
+    echo <<<'HELP'
+    Puls CLI
+
+    Usage:
+      php puls key:generate                    Generate a new APP_KEY
+      php puls user:add <name> [--sites=a,b]   Add a user
+      php puls user:remove <name>              Remove a user
+      php puls user:list                       List all users
+
+    Options:
+      --sites    Comma-separated list of sites the user can access.
+                 Omit for access to all sites.
+
+    HELP;
+    echo "\n";
+}
+
+function loadUsers(string $file): array
+{
+    if (!file_exists($file)) return [];
+    return json_decode(file_get_contents($file), true) ?: [];
+}
+
+function saveUsers(string $file, array $users): void
+{
+    file_put_contents($file, json_encode($users, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+}

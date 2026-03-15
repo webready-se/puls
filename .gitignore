@@ -1,0 +1,4 @@
+data/
+users.json
+.env
+.DS_Store
