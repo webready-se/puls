@@ -20,24 +20,24 @@ Puls is a cookieless, lightweight analytics tool built with a single PHP file an
 
 ```bash
 # 1. Clone
-git clone <repo-url> puls
+git clone git@github.com:webready-se/puls.git
 cd puls
 
-# 2. Create your first user
-php manage-users.php add admin
+# 2. Setup
+php puls key:generate
+php puls user:add admin
 
-# 3. Point your web server to public/
-# Or for local testing:
+# 3. Run locally
 php -S localhost:8080 -t public
-
-# 4. Add tracking to your site
 ```
+
+## Add Tracking
 
 ```html
 <script src="https://your-puls-domain/?js" data-site="my-site" defer></script>
 ```
 
-## Bot Tracking (optional)
+### Bot Tracking (optional)
 
 Add a tracking pixel to catch bots that don't execute JavaScript:
 
@@ -46,35 +46,40 @@ Add a tracking pixel to catch bots that don't execute JavaScript:
      alt="" width="1" height="1" style="position:absolute;opacity:0" />
 ```
 
-## User Management
+## CLI
+
+All management goes through `php puls`:
 
 ```bash
-php manage-users.php add <username>                    # Full access
-php manage-users.php add <username> --sites=site1,site2  # Restricted access
-php manage-users.php remove <username>
-php manage-users.php list
+php puls key:generate                    # Generate APP_KEY + create .env
+php puls user:add <name>                 # Add user with full access
+php puls user:add <name> --sites=a,b     # Add user restricted to specific sites
+php puls user:remove <name>              # Remove a user
+php puls user:list                       # List all users
 ```
 
 Users with no `--sites` flag can see all sites. Restricted users only see their assigned sites.
 
 ## Configuration
 
-Edit `config.php`:
+All configuration lives in `.env` (created by `php puls key:generate` from `.env.example`):
 
-```php
-return [
-    'db_path' => __DIR__ . '/data/puls.sqlite',
-    'users_file' => __DIR__ . '/users.json',
-    'allowed_origins' => [],       // CORS: ['https://example.com']
-    'session_lifetime' => 2592000, // 30 days
-    'max_login_attempts' => 5,
-    'lockout_minutes' => 15,
-];
+```env
+APP_KEY=base64:...          # Auto-generated, used for visitor hashing
+ALLOWED_ORIGINS=            # CORS: comma-separated origins
+DB_PATH=data/puls.sqlite    # Database path (relative to project root)
+SESSION_LIFETIME=2592000    # 30 days
+MAX_LOGIN_ATTEMPTS=5
+LOCKOUT_MINUTES=15
 ```
 
 ### CORS
 
-If tracking scripts are loaded cross-origin, add the origins to `allowed_origins` in `config.php` or set the `PULS_ALLOWED_ORIGINS` environment variable (comma-separated).
+If tracking scripts are loaded cross-origin, add the origins to `ALLOWED_ORIGINS` in `.env` (comma-separated):
+
+```env
+ALLOWED_ORIGINS=https://lillabosgarden.se,https://odlingsguiden.se
+```
 
 ## Deployment
 
@@ -109,7 +114,7 @@ server {
 
 1. Upload all files via FTP/SSH
 2. Point the domain to the `public/` directory
-3. Run `php manage-users.php add admin` via SSH
+3. Run `php puls key:generate && php puls user:add admin` via SSH
 4. Done
 
 ## Data Collected
