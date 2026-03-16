@@ -23,9 +23,11 @@
 - [x] .env-baserad konfiguration
 - [x] Hälsokontroll-endpoint (`/?health`)
 - [x] Auto-detect Forge zero-deploy paths (ingen symlink behövs)
-- [x] Pest-testsvit (59 tester: unit + integration)
+- [x] Pest-testsvit (65 tester: unit + integration)
 - [x] Favicon (inline SVG)
 - [x] Live på puls.wrlabs.se med data från lillabosgarden.se
+- [x] Fullständig UTM-spårning (alla 5 parametrar: source, medium, campaign, term, content)
+- [x] Pre-push hook — tester körs automatiskt före varje push (aktiveras via `composer install`)
 
 ---
 
@@ -41,7 +43,7 @@
 - [x] **Strippa tracking query params** — fbclid, gclid, utm_* m.fl. strippas i normalize_path
 - [x] **Referrer-gruppering** — Facebook, Instagram, Twitter/X, Google etc.
 - [x] **Auto-detect Forge zero-deploy** — resolve_path() hittar sajtroten automatiskt
-- [x] **Pest-testsvit** — 59 tester (unit + integration)
+- [x] **Pest-testsvit** — 65 tester (unit + integration)
 - [x] **UTM-länkgenerator** — Inbyggd i dashboarden
 - [x] **.env-baserad konfiguration** — php puls key:generate
 

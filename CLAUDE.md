@@ -28,7 +28,7 @@ Static file requests (anything with `.` in path) return 404 early to prevent rou
 ### Files
 
 ```
-public/index.php       — All backend logic (routing, tracking, API, auth, bot detection)
+public/index.php        — All backend logic (routing, tracking, API, auth, bot detection)
 public/dashboard.html   — Self-contained dashboard (CSS + JS, no build step)
 config.php              — Configuration (loads .env, auto-detects Forge paths)
 .env.example            — Environment template (checked in)
@@ -39,6 +39,8 @@ data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Dev dependencies (Pest)
 phpunit.xml             — Test configuration
 tests/                  — Pest test suite (unit + feature)
+scripts/hooks/pre-push  — Git hook: runs Pest before allowing push
+scripts/normalize-paths.php — One-time migration to clean old tracking params from paths
 ```
 
 ### Key Design Decisions
@@ -59,16 +61,22 @@ tests/                  — Pest test suite (unit + feature)
 php puls key:generate
 php puls user:add admin
 
+# Install dev dependencies + activate pre-push hook
+composer install
+
 # Run locally
 php -S localhost:8080 -t public
 
 # Run tests
-composer install
 ./vendor/bin/pest
 
 # Add user with site restriction
 php puls user:add client --sites=their-site
 ```
+
+### Pre-push hook
+
+Tests run automatically before every `git push`. The hook is configured via `composer post-install-cmd` — any contributor gets it after `composer install`. No manual setup needed.
 
 ## Production
 

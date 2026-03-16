@@ -27,7 +27,10 @@ cd puls
 php puls key:generate
 php puls user:add admin
 
-# 3. Run locally
+# 3. Install dev dependencies (also activates pre-push test hook)
+composer install
+
+# 4. Run locally
 php -S localhost:8080 -t public
 ```
 
@@ -147,7 +150,7 @@ $ACTIVATE_RELEASE()
 
 ## Data Collected
 
-**Pageviews:** path, referrer domain, browser, device type, daily visitor hash, UTM params, language
+**Pageviews:** path, referrer domain, browser, device type, daily visitor hash, UTM params (source, medium, campaign, term, content), language
 
 **Bots:** path, bot name, category (AI, Search engine, Social, SEO, Monitor), user agent
 
