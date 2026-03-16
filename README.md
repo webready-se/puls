@@ -54,6 +54,35 @@ Add a tracking pixel to catch bots that don't execute JavaScript:
 />
 ```
 
+### Server-side Bot Tracking (Nginx)
+
+Catch bots that don't load images or execute JavaScript (e.g. `curl`, AI tool agents). Add to your Nginx config:
+
+```nginx
+# Outside server block
+map $http_user_agent $is_bot {
+    default 0;
+    ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|
+       Meta-ExternalAgent|Applebot|Ahrefs|Semrush|
+       facebookexternalhit) 1;
+}
+
+# Inside server block
+location / {
+    mirror /puls_log;
+    # ...existing config
+}
+
+location = /puls_log {
+    internal;
+    if ($is_bot = "0") { return 204; }
+    proxy_pass https://your-puls-domain/?log&s=$host&p=$request_uri;
+    proxy_set_header User-Agent $http_user_agent;
+}
+```
+
+Zero latency impact — Nginx sends the request in the background. Deduplication is built in.
+
 ## CLI
 
 All management goes through `php puls`:

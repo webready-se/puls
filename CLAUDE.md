@@ -16,6 +16,7 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `GET /?js` | No | Serves tracking JavaScript |
 | `POST /?collect` | No | Receives pageview data (sendBeacon) |
 | `GET /?pixel&s={site}&p={path}` | No | 1x1 GIF for bot detection |
+| `GET /?log&s={site}&p={path}` | No | Server-side bot logging (Nginx mirror) |
 | `GET /?health` | No | Health check (200/503) |
 | `GET /?api&days=7[&site=x]` | Yes | JSON API |
 | `GET /?api&sites` | Yes | List tracked sites |

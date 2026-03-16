@@ -69,6 +69,11 @@ if (isset($_GET['pixel'])) {
     respond(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, 'image/gif', ['Cache-Control' => 'no-store']);
 }
 
+if (isset($_GET['log'])) {
+    handle_log($config);
+    respond('', 204, null, ['Cache-Control' => 'no-store']);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS' && isset($_GET['collect'])) {
     $cors = cors_headers($config['allowed_origins']);
     $cors
@@ -503,6 +508,10 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$since], $siteParams));
     $botPages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, site, path, created_at FROM bot_visits WHERE created_at >= ? {$siteFilter} ORDER BY created_at DESC LIMIT 20");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $botActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     return json_encode([
         'site'      => $site ?: 'Alla sajter',
         'days'      => $days,
@@ -518,6 +527,7 @@ function get_api_data(array $config, array $user): string
         'bots'      => $bots,
         'botCategories' => $botCategories,
         'botPages'  => $botPages,
+        'botActivity' => $botActivity,
     ], JSON_PRETTY_PRINT);
 }
 
@@ -609,6 +619,28 @@ function get_db(string $path): PDO
     }
 
     return $db;
+}
+
+function handle_log(array $config): void
+{
+    $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    $bot = detect_bot($ua);
+    if (!$bot) return;
+
+    $db = get_db($config['db_path']);
+    $path = normalize_path(urldecode($_GET['p'] ?? '/'));
+    $site = $_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown');
+    $site = substr($site, 0, 100);
+    $path = substr($path, 0, 500);
+    $now = date('Y-m-d H:i:s');
+
+    // Deduplicate: skip if same bot + site + path logged within last 10 seconds
+    $stmt = $db->prepare('SELECT COUNT(*) FROM bot_visits WHERE bot_name = ? AND site = ? AND path = ? AND created_at >= ?');
+    $stmt->execute([$bot['name'], $site, $path, date('Y-m-d H:i:s', strtotime('-10 seconds'))]);
+    if ($stmt->fetchColumn() > 0) return;
+
+    $stmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$site, $path, $bot['name'], $bot['category'], substr($ua, 0, 500), $now]);
 }
 
 function handle_pixel(array $config): void

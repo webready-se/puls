@@ -275,6 +275,16 @@
   // --- Helpers ---
   function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function num(n) { return Number(n || 0).toLocaleString('sv-SE'); }
+  function formatTime(dt) {
+    var d = new Date(dt.replace(' ', 'T'));
+    var now = new Date();
+    var diff = (now - d) / 1000;
+    if (diff < 60) return 'just nu';
+    if (diff < 3600) return Math.floor(diff / 60) + ' min sedan';
+    if (diff < 86400) return Math.floor(diff / 3600) + ' tim sedan';
+    if (diff < 172800) return 'igår ' + d.toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit'});
+    return d.toLocaleDateString('sv-SE', {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit'});
+  }
   function decode(s) { try { return decodeURIComponent(s); } catch(e) { return s; } }
 
   function formatDay(dateStr) {
@@ -550,7 +560,27 @@
     html += renderBotTable(bots, catColors);
     html += renderTable('Mest crawlade sidor', pages, 'path', 'visits', '#2563eb');
 
-    html += '</div></div>';
+    html += '</div>';
+
+    // Bot activity timeline
+    var activity = d.botActivity || [];
+    if (activity.length) {
+      html += '<div class="card" style="margin-top:14px"><span class="card-title">Senaste bot-aktivitet</span>' +
+        '<div style="margin-top:12px">';
+      activity.forEach(function(a) {
+        var color = catColors[a.category] || catColors['Övrigt'];
+        var time = formatTime(a.created_at);
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">' +
+          '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
+          '<span style="font-weight:600;min-width:120px">' + esc(a.name) + '</span>' +
+          '<span style="color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(a.path) + '</span>' +
+          '<span style="color:var(--light);white-space:nowrap;font-size:12px">' + time + '</span>' +
+        '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    html += '</div>';
     return html;
   }
 
@@ -626,6 +656,36 @@
         '<strong>medium</strong> = hur (social, email), ' +
         '<strong>campaign</strong> = varför (varkampanj). Bara source behövs.</p>' +
     '</div>' +
+
+    '<div class="snippet">' +
+      '<h3>Server-side bot-tracking (Nginx)</h3>' +
+      '<p>Fånga botar som inte laddar bilder eller kör JavaScript. Lägg till i Nginx-konfigurationen per sajt.</p>' +
+      '<pre id="nginx-snippet" onclick="copySnippet(this)">' +
+        '# Utanför server-blocket\n' +
+        'map $http_user_agent $is_bot {\n' +
+        '    default 0;\n' +
+        '    ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|\n' +
+        '       Meta-ExternalAgent|Applebot|Ahrefs|Semrush|\n' +
+        '       facebookexternalhit) 1;\n' +
+        '}\n' +
+        '\n' +
+        '# Inuti server-blocket\n' +
+        'location / {\n' +
+        '    mirror /puls_log;\n' +
+        '    # ...befintlig config\n' +
+        '}\n' +
+        '\n' +
+        'location = /puls_log {\n' +
+        '    internal;\n' +
+        '    if ($is_bot = "0") { return 204; }\n' +
+        '    proxy_pass ' + location.origin + '/?log&amp;s=$host&amp;p=$request_uri;\n' +
+        '    proxy_set_header User-Agent $http_user_agent;\n' +
+        '}' +
+      '</pre>' +
+      '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#e0e7ff">Hur funkar det?</strong> Nginx skickar en kopia av bot-requests till Puls i bakgrunden. ' +
+        'Noll påverkan på svarstid. Deduplicering sker automatiskt — botar som redan fångas via pixeln räknas inte dubbelt.</p>' +
+    '</div>' +
+
     '<div class="footer">Puls — One file. No cookies. Full picture.</div>';
   }
 
