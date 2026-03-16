@@ -756,6 +756,7 @@ function detect_bot(string $ua): ?array
         ['pattern' => 'Applebot-Extended', 'name' => 'Applebot-Extended','category' => 'AI'],
         ['pattern' => 'cohere-ai',         'name' => 'Cohere',           'category' => 'AI'],
         ['pattern' => 'Meta-ExternalAgent','name' => 'Meta AI',          'category' => 'AI'],
+        ['pattern' => 'OAI-SearchBot',    'name' => 'OAI-SearchBot',   'category' => 'AI'],
         // Search engines
         ['pattern' => 'Googlebot',         'name' => 'Googlebot',        'category' => 'Sökmotor'],
         ['pattern' => 'bingbot',           'name' => 'Bingbot',          'category' => 'Sökmotor'],
@@ -775,6 +776,7 @@ function detect_bot(string $ua): ?array
         ['pattern' => 'MJ12bot',           'name' => 'Majestic',         'category' => 'SEO'],
         ['pattern' => 'DotBot',            'name' => 'DotBot',           'category' => 'SEO'],
         ['pattern' => 'UptimeRobot',       'name' => 'UptimeRobot',      'category' => 'Monitor'],
+        ['pattern' => 'CensysInspect',    'name' => 'CensysInspect',   'category' => 'Monitor'],
         ['pattern' => 'bot',               'name' => 'Okänd bot',        'category' => 'Övrigt'],
         ['pattern' => 'crawler',           'name' => 'Okänd crawler',    'category' => 'Övrigt'],
         ['pattern' => 'spider',            'name' => 'Okänd spider',     'category' => 'Övrigt'],

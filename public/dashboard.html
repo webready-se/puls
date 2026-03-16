@@ -678,6 +678,9 @@
         'location = /puls_log {\n' +
         '    internal;\n' +
         '    if ($is_bot = "0") { return 204; }\n' +
+        '    resolver 8.8.8.8;\n' +
+        '    proxy_ssl_verify off;\n' +
+        '    proxy_ssl_server_name on;\n' +
         '    proxy_pass ' + location.origin + '/?log&amp;s=$host&amp;p=$request_uri;\n' +
         '    proxy_set_header User-Agent $http_user_agent;\n' +
         '}' +

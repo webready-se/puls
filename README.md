@@ -76,6 +76,9 @@ location / {
 location = /puls_log {
     internal;
     if ($is_bot = "0") { return 204; }
+    resolver 8.8.8.8;
+    proxy_ssl_verify off;
+    proxy_ssl_server_name on;
     proxy_pass https://your-puls-domain/?log&s=$host&p=$request_uri;
     proxy_set_header User-Agent $http_user_agent;
 }
