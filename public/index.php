@@ -353,7 +353,7 @@ function handle_collect(array $config): void
     $bot = detect_bot($ua);
     if ($bot) {
         $db = get_db($config['db_path']);
-        $site = !empty($input['site']) ? substr($input['site'], 0, 100) : ($_SERVER['HTTP_HOST'] ?? 'unknown');
+        $site = normalize_site(!empty($input['site']) ? $input['site'] : ($_SERVER['HTTP_HOST'] ?? 'unknown'));
         $path = normalize_path(urldecode(substr($input['u'], 0, 500)));
         $stmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
         $stmt->execute([$site, $path, $bot['name'], $bot['category'], substr($ua, 0, 500), date('Y-m-d H:i:s')]);
@@ -362,7 +362,7 @@ function handle_collect(array $config): void
 
     $db = get_db($config['db_path']);
 
-    $site = !empty($input['site']) ? substr($input['site'], 0, 100) : ($_SERVER['HTTP_HOST'] ?? 'unknown');
+    $site = normalize_site(!empty($input['site']) ? $input['site'] : ($_SERVER['HTTP_HOST'] ?? 'unknown'));
 
     $salt = date('Y-m-d') . 'puls-' . $config['app_key'];
     $hash = hash('sha256', ($_SERVER['REMOTE_ADDR'] ?? '') . ($_SERVER['HTTP_USER_AGENT'] ?? '') . $salt);
@@ -634,8 +634,7 @@ function handle_log(array $config): void
 
     $db = get_db($config['db_path']);
     $path = normalize_path(urldecode($_GET['p'] ?? '/'));
-    $site = $_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown');
-    $site = substr($site, 0, 100);
+    $site = normalize_site($_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown'));
     $path = substr($path, 0, 500);
     $now = date('Y-m-d H:i:s');
 
@@ -660,11 +659,11 @@ function handle_pixel(array $config): void
 
     $db = get_db($config['db_path']);
     $path = normalize_path(urldecode($_GET['p'] ?? '/'));
-    $site = $_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown');
+    $site = normalize_site($_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown'));
 
     $stmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
     $stmt->execute([
-        substr($site, 0, 100),
+        $site,
         substr($path, 0, 500),
         $bot['name'],
         $bot['category'],
@@ -726,6 +725,16 @@ function normalize_referrer(string $host): string
     }
 
     return $name;
+}
+
+function normalize_site(string $site): string
+{
+    $site = substr($site, 0, 100);
+    if (function_exists('idn_to_utf8')) {
+        $decoded = idn_to_utf8($site, 0, INTL_IDNA_VARIANT_UTS46);
+        if ($decoded !== false) $site = $decoded;
+    }
+    return $site;
 }
 
 function normalize_path(string $path): string
