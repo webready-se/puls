@@ -33,16 +33,12 @@ if ($uri !== '/' && str_contains($uri, '.')) {
 // Public endpoints (no auth required)
 
 if (isset($_GET['health'])) {
-    $status = ['status' => 'ok', 'timestamp' => date('c')];
     try {
         $db = get_db($config['db_path']);
-        $size = filesize($config['db_path']);
-        $status['db'] = ['size' => $size, 'size_human' => round($size / 1024 / 1024, 2) . ' MB'];
+        respond(json_encode(['status' => 'ok']), 200, 'application/json');
     } catch (Throwable $e) {
-        $status['status'] = 'error';
-        $status['db'] = ['error' => 'Connection failed'];
+        respond(json_encode(['status' => 'error']), 503, 'application/json');
     }
-    respond(json_encode($status), $status['status'] === 'ok' ? 200 : 503, 'application/json');
 }
 
 if (isset($_GET['js'])) {
