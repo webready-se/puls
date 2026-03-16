@@ -639,13 +639,14 @@ function handle_log(array $config): void
     $path = substr($path, 0, 500);
     $now = date('Y-m-d H:i:s');
 
-    // Deduplicate: skip if same bot + site + path logged within last 10 seconds
-    $stmt = $db->prepare('SELECT COUNT(*) FROM bot_visits WHERE bot_name = ? AND site = ? AND path = ? AND created_at >= ?');
-    $stmt->execute([$bot['name'], $site, $path, date('Y-m-d H:i:s', strtotime('-10 seconds'))]);
-    if ($stmt->fetchColumn() > 0) return;
-
-    $stmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$site, $path, $bot['name'], $bot['category'], substr($ua, 0, 500), $now]);
+    // Atomic deduplicate + insert: skip if same bot + site + path within last 10 seconds
+    $stmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at)
+        SELECT ?, ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+            SELECT 1 FROM bot_visits WHERE bot_name = ? AND site = ? AND path = ? AND created_at >= ?
+        )');
+    $stmt->execute([$site, $path, $bot['name'], $bot['category'], substr($ua, 0, 500), $now,
+                     $bot['name'], $site, $path, date('Y-m-d H:i:s', strtotime('-10 seconds'))]);
 
     // Lazy retention: clean up entries older than 90 days (once per day)
     cleanup_bot_visits($db);
