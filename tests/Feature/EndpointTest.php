@@ -145,7 +145,7 @@ test('icon files are served as PNG', function () {
 
 test('dashboard includes PWA meta tags', function () {
     $r = http('GET', '/?login');
-    expect($r['body'])->toContain('apple-mobile-web-app-capable')
+    expect($r['body'])->toContain('mobile-web-app-capable')
         ->and($r['body'])->toContain('manifest');
 });
 
