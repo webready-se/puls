@@ -71,14 +71,33 @@ Vänta tills Puls kört live ett tag och man ser vad som faktiskt saknas.
 - [ ] **Export** — CSV-export av data
 - [ ] **Dark mode** — Automatiskt via prefers-color-scheme
 
-## Epic 5: Smartare data
+## Epic 5: Server-side bot-tracking
+
+Pixeln fångar botar som laddar bilder (GPTBot, Meta AI, Ahrefs etc.), men inte verktyg som bara hämtar HTML utan att ladda resurser (t.ex. `curl`, Claude Code `WebFetch`). En server-side lösning täcker alla bot-besök.
+
+- [ ] **`/?log` endpoint** — Tar emot site, path och User-Agent. Kör detect_bot() och loggar i bot_visits precis som `/?pixel`
+- [ ] **Nginx mirror** — Snyggaste lösningen. Zero latency, ingen kod på sajterna. Konfigureras per sajt i Forge:
+  ```nginx
+  location / {
+      mirror /puls_log;
+  }
+  location = /puls_log {
+      internal;
+      proxy_pass https://puls.wrlabs.se/?log&s=$host&p=$request_uri;
+      proxy_set_header User-Agent $http_user_agent;
+  }
+  ```
+- [ ] **Deduplicering** — Samma bot + path + site inom kort tid (t.ex. 10s) ska inte dubbelräknas. Viktigt eftersom botar som laddar pixeln redan loggas via `/?pixel` — utan dedup räknas de två gånger
+- [ ] **Separat visning** — Logga server-side bot-trafik separat från besöksstatistik. Mer som en aktivitetslogg/timeline ("AI & Crawlers") i dashboarden, inte inblandat i pageview-siffror. Bot-besök är intressant att följa men inte samma sak som riktig trafik
+
+## Epic 6: Smartare data
 
 - [ ] **Bounce rate** — Besökare som bara ser en sida (data finns, ~41% i nuläget)
 - [ ] **Session-längd** — Ungefärlig tid på sajten (baserat på flera pageviews)
 - [ ] **Entry/exit pages** — Vilka sidor folk landar på och lämnar från
 - [ ] **Filtrering** — Filtrera dashboard per browser, device, referrer
 
-## Epic 6: Skalning & underhåll
+## Epic 7: Skalning & underhåll
 
 Inte relevant förrän det finns riktig volym. Avvakta.
 
