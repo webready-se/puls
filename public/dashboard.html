@@ -162,8 +162,29 @@
   .snippet pre {
     background: rgba(0,0,0,0.3); border-radius: 10px; padding: 16px;
     font-size: 12px; line-height: 1.7; color: #c7d2fe; overflow-x: auto;
-    word-break: break-all; white-space: pre-wrap;
+    word-break: break-all; white-space: pre-wrap; cursor: pointer;
+    position: relative;
   }
+  .snippet pre:hover { background: rgba(0,0,0,0.4); }
+  .snippet pre.copied::after {
+    content: 'Kopierad!'; position: absolute; top: 8px; right: 12px;
+    font-size: 11px; color: #a5f3fc; font-weight: 600;
+  }
+  .snippet input, .snippet select {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #e0e7ff;
+    outline: none; width: 100%;
+  }
+  .snippet input::placeholder { color: rgba(165,180,252,0.5); }
+  .snippet input:focus, .snippet select:focus {
+    border-color: rgba(165,180,252,0.4); background: rgba(255,255,255,0.15);
+  }
+  .snippet select option { background: #1e1b4b; color: #e0e7ff; }
+  .snippet-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;
+  }
+  @media (max-width: 600px) { .snippet-grid { grid-template-columns: 1fr; } }
+  .snippet label { display: block; font-size: 11px; color: #a5b4fc; margin-bottom: 4px; font-weight: 500; }
 
   /* Footer */
   .footer { text-align: center; padding: 16px 0; font-size: 12px; color: var(--light); }
@@ -550,16 +571,102 @@
 
   function renderSnippet(site) {
     var host = location.origin;
+    var siteVal = currentSite || 'min-sajt';
+
     return '<div class="snippet">' +
       '<h3>Tracking-snippet</h3>' +
-      '<p>Klistra in före &lt;/body&gt; — anpassa data-site per sajt.</p>' +
-      '<p>Pixeln (img) fångar botar som inte kör JS. Sätt <strong>p=</strong> till aktuell sökväg.</p>' +
-      '<pre>&lt;script src="' + host + '/?js" data-site="min-sajt" defer&gt;&lt;/script&gt;\n' +
-      '&lt;img src="' + host + '/?pixel&amp;s=min-sajt&amp;p=/aktuell-sida" alt="" width="1" height="1"\n' +
-      '     style="position:absolute;opacity:0" /&gt;</pre>' +
+      '<p>Klistra in före &lt;/body&gt; på din sajt. Pixeln fångar botar som inte kör JS.</p>' +
+      '<pre id="snippet-code" onclick="copySnippet(this)">' +
+        '&lt;script src="' + host + '/?js" data-site="' + esc(siteVal) + '" defer&gt;&lt;/script&gt;\n' +
+        '&lt;noscript&gt;&lt;img src="' + host + '/?pixel&amp;s=' + esc(siteVal) + '&amp;p=/" alt="" width="1" height="1" style="position:absolute;opacity:0"&gt;&lt;/noscript&gt;' +
+      '</pre>' +
+    '</div>' +
+
+    '<div class="snippet">' +
+      '<h3>UTM-länkgenerator</h3>' +
+      '<p>Lägg till UTM-parametrar på länkar du delar för att spåra var trafiken kommer från.</p>' +
+
+      '<div class="snippet-grid">' +
+        '<div><label>URL</label><input type="text" id="utm-url" placeholder="https://din-sajt.se/sida" oninput="updateUtm()"></div>' +
+        '<div><label>Källa (source) *</label>' +
+          '<select id="utm-source" onchange="updateUtm()">' +
+            '<option value="">Välj...</option>' +
+            '<option value="facebook">Facebook</option>' +
+            '<option value="instagram">Instagram</option>' +
+            '<option value="twitter">Twitter/X</option>' +
+            '<option value="linkedin">LinkedIn</option>' +
+            '<option value="newsletter">Nyhetsbrev</option>' +
+            '<option value="custom">Annan...</option>' +
+          '</select>' +
+        '</div>' +
+        '<div><label>Medium</label>' +
+          '<select id="utm-medium" onchange="updateUtm()">' +
+            '<option value="">Automatiskt</option>' +
+            '<option value="social">Social</option>' +
+            '<option value="email">E-post</option>' +
+            '<option value="website">Webbsida</option>' +
+            '<option value="cpc">Annons (CPC)</option>' +
+          '</select>' +
+        '</div>' +
+        '<div><label>Kampanj</label><input type="text" id="utm-campaign" placeholder="t.ex. varkampanj-2026" oninput="updateUtm()"></div>' +
+      '</div>' +
+      '<div id="utm-custom-row" style="display:none;margin-bottom:12px"><label>Egen källa</label><input type="text" id="utm-source-custom" placeholder="t.ex. podcast" oninput="updateUtm()"></div>' +
+      '<pre id="utm-result" onclick="copySnippet(this)" style="min-height:44px;color:#94a3b8">Fyll i URL och källa ovan</pre>' +
+
+      '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#e0e7ff">Vad är UTM?</strong> Parametrar som läggs på en URL för att spåra varifrån besökaren kom. ' +
+        '<strong>source</strong> = varifrån (facebook, nyhetsbrev), ' +
+        '<strong>medium</strong> = hur (social, email), ' +
+        '<strong>campaign</strong> = varför (varkampanj). Bara source behövs.</p>' +
     '</div>' +
     '<div class="footer">Puls — One file. No cookies. Full picture.</div>';
   }
+
+  function updateUtm() {
+    var url = document.getElementById('utm-url').value.trim();
+    var source = document.getElementById('utm-source').value;
+    var medium = document.getElementById('utm-medium').value;
+    var campaign = document.getElementById('utm-campaign').value.trim();
+    var customRow = document.getElementById('utm-custom-row');
+    var result = document.getElementById('utm-result');
+
+    if (source === 'custom') {
+      customRow.style.display = 'block';
+      source = document.getElementById('utm-source-custom').value.trim();
+    } else {
+      customRow.style.display = 'none';
+    }
+
+    // Auto-set medium if not chosen
+    if (!medium && source) {
+      var autoMedium = { facebook: 'social', instagram: 'social', twitter: 'social', linkedin: 'social', newsletter: 'email' };
+      medium = autoMedium[source] || '';
+    }
+
+    if (!url || !source) {
+      result.textContent = 'Fyll i URL och källa ovan';
+      result.style.color = '#94a3b8';
+      return;
+    }
+
+    var sep = url.indexOf('?') === -1 ? '?' : '&';
+    var out = url + sep + 'utm_source=' + encodeURIComponent(source);
+    if (medium) out += '&utm_medium=' + encodeURIComponent(medium);
+    if (campaign) out += '&utm_campaign=' + encodeURIComponent(campaign);
+
+    result.textContent = out;
+    result.style.color = '#c7d2fe';
+  }
+
+  window.copySnippet = function(el) {
+    var text = el.textContent;
+    if (text === 'Fyll i URL och källa ovan') return;
+    navigator.clipboard.writeText(text).then(function() {
+      el.classList.add('copied');
+      setTimeout(function() { el.classList.remove('copied'); }, 1500);
+    });
+  };
+
+  window.updateUtm = updateUtm;
 })();
 </script>
 </body>
