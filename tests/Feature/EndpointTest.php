@@ -48,6 +48,45 @@ test('collect endpoint accepts POST', function () {
     expect($r['status'])->toBe(204);
 });
 
+test('collect endpoint stores utm term and content', function () {
+    $r = http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode([
+            'u' => '/test-utm',
+            'r' => '',
+            'w' => 1920,
+            'site' => 'test',
+            'utm' => [
+                'source' => 'ig',
+                'medium' => 'social',
+                'campaign' => 'spring',
+                'term' => 'keyword',
+                'content' => 'link_in_bio',
+            ],
+        ]),
+    ]);
+    expect($r['status'])->toBe(204);
+});
+
+test('collect endpoint normalizes path with tracking params', function () {
+    $r = http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode([
+            'u' => '/?fbclid=abc123&utm_source=ig',
+            'r' => '',
+            'w' => 1920,
+            'site' => 'test',
+            'utm' => ['source' => 'ig'],
+        ]),
+    ]);
+    expect($r['status'])->toBe(204);
+});
+
+test('js snippet captures all five utm params', function () {
+    $r = http('GET', '/?js');
+    expect($r['body'])->toContain("'source','medium','campaign','term','content'");
+});
+
 test('collect endpoint rejects empty payload', function () {
     $r = http('POST', '/?collect', [
         'header' => 'Content-Type: application/json',

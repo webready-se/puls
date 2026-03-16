@@ -16,6 +16,10 @@
             "Tests\\": "tests/"
         }
     },
+    "scripts": {
+        "post-install-cmd": "git config core.hooksPath scripts/hooks",
+        "post-update-cmd": "git config core.hooksPath scripts/hooks"
+    },
     "config": {
         "allow-plugins": {
             "pestphp/pest-plugin": true
