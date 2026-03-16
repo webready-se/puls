@@ -76,17 +76,26 @@ Vänta tills Puls kört live ett tag och man ser vad som faktiskt saknas.
 Pixeln fångar botar som laddar bilder (GPTBot, Meta AI, Ahrefs etc.), men inte verktyg som bara hämtar HTML utan att ladda resurser (t.ex. `curl`, Claude Code `WebFetch`). En server-side lösning täcker alla bot-besök.
 
 - [ ] **`/?log` endpoint** — Tar emot site, path och User-Agent. Kör detect_bot() och loggar i bot_visits precis som `/?pixel`
-- [ ] **Nginx mirror** — Snyggaste lösningen. Zero latency, ingen kod på sajterna. Konfigureras per sajt i Forge:
+- [ ] **Nginx mirror** — Snyggaste lösningen. Zero latency, ingen kod på sajterna. `map` filtrerar bort non-bot trafik direkt i Nginx. Konfigureras per sajt i Forge:
   ```nginx
-  location / {
-      mirror /puls_log;
+  map $http_user_agent $is_bot {
+      default 0;
+      ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|Meta-ExternalAgent|Applebot|Ahrefs|Semrush|facebookexternalhit) 1;
   }
-  location = /puls_log {
-      internal;
-      proxy_pass https://puls.wrlabs.se/?log&s=$host&p=$request_uri;
-      proxy_set_header User-Agent $http_user_agent;
+
+  server {
+      location / {
+          mirror /puls_log;
+      }
+      location = /puls_log {
+          internal;
+          if ($is_bot = "0") { return 204; }
+          proxy_pass https://puls.wrlabs.se/?log&s=$host&p=$request_uri;
+          proxy_set_header User-Agent $http_user_agent;
+      }
   }
   ```
+  OBS: bot-listan dupliceras (Nginx + PHP). Nginx är grov förfiltrering, PHP `detect_bot()` gör riktig klassificering.
 - [ ] **Deduplicering** — Samma bot + path + site inom kort tid (t.ex. 10s) ska inte dubbelräknas. Viktigt eftersom botar som laddar pixeln redan loggas via `/?pixel` — utan dedup räknas de två gånger
 - [ ] **Separat visning** — Logga server-side bot-trafik separat från besöksstatistik. Mer som en aktivitetslogg/timeline ("AI & Crawlers") i dashboarden, inte inblandat i pageview-siffror. Bot-besök är intressant att följa men inte samma sak som riktig trafik
 
