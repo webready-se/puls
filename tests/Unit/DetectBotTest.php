@@ -40,6 +40,33 @@ test('detects SEO bots', function () {
         ->and($result['category'])->toBe('SEO');
 });
 
+test('detects monitor bots', function (string $ua, string $name) {
+    $result = detect_bot($ua);
+    expect($result)->not->toBeNull()
+        ->and($result['name'])->toBe($name)
+        ->and($result['category'])->toBe('Monitor');
+})->with([
+    ['UptimeRobot/2.0', 'UptimeRobot'],
+    ['Mozilla/5.0 CensysInspect/1.1', 'CensysInspect'],
+    ['spatie/laravel-uptime-monitor uptime checker', 'Uptime Checker'],
+]);
+
+test('detects automated clients', function (string $ua, string $name) {
+    $result = detect_bot($ua);
+    expect($result)->not->toBeNull()
+        ->and($result['name'])->toBe($name)
+        ->and($result['category'])->toBe('Klient');
+})->with([
+    ['axios/1.8.4', 'Axios'],
+    ['python-requests/2.31.0', 'Python Requests'],
+    ['Go-http-client/2.0', 'Go HTTP'],
+    ['curl/8.4.0', 'curl'],
+    ['wget/1.21', 'Wget'],
+    ['node-fetch/1.0', 'Node Fetch'],
+    ['HeadlessChrome/120.0', 'Headless Chrome'],
+    ['Scrapy/2.11', 'Scrapy'],
+]);
+
 test('returns null for regular browsers', function () {
     expect(detect_bot('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0'))
         ->toBeNull();

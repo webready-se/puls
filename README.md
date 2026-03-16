@@ -65,6 +65,9 @@ map $http_user_agent $is_bot {
     ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|
        Meta-ExternalAgent|Applebot|Ahrefs|Semrush|
        facebookexternalhit) 1;
+    ~*(axios|python-requests|Go-http-client|curl/|wget/|httpie|
+       node-fetch|undici|ruby|perl|java/|scrapy|puppeteer|
+       playwright|HeadlessChrome|PhantomJS|Pingdom) 1;
 }
 
 # Inside server block

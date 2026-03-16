@@ -474,12 +474,13 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$since], $siteParams));
     $browsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $total = array_sum(array_column($browsers, 'cnt'));
-    $browsers = array_map(fn($b) => ['name' => $b['name'], 'pct' => $total > 0 ? round($b['cnt'] / $total * 100) : 0], $browsers);
+    $smartPct = fn($cnt, $sum) => $sum > 0 ? (($p = $cnt / $sum * 100) < 1 && $p > 0 ? round($p, 1) : round($p)) : 0;
+    $browsers = array_map(fn($b) => ['name' => $b['name'], 'pct' => $smartPct($b['cnt'], $total)], $browsers);
 
     $stmt = $db->prepare("SELECT device as name, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY device ORDER BY cnt DESC");
     $stmt->execute(array_merge([$since], $siteParams));
     $devices = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $devices = array_map(fn($d) => ['name' => $d['name'], 'pct' => $total > 0 ? round($d['cnt'] / $total * 100) : 0], $devices);
+    $devices = array_map(fn($d) => ['name' => $d['name'], 'pct' => $smartPct($d['cnt'], $total)], $devices);
 
     $stmt = $db->prepare("SELECT COUNT(DISTINCT visitor_hash) as live FROM pageviews WHERE created_at >= ? {$siteFilter}");
     $stmt->execute(array_merge([date('Y-m-d H:i:s', strtotime('-5 minutes'))], $siteParams));
@@ -493,7 +494,7 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$since], $siteParams));
     $languages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $langTotal = array_sum(array_column($languages, 'cnt'));
-    $languages = array_map(fn($l) => ['name' => $l['name'], 'pct' => $langTotal > 0 ? round($l['cnt'] / $langTotal * 100) : 0], $languages);
+    $languages = array_map(fn($l) => ['name' => $l['name'], 'pct' => $smartPct($l['cnt'], $langTotal)], $languages);
 
     // Bot data
     $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, COUNT(*) as visits FROM bot_visits WHERE created_at >= ? {$siteFilter} GROUP BY bot_name, bot_category ORDER BY visits DESC");
@@ -625,7 +626,11 @@ function handle_log(array $config): void
 {
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
     $bot = detect_bot($ua);
-    if (!$bot) return;
+
+    // If Nginx sent it here, something non-human made the request
+    if (!$bot) {
+        $bot = ['name' => 'Okänd klient', 'category' => 'Klient'];
+    }
 
     $db = get_db($config['db_path']);
     $path = normalize_path(urldecode($_GET['p'] ?? '/'));
@@ -641,6 +646,9 @@ function handle_log(array $config): void
 
     $stmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
     $stmt->execute([$site, $path, $bot['name'], $bot['category'], substr($ua, 0, 500), $now]);
+
+    // Lazy retention: clean up entries older than 90 days (once per day)
+    cleanup_bot_visits($db);
 }
 
 function handle_pixel(array $config): void
@@ -741,6 +749,15 @@ function normalize_path(string $path): string
     return $path;
 }
 
+function cleanup_bot_visits(PDO $db): void
+{
+    $marker = dirname($db->query("PRAGMA database_list")->fetch()['file'] ?? __DIR__) . '/.bot_cleanup';
+    if (file_exists($marker) && file_get_contents($marker) === date('Y-m-d')) return;
+
+    $db->exec("DELETE FROM bot_visits WHERE created_at < '" . date('Y-m-d H:i:s', strtotime('-90 days')) . "'");
+    file_put_contents($marker, date('Y-m-d'));
+}
+
 function detect_bot(string $ua): ?array
 {
     $bots = [
@@ -777,6 +794,27 @@ function detect_bot(string $ua): ?array
         ['pattern' => 'DotBot',            'name' => 'DotBot',           'category' => 'SEO'],
         ['pattern' => 'UptimeRobot',       'name' => 'UptimeRobot',      'category' => 'Monitor'],
         ['pattern' => 'CensysInspect',    'name' => 'CensysInspect',   'category' => 'Monitor'],
+        ['pattern' => 'uptime checker',   'name' => 'Uptime Checker',  'category' => 'Monitor'],
+        ['pattern' => 'Pingdom',          'name' => 'Pingdom',         'category' => 'Monitor'],
+        // Automated clients
+        ['pattern' => 'axios/',           'name' => 'Axios',           'category' => 'Klient'],
+        ['pattern' => 'python-requests',  'name' => 'Python Requests', 'category' => 'Klient'],
+        ['pattern' => 'Go-http-client',   'name' => 'Go HTTP',        'category' => 'Klient'],
+        ['pattern' => 'curl/',            'name' => 'curl',            'category' => 'Klient'],
+        ['pattern' => 'wget/',            'name' => 'Wget',            'category' => 'Klient'],
+        ['pattern' => 'node-fetch',       'name' => 'Node Fetch',     'category' => 'Klient'],
+        ['pattern' => 'undici',           'name' => 'Undici',          'category' => 'Klient'],
+        ['pattern' => 'httpie',           'name' => 'HTTPie',          'category' => 'Klient'],
+        ['pattern' => 'java/',            'name' => 'Java HTTP',       'category' => 'Klient'],
+        ['pattern' => 'ruby',             'name' => 'Ruby HTTP',       'category' => 'Klient'],
+        ['pattern' => 'perl',             'name' => 'Perl HTTP',       'category' => 'Klient'],
+        ['pattern' => 'libwww-perl',      'name' => 'Perl LWP',       'category' => 'Klient'],
+        ['pattern' => 'scrapy',           'name' => 'Scrapy',          'category' => 'Klient'],
+        ['pattern' => 'puppeteer',        'name' => 'Puppeteer',       'category' => 'Klient'],
+        ['pattern' => 'playwright',       'name' => 'Playwright',      'category' => 'Klient'],
+        ['pattern' => 'HeadlessChrome',   'name' => 'Headless Chrome', 'category' => 'Klient'],
+        ['pattern' => 'PhantomJS',        'name' => 'PhantomJS',       'category' => 'Klient'],
+        // Generic bot patterns (keep last)
         ['pattern' => 'bot',               'name' => 'Okänd bot',        'category' => 'Övrigt'],
         ['pattern' => 'crawler',           'name' => 'Okänd crawler',    'category' => 'Övrigt'],
         ['pattern' => 'spider',            'name' => 'Okänd spider',     'category' => 'Övrigt'],

@@ -94,8 +94,8 @@ test('log endpoint tracks bot visits', function () {
     expect($r['status'])->toBe(204);
 });
 
-test('log endpoint ignores non-bot user agents', function () {
-    $r = http('GET', '/?log&s=test&p=/page', [
+test('log endpoint tracks unknown user agents as Okänd klient', function () {
+    $r = http('GET', '/?log&s=test&p=/unknown-ua', [
         'header' => 'User-Agent: Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/120.0',
     ]);
     expect($r['status'])->toBe(204);
