@@ -664,12 +664,8 @@
         '# Utanför server-blocket\n' +
         'map $http_user_agent $is_bot {\n' +
         '    default 0;\n' +
-        '    ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|\n' +
-        '       Meta-ExternalAgent|Applebot|Ahrefs|Semrush|\n' +
-        '       facebookexternalhit) 1;\n' +
-        '    ~*(axios|python-requests|Go-http-client|curl/|wget/|httpie|\n' +
-        '       node-fetch|undici|ruby|perl|java/|scrapy|puppeteer|\n' +
-        '       playwright|HeadlessChrome|PhantomJS|Pingdom) 1;\n' +
+        '    ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|Meta-ExternalAgent|Applebot|Ahrefs|Semrush|facebookexternalhit) 1;\n' +
+        '    ~*(axios|python-requests|Go-http-client|curl/|wget/|httpie|node-fetch|undici|ruby|perl|java/|scrapy|puppeteer|playwright|HeadlessChrome|PhantomJS|Pingdom) 1;\n' +
         '}\n' +
         '\n' +
         '# Inuti server-blocket\n' +
