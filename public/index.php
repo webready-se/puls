@@ -508,6 +508,10 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$since], $siteParams));
     $botPages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, site, path, created_at FROM bot_visits WHERE created_at >= ? {$siteFilter} ORDER BY created_at DESC LIMIT 20");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $botActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     return json_encode([
         'site'      => $site ?: 'Alla sajter',
         'days'      => $days,
@@ -523,6 +527,7 @@ function get_api_data(array $config, array $user): string
         'bots'      => $bots,
         'botCategories' => $botCategories,
         'botPages'  => $botPages,
+        'botActivity' => $botActivity,
     ], JSON_PRETTY_PRINT);
 }
 
