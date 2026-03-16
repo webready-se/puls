@@ -512,6 +512,13 @@ function get_api_data(array $config, array $user): string
     $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, site, path, created_at FROM bot_visits WHERE created_at >= ? {$siteFilter} ORDER BY created_at DESC LIMIT 20");
     $stmt->execute(array_merge([$since], $siteParams));
     $botActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (function_exists('idn_to_utf8')) {
+        foreach ($botActivity as &$a) {
+            $decoded = idn_to_utf8($a['site'], 0, INTL_IDNA_VARIANT_UTS46);
+            if ($decoded !== false) $a['site'] = $decoded;
+        }
+        unset($a);
+    }
 
     return json_encode([
         'site'      => $site ?: 'Alla sajter',
