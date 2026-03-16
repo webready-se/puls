@@ -105,7 +105,7 @@
   .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
   .card-subtitle { font-size: 12px; color: var(--light); }
-  .chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 0 4px; overflow-x: auto; }
+  .chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 30px 4px 0; overflow: visible; }
   @media (max-width: 600px) { .chart { height: 130px; gap: 3px; } }
   .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; min-width: 28px; }
   .chart-val { font-size: 10px; color: var(--muted); font-weight: 600; }
@@ -518,9 +518,32 @@
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' + badges + '</div>' +
       '<div class="grid-2">';
 
-    html += renderTable('Aktiva botar', bots, 'name', 'visits', '#dc2626');
+    html += renderBotTable(bots, catColors);
     html += renderTable('Mest crawlade sidor', pages, 'path', 'visits', '#2563eb');
 
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderBotTable(bots, catColors) {
+    if (!bots || !bots.length) {
+      return '<div class="card"><span class="card-title">Aktiva botar</span>' +
+        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p></div>';
+    }
+    var max = Math.max.apply(null, bots.map(function(b) { return +b.visits; }));
+    var html = '<div class="card"><span class="card-title">Aktiva botar</span><div style="margin-top:14px">';
+    bots.forEach(function(b) {
+      var pct = (+b.visits / max) * 100;
+      var color = catColors[b.category] || catColors['Övrigt'];
+      html += '<div class="trow">' +
+        '<span class="trow-label" title="' + esc(b.name) + ' (' + esc(b.category) + ')">' +
+          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:6px;flex-shrink:0"></span>' +
+          esc(b.name) + ' <span style="color:var(--light);font-size:11px">' + esc(b.category) + '</span>' +
+        '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<span class="trow-val">' + num(b.visits) + '</span>' +
+      '</div>';
+    });
     html += '</div></div>';
     return html;
   }

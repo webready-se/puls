@@ -333,8 +333,9 @@ function handle_collect(array $config): void
     $referrer = null;
     if (!empty($input['r'])) {
         $parsed = parse_url($input['r'], PHP_URL_HOST);
-        if ($parsed && $parsed !== ($_SERVER['HTTP_HOST'] ?? '')) {
-            $referrer = $parsed;
+        $self = [$_SERVER['HTTP_HOST'] ?? '', $site];
+        if ($parsed && !in_array($parsed, $self, true) && !in_array(str_replace('www.', '', $parsed), $self, true)) {
+            $referrer = normalize_referrer($parsed);
         }
     }
 
@@ -601,8 +602,62 @@ function cors_headers(array $allowedOrigins): ?array
     return null;
 }
 
+function normalize_referrer(string $host): string
+{
+    $map = [
+        'm.facebook.com'   => 'Facebook',
+        'l.facebook.com'   => 'Facebook',
+        'lm.facebook.com'  => 'Facebook',
+        'www.facebook.com' => 'Facebook',
+        'facebook.com'     => 'Facebook',
+        'l.instagram.com'  => 'Instagram',
+        'www.instagram.com'=> 'Instagram',
+        'instagram.com'    => 'Instagram',
+        't.co'             => 'Twitter/X',
+        'x.com'            => 'Twitter/X',
+        'www.x.com'        => 'Twitter/X',
+        'out.reddit.com'   => 'Reddit',
+        'www.reddit.com'   => 'Reddit',
+        'old.reddit.com'   => 'Reddit',
+        'away.vk.com'      => 'VK',
+        'www.linkedin.com' => 'LinkedIn',
+        'linkedin.com'     => 'LinkedIn',
+        'www.pinterest.com'=> 'Pinterest',
+        'pin.it'           => 'Pinterest',
+        'www.google.com'   => 'Google',
+        'www.google.se'    => 'Google',
+        'www.bing.com'     => 'Bing',
+        'search.yahoo.com' => 'Yahoo',
+        'duckduckgo.com'   => 'DuckDuckGo',
+    ];
+
+    $name = $map[strtolower($host)] ?? $host;
+
+    // Decode IDN/punycode domains (xn--snittrnta-02a.se → snittränta.se)
+    if (str_contains($name, 'xn--') && function_exists('idn_to_utf8')) {
+        $decoded = idn_to_utf8($name, 0, INTL_IDNA_VARIANT_UTS46);
+        if ($decoded !== false) $name = $decoded;
+    }
+
+    return $name;
+}
+
 function normalize_path(string $path): string
 {
+    // Strip tracking query params (fbclid, gclid, utm_*, etc.)
+    if (str_contains($path, '?')) {
+        [$pathPart, $query] = explode('?', $path, 2);
+        parse_str($query, $params);
+        $strip = ['fbclid', 'gclid', 'gclsrc', 'dclid', 'msclkid', 'mc_eid',
+                   'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+                   'ref', 'hsa_cam', 'hsa_grp', 'hsa_mt', 'hsa_src', 'hsa_ad', 'hsa_acc',
+                   'hsa_net', 'hsa_ver', 'hsa_la', 'hsa_ol', 'hsa_kw'];
+        foreach ($strip as $key) {
+            unset($params[$key]);
+        }
+        $path = $params ? $pathPart . '?' . http_build_query($params) : $pathPart;
+    }
+
     if ($path !== '/' && str_ends_with($path, '/')) {
         $path = rtrim($path, '/');
     }
