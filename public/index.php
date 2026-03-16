@@ -299,7 +299,7 @@ function get_tracking_script(): string
       var sc=document.currentScript||{src:'/stats.php',dataset:{}};
       var ep=sc.src.split('?')[0]+'?collect';
       var site=sc.dataset.site||location.hostname;
-      function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});return Object.keys(o).length?o:null}
+      function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});return Object.keys(o).length?o:null}
       function s(){
         var d=JSON.stringify({u:location.pathname+location.search,r:document.referrer,w:innerWidth,site:site,utm:utm()});
         navigator.sendBeacon?navigator.sendBeacon(ep,d):0;
@@ -353,6 +353,8 @@ function handle_collect(array $config): void
     $utmSource   = $utm && !empty($utm['source'])   ? substr($utm['source'], 0, 100)   : null;
     $utmMedium   = $utm && !empty($utm['medium'])   ? substr($utm['medium'], 0, 100)   : null;
     $utmCampaign = $utm && !empty($utm['campaign']) ? substr($utm['campaign'], 0, 200) : null;
+    $utmTerm     = $utm && !empty($utm['term'])     ? substr($utm['term'], 0, 200)     : null;
+    $utmContent  = $utm && !empty($utm['content'])  ? substr($utm['content'], 0, 200)  : null;
 
     $lang = null;
     if (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
@@ -361,7 +363,7 @@ function handle_collect(array $config): void
 
     $path = normalize_path(urldecode(substr($input['u'], 0, 500)));
 
-    $stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, utm_term, utm_content, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $stmt->execute([
         $site,
         $path,
@@ -372,6 +374,8 @@ function handle_collect(array $config): void
         $utmSource,
         $utmMedium,
         $utmCampaign,
+        $utmTerm,
+        $utmContent,
         $lang,
         date('Y-m-d H:i:s'),
     ]);
@@ -451,7 +455,7 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([date('Y-m-d H:i:s', strtotime('-5 minutes'))], $siteParams));
     $live = $stmt->fetch(PDO::FETCH_ASSOC)['live'] ?? 0;
 
-    $stmt = $db->prepare("SELECT utm_source as source, utm_medium as medium, utm_campaign as campaign, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} AND utm_source IS NOT NULL GROUP BY utm_source, utm_medium, utm_campaign ORDER BY visitors DESC LIMIT 10");
+    $stmt = $db->prepare("SELECT utm_source as source, utm_medium as medium, utm_campaign as campaign, utm_term as term, utm_content as content, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} AND utm_source IS NOT NULL GROUP BY utm_source, utm_medium, utm_campaign, utm_term, utm_content ORDER BY visitors DESC LIMIT 10");
     $stmt->execute(array_merge([$since], $siteParams));
     $utm = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -527,6 +531,8 @@ function get_db(string $path): PDO
             utm_source TEXT,
             utm_medium TEXT,
             utm_campaign TEXT,
+            utm_term TEXT,
+            utm_content TEXT,
             language TEXT,
             created_at TEXT NOT NULL
         )');
@@ -550,6 +556,10 @@ function get_db(string $path): PDO
             $db->exec('ALTER TABLE pageviews ADD COLUMN utm_medium TEXT');
             $db->exec('ALTER TABLE pageviews ADD COLUMN utm_campaign TEXT');
             $db->exec('ALTER TABLE pageviews ADD COLUMN language TEXT');
+        }
+        if (!in_array('utm_term', $cols)) {
+            $db->exec('ALTER TABLE pageviews ADD COLUMN utm_term TEXT');
+            $db->exec('ALTER TABLE pageviews ADD COLUMN utm_content TEXT');
         }
         $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='bot_visits'")->fetchAll();
         if (empty($tables)) {

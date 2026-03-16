@@ -501,7 +501,7 @@
     var html = '<div class="card"><span class="card-title">UTM-kampanjer</span><div style="margin-top:14px">';
     rows.forEach(function(r) {
       var pct = (+r.visitors / max) * 100;
-      var label = esc(r.source) + (r.medium ? ' / ' + esc(r.medium) : '') + (r.campaign ? ' — ' + esc(r.campaign) : '');
+      var label = esc(r.source) + (r.medium ? ' / ' + esc(r.medium) : '') + (r.campaign ? ' — ' + esc(r.campaign) : '') + (r.term ? ' [' + esc(r.term) + ']' : '') + (r.content ? ' (' + esc(r.content) + ')' : '');
       html += '<div class="trow">' +
         '<span class="trow-label" title="' + label + '">' + label + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#059669"></div></div>' +
