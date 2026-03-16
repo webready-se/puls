@@ -276,7 +276,7 @@
   function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function num(n) { return Number(n || 0).toLocaleString('sv-SE'); }
   function formatTime(dt) {
-    var d = new Date(dt.replace(' ', 'T'));
+    var d = new Date(dt.replace(' ', 'T') + 'Z');
     var now = new Date();
     var diff = (now - d) / 1000;
     if (diff < 60) return 'just nu';
