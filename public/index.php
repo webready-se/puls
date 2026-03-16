@@ -23,9 +23,12 @@ $config = require __DIR__ . '/../config.php';
 // ROUTING
 // =====================================================================
 
-// Ignore requests for static files that don't exist
+// Serve PWA icons, reject other static file requests
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 if ($uri !== '/' && str_contains($uri, '.')) {
+    if (preg_match('#^/icon-\d+\.png$#', $uri) && file_exists(__DIR__ . $uri)) {
+        respond(file_get_contents(__DIR__ . $uri), 200, 'image/png', ['Cache-Control' => 'public, max-age=604800']);
+    }
     http_response_code(404);
     exit;
 }
@@ -44,6 +47,22 @@ if (isset($_GET['health'])) {
 if (isset($_GET['js'])) {
     respond(get_tracking_script(), 200, 'application/javascript', ['Cache-Control' => 'public, max-age=86400']);
 }
+
+if (isset($_GET['manifest'])) {
+    respond(json_encode([
+        'name' => 'Puls',
+        'short_name' => 'Puls',
+        'start_url' => '/',
+        'display' => 'standalone',
+        'background_color' => '#f8fafc',
+        'theme_color' => '#6366f1',
+        'icons' => [
+            ['src' => '/icon-192.png', 'sizes' => '192x192', 'type' => 'image/png'],
+            ['src' => '/icon-512.png', 'sizes' => '512x512', 'type' => 'image/png'],
+        ],
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), 200, 'application/manifest+json', ['Cache-Control' => 'public, max-age=86400']);
+}
+
 
 if (isset($_GET['pixel'])) {
     handle_pixel($config);
@@ -214,7 +233,13 @@ function show_login(?string $error = null): void
     <html lang="sv">
     <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Puls">
+    <meta name="theme-color" content="#6366f1">
+    <link rel="manifest" href="/?manifest">
+    <link rel="apple-touch-icon" href="/icon-180.png">
     <title>Puls — Logga in</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='%236366f1'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
     <style>

@@ -2,7 +2,13 @@
 <html lang="sv">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Puls">
+<meta name="theme-color" content="#6366f1">
+<link rel="manifest" href="/?manifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <title>Puls</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='%236366f1'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
 <style>
@@ -23,7 +29,8 @@
   /* Header */
   .header {
     background: var(--card); border-bottom: 1px solid var(--border);
-    padding: 14px 28px; display: flex; align-items: center;
+    padding: 14px 28px; padding-top: calc(14px + env(safe-area-inset-top, 0px));
+    display: flex; align-items: center;
     justify-content: space-between; position: sticky; top: 0; z-index: 10;
   }
   .logo { display: flex; align-items: center; gap: 12px; }

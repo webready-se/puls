@@ -122,6 +122,33 @@ test('root without auth shows login', function () {
         ->and($r['body'])->toContain('Logga in');
 });
 
+test('manifest endpoint returns valid JSON', function () {
+    $r = http('GET', '/?manifest');
+    expect($r['status'])->toBe(200);
+
+    $contentType = collect($r['headers'])->first(fn ($h) => str_contains($h, 'Content-Type'));
+    expect($contentType)->toContain('manifest+json');
+
+    $data = json_decode($r['body'], true);
+    expect($data['name'])->toBe('Puls')
+        ->and($data['display'])->toBe('standalone')
+        ->and($data['icons'])->toHaveCount(2);
+});
+
+test('icon files are served as PNG', function () {
+    $r = http('GET', '/icon-192.png');
+    expect($r['status'])->toBe(200);
+
+    $contentType = collect($r['headers'])->first(fn ($h) => str_contains($h, 'Content-Type'));
+    expect($contentType)->toContain('image/png');
+});
+
+test('dashboard includes PWA meta tags', function () {
+    $r = http('GET', '/?login');
+    expect($r['body'])->toContain('apple-mobile-web-app-capable')
+        ->and($r['body'])->toContain('manifest');
+});
+
 test('static files return 404', function () {
     $r = http('GET', '/favicon.ico');
     expect($r['status'])->toBe(404);
