@@ -42,8 +42,13 @@ php -S localhost:8080 -t public
 Add a tracking pixel to catch bots that don't execute JavaScript:
 
 ```html
-<img src="https://your-puls-domain/?pixel&s=my-site&p=/current-path"
-     alt="" width="1" height="1" style="position:absolute;opacity:0" />
+<img
+  src="https://your-puls-domain/?pixel&s=my-site&p=/current-path"
+  alt=""
+  width="1"
+  height="1"
+  style="position:absolute;opacity:0"
+/>
 ```
 
 ## CLI
@@ -108,6 +113,29 @@ server {
         include fastcgi_params;
     }
 }
+```
+
+### Laravel Forge (zero-downtime deploys)
+
+Puls auto-detects Forge's release directory structure and stores
+`data/` and `users.json` in the site root automatically. No symlinks needed.
+
+**First-time setup (SSH):**
+
+```bash
+cd /home/forge/puls.example.com/current
+php puls key:generate
+php puls user:add admin
+```
+
+**Deploy script (default is fine):**
+
+```bash
+$CREATE_RELEASE()
+
+cd $FORGE_RELEASE_DIRECTORY
+
+$ACTIVATE_RELEASE()
 ```
 
 ### Shared Hosting

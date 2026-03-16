@@ -2,3 +2,5 @@ data/
 users.json
 .env
 .DS_Store
+/vendor/
+composer.lock

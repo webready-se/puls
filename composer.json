@@ -1,0 +1,24 @@
+{
+    "name": "webready/puls",
+    "description": "Cookieless analytics",
+    "type": "project",
+    "authors": [
+        {
+            "name": "Nicklas Jarnesjö",
+            "email": "nicklas@webready.se"
+        }
+    ],
+    "require-dev": {
+        "pestphp/pest": "*"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}

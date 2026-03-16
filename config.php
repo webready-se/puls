@@ -11,12 +11,25 @@ if (file_exists($envFile)) {
     }
 }
 
+function resolve_path(string $path): string
+{
+    if ($path[0] === '/') return $path;
+
+    // Detect Forge zero-deploy: __DIR__ is inside releases/, resolve to site root
+    $dir = __DIR__;
+    if (preg_match('#(/home/forge/[^/]+)/releases/\d+#', $dir, $m)) {
+        return $m[1] . '/' . $path;
+    }
+
+    return $dir . '/' . $path;
+}
+
 return [
     'app_key' => $_ENV['APP_KEY'] ?? '',
 
-    'db_path' => __DIR__ . '/' . ($_ENV['DB_PATH'] ?? 'data/puls.sqlite'),
+    'db_path' => resolve_path($_ENV['DB_PATH'] ?? 'data/puls.sqlite'),
 
-    'users_file' => __DIR__ . '/users.json',
+    'users_file' => resolve_path($_ENV['USERS_FILE'] ?? 'users.json'),
 
     'allowed_origins' => array_filter(explode(',', $_ENV['ALLOWED_ORIGINS'] ?? '')),
 
