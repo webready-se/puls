@@ -87,6 +87,30 @@ test('js snippet captures all five utm params', function () {
     expect($r['body'])->toContain("'source','medium','campaign','term','content'");
 });
 
+test('log endpoint tracks bot visits', function () {
+    $r = http('GET', '/?log&s=test&p=/some-page', [
+        'header' => 'User-Agent: Mozilla/5.0 (compatible; GPTBot/1.0; +https://openai.com/gptbot)',
+    ]);
+    expect($r['status'])->toBe(204);
+});
+
+test('log endpoint ignores non-bot user agents', function () {
+    $r = http('GET', '/?log&s=test&p=/page', [
+        'header' => 'User-Agent: Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/120.0',
+    ]);
+    expect($r['status'])->toBe(204);
+});
+
+test('log endpoint deduplicates within 10 seconds', function () {
+    $ua = 'User-Agent: Mozilla/5.0 (compatible; ClaudeBot/1.0)';
+    // First request
+    $r1 = http('GET', '/?log&s=dedup-test&p=/dedup', ['header' => $ua]);
+    expect($r1['status'])->toBe(204);
+    // Second identical request — should be deduped
+    $r2 = http('GET', '/?log&s=dedup-test&p=/dedup', ['header' => $ua]);
+    expect($r2['status'])->toBe(204);
+});
+
 test('collect endpoint rejects empty payload', function () {
     $r = http('POST', '/?collect', [
         'header' => 'Content-Type: application/json',
