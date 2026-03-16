@@ -29,21 +29,37 @@
 
 ---
 
-## Epic 1: Stabilitet & datahygien (PRIO 1)
+## Epic 1: Deploya & gå live ✅
+
+- [x] **Nginx-config + SSL** — Laravel Forge, puls.wrlabs.se
+- [x] **Migrera SQLite från lillabosgarden.se** — Kopierad, auto-migration kördes
+- [x] **Skapa admin-user** — `php puls user:add admin`
+- [x] **Uppdatera tracking-snippets** — lillabosgarden.se, odlingsguiden, snittränta.se, jarnesjo.com
+- [x] **Verifiera CORS** — Cross-origin tracking fungerar
+- [x] **Hälsokontroll-endpoint** — `/?health` → 200/503
+- [x] **Stabil visitor hash-salt** — APP_KEY i .env istället för hash_file(users.json)
+- [x] **Strippa tracking query params** — fbclid, gclid, utm_* m.fl. strippas i normalize_path
+- [x] **Referrer-gruppering** — Facebook, Instagram, Twitter/X, Google etc.
+- [x] **Auto-detect Forge zero-deploy** — resolve_path() hittar sajtroten automatiskt
+- [x] **Pest-testsvit** — 59 tester (unit + integration)
+- [x] **UTM-länkgenerator** — Inbyggd i dashboarden
+- [x] **.env-baserad konfiguration** — php puls key:generate
+
+## Epic 2: Stabilitet & datahygien
 
 Bör på plats nu när det kör live.
 
 - [ ] **Data retention** — Auto-rensa pageviews/bot_visits äldre än N dagar (konfigurerbart, default 365). Enklast via cron: `DELETE FROM pageviews WHERE created_at < date('now', '-365 days')`
 - [ ] **Lazy migration-check** — Undvik `PRAGMA table_info` på varje request. En version-tabell eller enkel flagga räcker
 
-## Epic 2: Säkerhet & härdning (PRIO 2)
+## Epic 3: Säkerhet & härdning
 
 - [ ] **Content-Security-Policy** — Strikt CSP på dashboard
 - [ ] **Rate limiting (Nginx)** — `limit_req_zone` på collect-endpoint
 - [ ] **Session-rotation** — Förnya session-ID periodiskt, inte bara vid login
 - [ ] **Audit log** — Logga login-försök (lyckade + misslyckade) i SQLite
 
-## Epic 3: Dashboard-förbättringar
+## Epic 4: Dashboard-förbättringar
 
 Vänta tills Puls kört live ett tag och man ser vad som faktiskt saknas.
 
@@ -53,14 +69,14 @@ Vänta tills Puls kört live ett tag och man ser vad som faktiskt saknas.
 - [ ] **Export** — CSV-export av data
 - [ ] **Dark mode** — Automatiskt via prefers-color-scheme
 
-## Epic 4: Smartare data
+## Epic 5: Smartare data
 
 - [ ] **Bounce rate** — Besökare som bara ser en sida (data finns, ~41% i nuläget)
 - [ ] **Session-längd** — Ungefärlig tid på sajten (baserat på flera pageviews)
 - [ ] **Entry/exit pages** — Vilka sidor folk landar på och lämnar från
 - [ ] **Filtrering** — Filtrera dashboard per browser, device, referrer
 
-## Epic 5: Skalning & underhåll
+## Epic 6: Skalning & underhåll
 
 Inte relevant förrän det finns riktig volym. Avvakta.
 
