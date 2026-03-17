@@ -74,6 +74,11 @@ if (isset($_GET['log'])) {
     respond('', 204, null, ['Cache-Control' => 'no-store']);
 }
 
+if (isset($_GET['status_log'])) {
+    handle_status_log($config);
+    respond('', 204, null, ['Cache-Control' => 'no-store']);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS' && isset($_GET['collect'])) {
     $cors = cors_headers($config['allowed_origins']);
     $cors
@@ -520,6 +525,35 @@ function get_api_data(array $config, array $user): string
         unset($a);
     }
 
+    // Broken links (last 30 days, regardless of $days filter)
+    $blSiteFilter = $site ? 'AND site = ?' : '';
+    $blSiteParams = $site ? [$site] : [];
+    if (!$site && !empty($allowedSites)) {
+        $placeholders = implode(',', array_fill(0, count($allowedSites), '?'));
+        $blSiteFilter = "AND site IN ({$placeholders})";
+        $blSiteParams = $allowedSites;
+    }
+    $blTables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='broken_links'")->fetchAll();
+    $brokenLinks = [];
+    if (!empty($blTables)) {
+        $stmt = $db->prepare("SELECT path, status, SUM(hits) as hits,
+            MIN(first_seen) as first_seen, MAX(last_seen) as last_seen,
+            GROUP_CONCAT(DISTINCT referrer) as referrers
+            FROM broken_links
+            WHERE last_seen >= date('now', '-30 days') {$blSiteFilter}
+            GROUP BY path, status
+            ORDER BY hits DESC
+            LIMIT 25");
+        $stmt->execute($blSiteParams);
+        $brokenLinks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($brokenLinks as &$bl) {
+            $bl['hits'] = (int) $bl['hits'];
+            $bl['status'] = (int) $bl['status'];
+            $bl['referrers'] = $bl['referrers'] ? array_filter(explode(',', $bl['referrers'])) : [];
+        }
+        unset($bl);
+    }
+
     return json_encode([
         'site'      => $site ?: 'Alla sajter',
         'days'      => $days,
@@ -536,6 +570,7 @@ function get_api_data(array $config, array $user): string
         'botCategories' => $botCategories,
         'botPages'  => $botPages,
         'botActivity' => $botActivity,
+        'brokenLinks' => $brokenLinks,
     ], JSON_PRETTY_PRINT);
 }
 
@@ -591,39 +626,20 @@ function get_db(string $path): PDO
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE INDEX idx_bot_site_date ON bot_visits (site, created_at)');
+        $db->exec('CREATE TABLE broken_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            path TEXT NOT NULL,
+            status INTEGER NOT NULL,
+            referrer TEXT,
+            hits INTEGER DEFAULT 1,
+            first_seen TEXT NOT NULL,
+            last_seen TEXT NOT NULL
+        )');
+        $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status, referrer)');
+        $db->exec('CREATE INDEX idx_broken_site_status ON broken_links (site, status, hits DESC)');
     } else {
-        // Migrate: add columns/tables if missing
-        $cols = array_column($db->query('PRAGMA table_info(pageviews)')->fetchAll(PDO::FETCH_ASSOC), 'name');
-        if (!in_array('utm_source', $cols)) {
-            $db->exec('ALTER TABLE pageviews ADD COLUMN utm_source TEXT');
-            $db->exec('ALTER TABLE pageviews ADD COLUMN utm_medium TEXT');
-            $db->exec('ALTER TABLE pageviews ADD COLUMN utm_campaign TEXT');
-            $db->exec('ALTER TABLE pageviews ADD COLUMN language TEXT');
-        }
-        if (!in_array('utm_term', $cols)) {
-            $db->exec('ALTER TABLE pageviews ADD COLUMN utm_term TEXT');
-            $db->exec('ALTER TABLE pageviews ADD COLUMN utm_content TEXT');
-        }
-        $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='bot_visits'")->fetchAll();
-        if (empty($tables)) {
-            $db->exec('CREATE TABLE bot_visits (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                site TEXT NOT NULL,
-                path TEXT NOT NULL,
-                bot_name TEXT NOT NULL,
-                bot_category TEXT NOT NULL,
-                user_agent TEXT,
-                created_at TEXT NOT NULL
-            )');
-            $db->exec('CREATE INDEX idx_bot_site_date ON bot_visits (site, created_at)');
-        }
-
-        // Migrate: normalize paths
-        $needsNorm = $db->query("SELECT COUNT(*) FROM pageviews WHERE path LIKE '%/' AND path != '/'")->fetchColumn();
-        if ($needsNorm > 0) {
-            $db->exec("UPDATE pageviews SET path = RTRIM(path, '/') WHERE path LIKE '%/' AND path != '/'");
-            $db->exec("UPDATE bot_visits SET path = RTRIM(path, '/') WHERE path LIKE '%/' AND path != '/'");
-        }
+        run_migrations($db);
     }
 
     return $db;
@@ -764,6 +780,119 @@ function normalize_path(string $path): string
         $path = rtrim($path, '/');
     }
     return $path;
+}
+
+function run_migrations(PDO $db): void
+{
+    $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
+    $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
+    $currentVersion = 3; // Bump this when adding new migrations
+
+    $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
+    if ($version >= $currentVersion) return;
+
+    // v1: UTM columns
+    $cols = array_column($db->query('PRAGMA table_info(pageviews)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+    if (!in_array('utm_source', $cols)) {
+        $db->exec('ALTER TABLE pageviews ADD COLUMN utm_source TEXT');
+        $db->exec('ALTER TABLE pageviews ADD COLUMN utm_medium TEXT');
+        $db->exec('ALTER TABLE pageviews ADD COLUMN utm_campaign TEXT');
+        $db->exec('ALTER TABLE pageviews ADD COLUMN language TEXT');
+    }
+    if (!in_array('utm_term', $cols)) {
+        $db->exec('ALTER TABLE pageviews ADD COLUMN utm_term TEXT');
+        $db->exec('ALTER TABLE pageviews ADD COLUMN utm_content TEXT');
+    }
+
+    // v1: bot_visits table
+    $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='bot_visits'")->fetchAll();
+    if (empty($tables)) {
+        $db->exec('CREATE TABLE bot_visits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            path TEXT NOT NULL,
+            bot_name TEXT NOT NULL,
+            bot_category TEXT NOT NULL,
+            user_agent TEXT,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE INDEX idx_bot_site_date ON bot_visits (site, created_at)');
+    }
+
+    // v2: normalize trailing slashes
+    $needsNorm = $db->query("SELECT COUNT(*) FROM pageviews WHERE path LIKE '%/' AND path != '/'")->fetchColumn();
+    if ($needsNorm > 0) {
+        $db->exec("UPDATE pageviews SET path = RTRIM(path, '/') WHERE path LIKE '%/' AND path != '/'");
+        $db->exec("UPDATE bot_visits SET path = RTRIM(path, '/') WHERE path LIKE '%/' AND path != '/'");
+    }
+
+    // v3: broken_links table
+    $blTables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='broken_links'")->fetchAll();
+    if (empty($blTables)) {
+        $db->exec('CREATE TABLE broken_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            path TEXT NOT NULL,
+            status INTEGER NOT NULL,
+            referrer TEXT,
+            hits INTEGER DEFAULT 1,
+            first_seen TEXT NOT NULL,
+            last_seen TEXT NOT NULL
+        )');
+        $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status, referrer)');
+        $db->exec('CREATE INDEX idx_broken_site_status ON broken_links (site, status, hits DESC)');
+    }
+
+    file_put_contents($marker, (string) $currentVersion);
+}
+
+function handle_status_log(array $config): void
+{
+    $status = (int) ($_GET['status'] ?? 0);
+
+    // Only track redirects and errors
+    if ($status < 300 || $status === 304) return;
+
+    $db = get_db($config['db_path']);
+    $path = normalize_path(urldecode($_GET['p'] ?? '/'));
+    $site = normalize_site($_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown'));
+    $path = substr($path, 0, 500);
+
+    // Ignore common noise paths (scanners probing for vulnerabilities)
+    $noisePaths = ['/wp-admin', '/wp-login', '/wp-content', '/.env', '/.git', '/xmlrpc.php', '/administrator'];
+    foreach ($noisePaths as $noise) {
+        if (str_starts_with($path, $noise)) return;
+    }
+
+    // Truncate referrer to domain+path (strip query strings)
+    $referrer = $_SERVER['HTTP_X_ORIGINAL_REFERER'] ?? $_SERVER['HTTP_REFERER'] ?? null;
+    if ($referrer) {
+        $parsed = parse_url($referrer);
+        $referrer = ($parsed['host'] ?? '') . ($parsed['path'] ?? '/');
+        $referrer = substr($referrer, 0, 500);
+    }
+
+    $now = date('Y-m-d H:i:s');
+
+    // Upsert: increment hits if exists, otherwise insert
+    $stmt = $db->prepare('INSERT INTO broken_links (site, path, status, referrer, hits, first_seen, last_seen)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+        ON CONFLICT(site, path, status, referrer) DO UPDATE SET
+            hits = hits + 1,
+            last_seen = excluded.last_seen');
+    $stmt->execute([$site, $path, $status, $referrer, $now, $now]);
+
+    // Lazy retention: clean up entries older than 30 days (once per day)
+    cleanup_broken_links($db);
+}
+
+function cleanup_broken_links(PDO $db): void
+{
+    $marker = dirname($db->query("PRAGMA database_list")->fetch()['file'] ?? __DIR__) . '/.broken_cleanup';
+    if (file_exists($marker) && file_get_contents($marker) === date('Y-m-d')) return;
+
+    $db->exec("DELETE FROM broken_links WHERE last_seen < '" . date('Y-m-d H:i:s', strtotime('-30 days')) . "'");
+    file_put_contents($marker, date('Y-m-d'));
 }
 
 function cleanup_bot_visits(PDO $db): void
