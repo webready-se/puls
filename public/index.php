@@ -790,7 +790,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 4; // Bump this when adding new migrations
+    $currentVersion = 5; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -852,6 +852,32 @@ function run_migrations(PDO $db): void
         $db->exec("DELETE FROM broken_links WHERE path LIKE '%.php' OR path LIKE '/cgi-bin%' OR path LIKE '/.well-known%'");
     }
 
+    // v5: broader noise cleanup + decode referrers
+    if ($version < 5) {
+        $db->exec("DELETE FROM broken_links WHERE path LIKE '%.php%' OR path LIKE '%/wp-%' OR path LIKE '%/wordpress%' OR path LIKE '%/xmlrpc%' OR path LIKE '%/cgi-bin%' OR path LIKE '/.well-known%'");
+        // Decode URL-encoded referrers
+        $rows = $db->query("SELECT id, referrer FROM broken_links WHERE referrer LIKE '%\%%'")->fetchAll(PDO::FETCH_ASSOC);
+        $update = $db->prepare("UPDATE broken_links SET referrer = ? WHERE id = ?");
+        foreach ($rows as $row) {
+            $decoded = urldecode($row['referrer']);
+            if ($decoded !== $row['referrer']) {
+                $update->execute([$decoded, $row['id']]);
+            }
+        }
+        // Decode punycode in referrers
+        if (function_exists('idn_to_utf8')) {
+            $rows = $db->query("SELECT id, referrer FROM broken_links WHERE referrer LIKE '%xn--%'")->fetchAll(PDO::FETCH_ASSOC);
+            $update = $db->prepare("UPDATE broken_links SET referrer = ? WHERE id = ?");
+            foreach ($rows as $row) {
+                $host = explode('/', $row['referrer'])[0];
+                $decoded = idn_to_utf8($host, 0, INTL_IDNA_VARIANT_UTS46);
+                if ($decoded !== false && $decoded !== $host) {
+                    $update->execute([str_replace($host, $decoded, $row['referrer']), $row['id']]);
+                }
+            }
+        }
+    }
+
     file_put_contents($marker, (string) $currentVersion);
 }
 
@@ -868,14 +894,14 @@ function handle_status_log(array $config): void
     $path = substr($path, 0, 500);
 
     // Ignore noise paths (scanners probing for vulnerabilities)
-    if (preg_match('#\.php$|/cgi-bin|^/\.well-known|^/wp-|^/\.env|^/\.git|^/xmlrpc|^/administrator#i', $path)) return;
+    if (preg_match('#\.php\d?|/cgi-bin|^/\.well-known|/wp-|/wordpress|^/\.env|^/\.git|/xmlrpc|/administrator#i', $path)) return;
 
     // Truncate referrer to domain+path (strip query strings, decode punycode + URL-encoding)
     $referrer = $_SERVER['HTTP_X_ORIGINAL_REFERER'] ?? $_SERVER['HTTP_REFERER'] ?? null;
     if ($referrer) {
         $parsed = parse_url($referrer);
         $host = $parsed['host'] ?? '';
-        if (function_exists('idn_to_utf8') && str_starts_with($host, 'xn--')) {
+        if (function_exists('idn_to_utf8') && str_contains($host, 'xn--')) {
             $decoded = idn_to_utf8($host, 0, INTL_IDNA_VARIANT_UTS46);
             if ($decoded !== false) $host = $decoded;
         }

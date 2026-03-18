@@ -217,6 +217,18 @@ test('status_log ignores noise paths', function () {
 
     $r = http('GET', '/?status_log&s=test&p=/.well-known/assetlinks.json&status=404');
     expect($r['status'])->toBe(204);
+
+    $r = http('GET', '/?status_log&s=test&p=/wp-includes/js/jquery&status=404');
+    expect($r['status'])->toBe(204);
+
+    $r = http('GET', '/?status_log&s=test&p=/wordpress/wp-admin/maint&status=404');
+    expect($r['status'])->toBe(204);
+
+    $r = http('GET', '/?status_log&s=test&p=/randkeyword.PhP7&status=404');
+    expect($r['status'])->toBe(204);
+
+    $r = http('GET', '/?status_log&s=test&p=' . urlencode('/inputs.php?p=') . '&status=404');
+    expect($r['status'])->toBe(204);
 });
 
 test('status_log increments hits on duplicate', function () {
