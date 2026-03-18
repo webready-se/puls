@@ -211,6 +211,24 @@
   @media (max-width: 600px) { .snippet-grid { grid-template-columns: 1fr; } }
   .snippet label { display: block; font-size: 11px; color: #a5b4fc; margin-bottom: 4px; font-weight: 500; }
 
+  /* Pull to refresh (PWA only) */
+  .ptr-indicator {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    height: 0; overflow: hidden; background: var(--bg);
+    transition: height 0.2s ease;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .ptr-indicator.pulling { transition: none; }
+  .ptr-indicator.refreshing { height: 52px; }
+  .ptr-spinner {
+    width: 22px; height: 22px; border: 2.5px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  .ptr-indicator.refreshing .ptr-spinner { animation: spin 0.8s linear infinite; }
+  .ptr-text { font-size: 12px; color: var(--muted); margin-left: 10px; font-weight: 500; }
+
   /* Footer */
   .footer { text-align: center; padding: 16px 0; font-size: 12px; color: var(--light); }
 
@@ -228,6 +246,11 @@
 </style>
 </head>
 <body>
+
+<div class="ptr-indicator" id="ptr">
+  <div class="ptr-spinner" id="ptr-spinner"></div>
+  <span class="ptr-text" id="ptr-text">Uppdatera</span>
+</div>
 
 <div class="header">
   <div class="logo">
@@ -833,6 +856,71 @@
   };
 
   window.updateUtm = updateUtm;
+
+  // --- Pull to refresh (PWA standalone) ---
+  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+    var ptr = document.getElementById('ptr');
+    var ptrSpinner = document.getElementById('ptr-spinner');
+    var ptrText = document.getElementById('ptr-text');
+    var ptrStartY = 0;
+    var ptrDist = 0;
+    var ptrActive = false;
+    var ptrRefreshing = false;
+    var PTR_THRESHOLD = 70;
+    var PTR_MAX = 110;
+
+    document.addEventListener('touchstart', function(e) {
+      if (ptrRefreshing) return;
+      if (window.scrollY === 0) {
+        ptrStartY = e.touches[0].clientY;
+        ptrActive = true;
+        ptr.classList.add('pulling');
+        ptr.classList.remove('refreshing');
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+      if (!ptrActive || ptrRefreshing) return;
+      ptrDist = Math.max(0, e.touches[0].clientY - ptrStartY);
+      if (ptrDist > 0 && window.scrollY === 0) {
+        var progress = Math.min(ptrDist / PTR_MAX, 1);
+        var h = Math.min(ptrDist * 0.5, 60);
+        ptr.style.height = h + 'px';
+        ptrSpinner.style.transform = 'rotate(' + (progress * 360) + 'deg)';
+        ptrSpinner.style.opacity = Math.min(progress * 1.5, 1);
+        ptrText.textContent = ptrDist >= PTR_THRESHOLD ? 'Släpp för att uppdatera' : 'Uppdatera';
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchend', function() {
+      if (!ptrActive) return;
+      ptrActive = false;
+      ptr.classList.remove('pulling');
+
+      if (ptrDist >= PTR_THRESHOLD && !ptrRefreshing) {
+        ptrRefreshing = true;
+        ptr.classList.add('refreshing');
+        ptrText.textContent = 'Laddar...';
+        ptr.style.height = '';
+
+        var url = API + '?api&days=' + currentDays;
+        if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .then(function(data) { if (data) render(data); })
+          .finally(function() {
+            setTimeout(function() {
+              ptr.classList.remove('refreshing');
+              ptr.style.height = '0';
+              ptrRefreshing = false;
+            }, 300);
+          });
+      } else {
+        ptr.style.height = '0';
+      }
+      ptrDist = 0;
+    }, { passive: true });
+  }
 })();
 </script>
 </body>
