@@ -111,6 +111,24 @@
     display: flex; align-items: center; justify-content: center;
   }
   .stat-icon svg { width: 20px; height: 20px; color: var(--accent); }
+  .stat-trend { font-size: 12px; font-weight: 600; margin-top: 2px; }
+  .stat-trend.up { color: var(--green); }
+  .stat-trend.down { color: var(--red); }
+  .stat-trend.flat { color: var(--light); }
+
+  /* Tools toggle */
+  .tools-toggle {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 12px; margin-bottom: 14px;
+    font-size: 13px; color: var(--muted); cursor: pointer;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); transition: color 0.2s;
+  }
+  .tools-toggle:hover { color: var(--text); }
+  .tools-toggle svg { width: 16px; height: 16px; transition: transform 0.3s; }
+  .tools-toggle.open svg { transform: rotate(180deg); }
+  .tools-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+  .tools-content.open { max-height: 3000px; }
 
   /* Chart */
   .card {
@@ -404,7 +422,8 @@
     if (!hasData) {
       app.innerHTML = '<div class="empty">' + icons.chart +
         '<p>Ingen data ännu. Lägg till tracking-scriptet nedan för att börja samla in besöksstatistik.</p></div>' +
-        renderSnippet(d.site);
+        renderSnippet(d.site) +
+        '<div class="footer">Puls — One file. No cookies. Full picture.</div>';
       return;
     }
 
@@ -412,8 +431,20 @@
     var totalVisitors = +d.totals.visitors;
     var pagesPerVisitor = totalVisitors > 0 ? (totalViews / totalVisitors).toFixed(1) : '—';
 
+    // Trend comparison
+    var prev = d.previousTotals;
+    var viewsTrend = null, visitorsTrend = null, ppvTrend = null;
+    if (prev && +prev.views > 0) {
+      viewsTrend = Math.round(((totalViews - +prev.views) / +prev.views) * 100);
+      visitorsTrend = Math.round(((totalVisitors - +prev.visitors) / +prev.visitors) * 100);
+      var prevPpv = +prev.visitors > 0 ? (+prev.views / +prev.visitors) : 0;
+      if (prevPpv > 0) {
+        ppvTrend = Math.round((((totalViews / totalVisitors) - prevPpv) / prevPpv) * 100);
+      }
+    }
+
     app.innerHTML =
-      renderStats(totalViews, totalVisitors, pagesPerVisitor, d.live) +
+      renderStats(totalViews, totalVisitors, pagesPerVisitor, d.live, viewsTrend, visitorsTrend, ppvTrend) +
       renderChart(d) +
       '<div class="grid-2">' +
         renderTable('Populära sidor', d.pages, 'path', 'views', '#6366f1') +
@@ -429,22 +460,30 @@
       '</div>' +
       renderBotSection(d) +
       renderBrokenLinks(d.brokenLinks) +
-      renderSnippet(d.site);
+      renderTools(d.site);
   }
 
-  function renderStats(views, visitors, pagesPerVisitor, live) {
+  function renderStats(views, visitors, pagesPerVisitor, live, viewsTrend, visitorsTrend, ppvTrend) {
     return '<div class="stats">' +
-      statCard('Sidvisningar', num(views), icons.eye) +
-      statCard('Unika besökare', num(visitors), icons.users) +
-      statCard('Sidor / besökare', pagesPerVisitor, icons.layers) +
-      statCard('Live nu', num(live), icons.zap) +
+      statCard('Sidvisningar', num(views), icons.eye, viewsTrend) +
+      statCard('Unika besökare', num(visitors), icons.users, visitorsTrend) +
+      statCard('Sidor / besökare', pagesPerVisitor, icons.layers, ppvTrend) +
+      statCard('Live nu', num(live), icons.zap, null) +
     '</div>';
   }
 
-  function statCard(label, value, icon) {
+  function statCard(label, value, icon, trend) {
+    var trendHtml = '';
+    if (trend !== null && trend !== undefined) {
+      var cls = trend > 0 ? 'up' : (trend < 0 ? 'down' : 'flat');
+      var arrow = trend > 0 ? '▲' : (trend < 0 ? '▼' : '–');
+      var sign = trend > 0 ? '+' : '';
+      trendHtml = '<div class="stat-trend ' + cls + '">' + arrow + ' ' + sign + trend + '%</div>';
+    }
     return '<div class="stat"><div class="stat-top"><div>' +
       '<div class="stat-label">' + label + '</div>' +
       '<div class="stat-value">' + value + '</div>' +
+      trendHtml +
       '</div><div class="stat-icon">' + icon + '</div></div></div>';
   }
 
@@ -697,6 +736,18 @@
     return html;
   }
 
+  function renderTools(site) {
+    var isOpen = localStorage.getItem('puls-tools-open') === '1';
+    var chevron = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>';
+    return '<div class="tools-toggle' + (isOpen ? ' open' : '') + '" onclick="toggleTools(this)">' +
+      chevron + '<span>' + (isOpen ? 'Dölj verktyg' : 'Visa verktyg') + '</span>' +
+    '</div>' +
+    '<div class="tools-content' + (isOpen ? ' open' : '') + '">' +
+      renderSnippet(site) +
+    '</div>' +
+    '<div class="footer">Puls — One file. No cookies. Full picture.</div>';
+  }
+
   function renderSnippet(site) {
     var host = location.origin;
     var siteVal = currentSite || 'min-sajt';
@@ -803,9 +854,7 @@
       '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#e0e7ff">Hur funkar det?</strong> Nginx skickar en kopia av bot-requests till Puls i bakgrunden (mirror). ' +
         'Broken links (404) f\u00e5ngas via post_action efter att svaret skickats. ' +
         'PHP-sajt: l\u00e4gg post_action i PHP-blocket. Statisk sajt: i error_page-locationen. Noll p\u00e5verkan p\u00e5 svarstid.</p>' +
-    '</div>' +
-
-    '<div class="footer">Puls — One file. No cookies. Full picture.</div>';
+    '</div>';
   }
 
   function updateUtm() {
@@ -854,6 +903,14 @@
   };
 
   window.updateUtm = updateUtm;
+
+  window.toggleTools = function(btn) {
+    var content = btn.nextElementSibling;
+    var isOpen = content.classList.toggle('open');
+    btn.classList.toggle('open', isOpen);
+    btn.querySelector('span').textContent = isOpen ? 'Dölj verktyg' : 'Visa verktyg';
+    localStorage.setItem('puls-tools-open', isOpen ? '1' : '0');
+  };
 
   // --- Pull to refresh (PWA standalone) ---
   if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {

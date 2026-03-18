@@ -476,6 +476,12 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$since], $siteParams));
     $totals = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    // Previous period for trend comparison
+    $prevSince = date('Y-m-d', strtotime("-" . ($days * 2) . " days"));
+    $stmt = $db->prepare("SELECT COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter}");
+    $stmt->execute(array_merge([$prevSince, $since], $siteParams));
+    $previousTotals = $stmt->fetch(PDO::FETCH_ASSOC);
+
     $stmt = $db->prepare("SELECT browser as name, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY browser ORDER BY cnt DESC");
     $stmt->execute(array_merge([$since], $siteParams));
     $browsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -566,6 +572,7 @@ function get_api_data(array $config, array $user): string
         'days'      => $days,
         'live'      => (int)$live,
         'totals'    => $totals,
+        'previousTotals' => $previousTotals,
         'pageviews' => $byDay,
         'pages'     => $pages,
         'referrers' => $referrers,
