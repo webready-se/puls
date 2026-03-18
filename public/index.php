@@ -118,7 +118,7 @@ if (!is_authenticated()) {
 // Serve dashboard
 $dashboard = __DIR__ . '/dashboard.html';
 if (file_exists($dashboard)) {
-    respond(file_get_contents($dashboard), 200, 'text/html');
+    respond(file_get_contents($dashboard), 200, 'text/html', security_headers());
 }
 respond('Dashboard file not found.', 404, 'text/plain');
 
@@ -320,7 +320,7 @@ function show_login(?string $error = null): void
     </div>
     </body>
     </html>
-    HTML, 200, 'text/html');
+    HTML, 200, 'text/html', security_headers());
 }
 
 // =====================================================================
@@ -584,6 +584,17 @@ function get_api_data(array $config, array $user): string
 // =====================================================================
 // HELPERS
 // =====================================================================
+
+function security_headers(): array
+{
+    return [
+        'Content-Security-Policy' => "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'",
+        'X-Content-Type-Options' => 'nosniff',
+        'X-Frame-Options' => 'DENY',
+        'Referrer-Policy' => 'strict-origin-when-cross-origin',
+        'Permissions-Policy' => 'camera=(), microphone=(), geolocation=()',
+    ];
+}
 
 function respond(string $body, int $status, ?string $contentType = null, array $headers = []): never
 {

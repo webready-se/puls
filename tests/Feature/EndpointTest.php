@@ -257,6 +257,18 @@ test('status_log normalizes path', function () {
     expect($r['status'])->toBe(204);
 });
 
+test('login page has security headers', function () {
+    $r = http('GET', '/');
+    expect($r['status'])->toBe(200);
+
+    $headers = implode("\n", $r['headers']);
+    expect($headers)->toContain('Content-Security-Policy:')
+        ->and($headers)->toContain('X-Content-Type-Options: nosniff')
+        ->and($headers)->toContain('X-Frame-Options: DENY')
+        ->and($headers)->toContain('Referrer-Policy:')
+        ->and($headers)->toContain('Permissions-Policy:');
+});
+
 /**
  * Helper to make collection-like operations work without Laravel.
  */
