@@ -634,6 +634,7 @@
         g += '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
           '<div style="display:flex;align-items:center;gap:10px;font-size:13px">' +
             '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
+            (l.site ? '<span style="color:var(--light);font-size:11px;min-width:80px">' + esc(l.site) + '</span>' : '') +
             '<span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(l.path) + '">' + esc(l.path) + '</span>' +
             '<span style="color:var(--muted);white-space:nowrap;font-size:12px">' + num(l.hits) + ' tr\u00e4ffar</span>' +
             '<span style="color:var(--light);white-space:nowrap;font-size:12px">' + time + '</span>' +
@@ -719,8 +720,7 @@
         '# Inuti server-blocket\n' +
         'location / {\n' +
         '    mirror /puls_log;\n' +
-        '    post_action @puls_status_log;\n' +
-        '    # ...befintlig config\n' +
+        '    # ...befintlig config (try_files etc.)\n' +
         '}\n' +
         '\n' +
         '# Bot-tracking (200-svar)\n' +
@@ -734,7 +734,12 @@
         '    proxy_set_header User-Agent $http_user_agent;\n' +
         '}\n' +
         '\n' +
-        '# Broken link tracking (404/301)\n' +
+        '# Broken link tracking (404/301) — l\u00e4gg post_action i PHP-blocket\n' +
+        'location ~ \\.php$ {\n' +
+        '    post_action @puls_status_log;\n' +
+        '    # ...befintlig fastcgi-config\n' +
+        '}\n' +
+        '\n' +
         'location @puls_status_log {\n' +
         '    internal;\n' +
         '    if ($status = 200) { return 204; }\n' +

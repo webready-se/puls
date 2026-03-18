@@ -536,12 +536,12 @@ function get_api_data(array $config, array $user): string
     $blTables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='broken_links'")->fetchAll();
     $brokenLinks = [];
     if (!empty($blTables)) {
-        $stmt = $db->prepare("SELECT path, status, SUM(hits) as hits,
+        $stmt = $db->prepare("SELECT site, path, status, SUM(hits) as hits,
             MIN(first_seen) as first_seen, MAX(last_seen) as last_seen,
             GROUP_CONCAT(DISTINCT referrer) as referrers
             FROM broken_links
             WHERE last_seen >= date('now', '-30 days') {$blSiteFilter}
-            GROUP BY path, status
+            GROUP BY site, path, status
             ORDER BY hits DESC
             LIMIT 25");
         $stmt->execute($blSiteParams);
@@ -550,6 +550,10 @@ function get_api_data(array $config, array $user): string
             $bl['hits'] = (int) $bl['hits'];
             $bl['status'] = (int) $bl['status'];
             $bl['referrers'] = $bl['referrers'] ? array_filter(explode(',', $bl['referrers'])) : [];
+            if (function_exists('idn_to_utf8')) {
+                $decoded = idn_to_utf8($bl['site'], 0, INTL_IDNA_VARIANT_UTS46);
+                if ($decoded !== false) $bl['site'] = $decoded;
+            }
         }
         unset($bl);
     }
