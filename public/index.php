@@ -130,6 +130,7 @@ function start_session(array $config): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) return;
 
+    ini_set('session.gc_maxlifetime', $config['session_lifetime']);
     session_set_cookie_params([
         'lifetime' => $config['session_lifetime'],
         'path' => '/',
