@@ -734,11 +734,17 @@
         '    proxy_set_header User-Agent $http_user_agent;\n' +
         '}\n' +
         '\n' +
-        '# Broken link tracking (404/301) — l\u00e4gg post_action i PHP-blocket\n' +
-        'location ~ \\.php$ {\n' +
-        '    post_action @puls_status_log;\n' +
-        '    # ...befintlig fastcgi-config\n' +
+        '# Broken link tracking (404/301)\n' +
+        '# PHP-sajt: l\u00e4gg post_action i location ~ \\.php$\n' +
+        '# Statisk sajt: l\u00e4gg post_action i error_page-location\n' +
+        'error_page 404 /404.html;\n' +
+        'location = /404.html {\n' +
+        '    internal;\n' +
+        '    post_action @puls_status_log;  # statisk sajt\n' +
         '}\n' +
+        '# location ~ \\.php$ {\n' +
+        '#     post_action @puls_status_log;  # PHP-sajt\n' +
+        '# }\n' +
         '\n' +
         'location @puls_status_log {\n' +
         '    internal;\n' +
@@ -754,7 +760,8 @@
         '}' +
       '</pre>' +
       '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#e0e7ff">Hur funkar det?</strong> Nginx skickar en kopia av bot-requests till Puls i bakgrunden (mirror). ' +
-        'Broken links (404/301) fångas via post_action efter att svaret skickats. Noll påverkan på svarstid.</p>' +
+        'Broken links (404) f\u00e5ngas via post_action efter att svaret skickats. ' +
+        'PHP-sajt: l\u00e4gg post_action i PHP-blocket. Statisk sajt: i error_page-locationen. Noll p\u00e5verkan p\u00e5 svarstid.</p>' +
     '</div>' +
 
     '<div class="footer">Puls — One file. No cookies. Full picture.</div>';

@@ -790,7 +790,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 3; // Bump this when adding new migrations
+    $currentVersion = 4; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -847,6 +847,11 @@ function run_migrations(PDO $db): void
         $db->exec('CREATE INDEX idx_broken_site_status ON broken_links (site, status, hits DESC)');
     }
 
+    // v4: clean up scanner noise from broken_links
+    if ($version < 4) {
+        $db->exec("DELETE FROM broken_links WHERE path LIKE '%.php' OR path LIKE '/cgi-bin%' OR path LIKE '/.well-known%'");
+    }
+
     file_put_contents($marker, (string) $currentVersion);
 }
 
@@ -862,18 +867,20 @@ function handle_status_log(array $config): void
     $site = normalize_site($_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown'));
     $path = substr($path, 0, 500);
 
-    // Ignore common noise paths (scanners probing for vulnerabilities)
-    $noisePaths = ['/wp-admin', '/wp-login', '/wp-content', '/.env', '/.git', '/xmlrpc.php', '/administrator'];
-    foreach ($noisePaths as $noise) {
-        if (str_starts_with($path, $noise)) return;
-    }
+    // Ignore noise paths (scanners probing for vulnerabilities)
+    if (preg_match('#\.php$|/cgi-bin|^/\.well-known|^/wp-|^/\.env|^/\.git|^/xmlrpc|^/administrator#i', $path)) return;
 
-    // Truncate referrer to domain+path (strip query strings)
+    // Truncate referrer to domain+path (strip query strings, decode punycode + URL-encoding)
     $referrer = $_SERVER['HTTP_X_ORIGINAL_REFERER'] ?? $_SERVER['HTTP_REFERER'] ?? null;
     if ($referrer) {
         $parsed = parse_url($referrer);
-        $referrer = ($parsed['host'] ?? '') . ($parsed['path'] ?? '/');
-        $referrer = substr($referrer, 0, 500);
+        $host = $parsed['host'] ?? '';
+        if (function_exists('idn_to_utf8') && str_starts_with($host, 'xn--')) {
+            $decoded = idn_to_utf8($host, 0, INTL_IDNA_VARIANT_UTS46);
+            if ($decoded !== false) $host = $decoded;
+        }
+        $refPath = urldecode($parsed['path'] ?? '/');
+        $referrer = substr($host . $refPath, 0, 500);
     }
 
     $now = date('Y-m-d H:i:s');

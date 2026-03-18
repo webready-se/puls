@@ -208,6 +208,15 @@ test('status_log ignores noise paths', function () {
 
     $r = http('GET', '/?status_log&s=test&p=/.env&status=404');
     expect($r['status'])->toBe(204);
+
+    $r = http('GET', '/?status_log&s=test&p=/admin.php&status=404');
+    expect($r['status'])->toBe(204);
+
+    $r = http('GET', '/?status_log&s=test&p=/cgi-bin/test&status=404');
+    expect($r['status'])->toBe(204);
+
+    $r = http('GET', '/?status_log&s=test&p=/.well-known/assetlinks.json&status=404');
+    expect($r['status'])->toBe(204);
 });
 
 test('status_log increments hits on duplicate', function () {
