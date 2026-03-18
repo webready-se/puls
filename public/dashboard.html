@@ -213,14 +213,12 @@
 
   /* Pull to refresh (PWA only) */
   .ptr-indicator {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-    display: flex; align-items: center; justify-content: center;
+    display: none; align-items: center; justify-content: center;
     height: 0; overflow: hidden; background: var(--bg);
-    transition: height 0.2s ease;
-    padding-top: env(safe-area-inset-top, 0px);
   }
+  .ptr-indicator.active { display: flex; }
   .ptr-indicator.pulling { transition: none; }
-  .ptr-indicator.refreshing { height: 52px; }
+  .ptr-indicator.releasing { transition: height 0.3s ease; }
   .ptr-spinner {
     width: 22px; height: 22px; border: 2.5px solid var(--border);
     border-top-color: var(--accent); border-radius: 50%;
@@ -247,11 +245,6 @@
 </head>
 <body>
 
-<div class="ptr-indicator" id="ptr">
-  <div class="ptr-spinner" id="ptr-spinner"></div>
-  <span class="ptr-text" id="ptr-text">Uppdatera</span>
-</div>
-
 <div class="header">
   <div class="logo">
     <div class="logo-icon">
@@ -276,6 +269,11 @@
     </div>
     <a href="/?logout" class="logout-btn">Logga ut</a>
   </div>
+</div>
+
+<div class="ptr-indicator" id="ptr">
+  <div class="ptr-spinner" id="ptr-spinner"></div>
+  <span class="ptr-text" id="ptr-text">Uppdatera</span>
 </div>
 
 <div class="wrap" id="app">
@@ -864,44 +862,53 @@
     var ptrText = document.getElementById('ptr-text');
     var ptrStartY = 0;
     var ptrDist = 0;
-    var ptrActive = false;
+    var ptrTracking = false;
     var ptrRefreshing = false;
-    var PTR_THRESHOLD = 70;
-    var PTR_MAX = 110;
+    var PTR_THRESHOLD = 60;
+    var PTR_MAX = 100;
 
     document.addEventListener('touchstart', function(e) {
       if (ptrRefreshing) return;
-      if (window.scrollY === 0) {
+      if (window.scrollY <= 0) {
         ptrStartY = e.touches[0].clientY;
-        ptrActive = true;
-        ptr.classList.add('pulling');
-        ptr.classList.remove('refreshing');
+        ptrTracking = true;
+        ptrDist = 0;
       }
     }, { passive: true });
 
     document.addEventListener('touchmove', function(e) {
-      if (!ptrActive || ptrRefreshing) return;
-      ptrDist = Math.max(0, e.touches[0].clientY - ptrStartY);
-      if (ptrDist > 0 && window.scrollY === 0) {
-        var progress = Math.min(ptrDist / PTR_MAX, 1);
-        var h = Math.min(ptrDist * 0.5, 60);
-        ptr.style.height = h + 'px';
-        ptrSpinner.style.transform = 'rotate(' + (progress * 360) + 'deg)';
-        ptrSpinner.style.opacity = Math.min(progress * 1.5, 1);
-        ptrText.textContent = ptrDist >= PTR_THRESHOLD ? 'Släpp för att uppdatera' : 'Uppdatera';
+      if (!ptrTracking || ptrRefreshing) return;
+      var dy = e.touches[0].clientY - ptrStartY;
+      if (dy <= 0 || window.scrollY > 0) {
+        // Scrolling up or page is scrolled — reset
+        if (ptrDist > 0) {
+          ptr.classList.remove('active', 'pulling');
+          ptr.style.height = '0';
+          ptrDist = 0;
+        }
+        return;
       }
+      ptrDist = dy;
+      var progress = Math.min(ptrDist / PTR_MAX, 1);
+      var h = Math.min(ptrDist * 0.45, 56);
+      ptr.classList.add('active', 'pulling');
+      ptr.classList.remove('releasing');
+      ptr.style.height = h + 'px';
+      ptrSpinner.style.transform = 'rotate(' + (progress * 360) + 'deg)';
+      ptrSpinner.style.opacity = Math.min(progress * 1.5, 1);
+      ptrText.textContent = ptrDist >= PTR_THRESHOLD ? 'Släpp för att uppdatera' : 'Dra ner för att uppdatera';
     }, { passive: true });
 
     document.addEventListener('touchend', function() {
-      if (!ptrActive) return;
-      ptrActive = false;
-      ptr.classList.remove('pulling');
+      if (!ptrTracking) return;
+      ptrTracking = false;
 
       if (ptrDist >= PTR_THRESHOLD && !ptrRefreshing) {
         ptrRefreshing = true;
-        ptr.classList.add('refreshing');
+        ptr.classList.remove('pulling');
+        ptr.classList.add('releasing', 'refreshing');
+        ptr.style.height = '44px';
         ptrText.textContent = 'Laddar...';
-        ptr.style.height = '';
 
         var url = API + '?api&days=' + currentDays;
         if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
@@ -909,14 +916,21 @@
           .then(function(r) { return r.json(); })
           .then(function(data) { if (data) render(data); })
           .finally(function() {
+            ptr.classList.add('releasing');
+            ptr.classList.remove('refreshing');
+            ptr.style.height = '0';
             setTimeout(function() {
-              ptr.classList.remove('refreshing');
-              ptr.style.height = '0';
+              ptr.classList.remove('active', 'releasing');
               ptrRefreshing = false;
             }, 300);
           });
       } else {
+        ptr.classList.add('releasing');
+        ptr.classList.remove('pulling');
         ptr.style.height = '0';
+        setTimeout(function() {
+          ptr.classList.remove('active', 'releasing');
+        }, 300);
       }
       ptrDist = 0;
     }, { passive: true });
