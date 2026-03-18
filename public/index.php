@@ -549,7 +549,9 @@ function get_api_data(array $config, array $user): string
         foreach ($brokenLinks as &$bl) {
             $bl['hits'] = (int) $bl['hits'];
             $bl['status'] = (int) $bl['status'];
-            $bl['referrers'] = $bl['referrers'] ? array_filter(explode(',', $bl['referrers'])) : [];
+            $bl['referrers'] = $bl['referrers']
+                ? array_values(array_filter(array_map(fn($r) => urldecode($r), explode(',', $bl['referrers']))))
+                : [];
             if (function_exists('idn_to_utf8')) {
                 $decoded = idn_to_utf8($bl['site'], 0, INTL_IDNA_VARIANT_UTS46);
                 if ($decoded !== false) $bl['site'] = $decoded;
@@ -783,6 +785,8 @@ function normalize_path(string $path): string
     if ($path !== '/' && str_ends_with($path, '/')) {
         $path = rtrim($path, '/');
     }
+    // Collapse multiple slashes (e.g. //feed → /feed)
+    $path = preg_replace('#/+#', '/', $path);
     return $path;
 }
 
@@ -790,7 +794,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 5; // Bump this when adding new migrations
+    $currentVersion = 6; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -874,6 +878,21 @@ function run_migrations(PDO $db): void
                 if ($decoded !== false && $decoded !== $host) {
                     $update->execute([str_replace($host, $decoded, $row['referrer']), $row['id']]);
                 }
+            }
+        }
+    }
+
+    // v6: clean up test entries, normalize double slashes, URL-decode stored referrers
+    if ($version < 6) {
+        $db->exec("DELETE FROM broken_links WHERE path IN ('/endpoint-test', '/test-404', '/test-301', '/test-200', '/denna-sida-finns-inte-abc123', '/finns-inte-test', '/finns-inte-test-xyz', '/testar-broken-link-xyz', '/testar-broken-link-123')");
+        $db->exec("UPDATE broken_links SET path = REPLACE(path, '//', '/') WHERE path LIKE '//%'");
+        // URL-decode stored referrers (re-run for any missed by v5)
+        $rows = $db->query("SELECT id, referrer FROM broken_links WHERE referrer LIKE '%\%%'")->fetchAll(PDO::FETCH_ASSOC);
+        $update = $db->prepare("UPDATE broken_links SET referrer = ? WHERE id = ?");
+        foreach ($rows as $row) {
+            $decoded = urldecode($row['referrer']);
+            if ($decoded !== $row['referrer']) {
+                $update->execute([$decoded, $row['id']]);
             }
         }
     }
