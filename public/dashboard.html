@@ -7,10 +7,19 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Puls">
 <meta name="theme-color" content="#6366f1">
+<meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/?manifest">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <title>Puls</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='%236366f1'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
+<script>
+// Theme: apply immediately in <head> to prevent flash of wrong theme
+(function() {
+  var s = localStorage.getItem('puls-theme') || 'system';
+  if (s === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else if (s === 'light') document.documentElement.setAttribute('data-theme', 'light');
+})();
+</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -19,7 +28,26 @@
     --accent: #6366f1; --accent2: #8b5cf6; --accent-light: #818cf8;
     --green: #059669; --green-bg: #ecfdf5;
     --red: #dc2626; --red-bg: #fef2f2;
+    --subtle: #f1f5f9;
     --radius: 14px;
+  }
+  [data-theme="dark"] {
+    --bg: #0f172a; --card: #1e293b; --border: #334155;
+    --text: #f1f5f9; --muted: #94a3b8; --light: #64748b;
+    --accent: #818cf8; --accent2: #a78bfa; --accent-light: #6366f1;
+    --green: #34d399; --green-bg: rgba(52,211,153,0.1);
+    --red: #f87171; --red-bg: rgba(248,113,113,0.1);
+    --subtle: #334155;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f172a; --card: #1e293b; --border: #334155;
+      --text: #f1f5f9; --muted: #94a3b8; --light: #64748b;
+      --accent: #818cf8; --accent2: #a78bfa; --accent-light: #6366f1;
+      --green: #34d399; --green-bg: rgba(52,211,153,0.1);
+      --red: #f87171; --red-bg: rgba(248,113,113,0.1);
+      --subtle: #334155;
+    }
   }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -63,7 +91,7 @@
   .site-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
   .logout-btn { color: var(--muted); text-decoration: none; }
   .logout-btn:hover { color: var(--red); border-color: var(--red); }
-  .period-group { display: flex; background: #f1f5f9; border-radius: 10px; padding: 3px; }
+  .period-group { display: flex; background: var(--subtle); border-radius: 10px; padding: 3px; }
   .period-btn {
     padding: 7px 14px; border-radius: 8px; border: none; font-size: 13px;
     cursor: pointer; font-weight: 400; background: transparent;
@@ -107,7 +135,7 @@
   .stat-value { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
   @media (max-width: 600px) { .stat-value { font-size: 22px; } }
   .stat-icon {
-    width: 40px; height: 40px; border-radius: 10px; background: #f1f5f9;
+    width: 40px; height: 40px; border-radius: 10px; background: var(--subtle);
     display: flex; align-items: center; justify-content: center;
   }
   .stat-icon svg { width: 20px; height: 20px; color: var(--accent); }
@@ -151,7 +179,7 @@
   .chart-bar:hover { filter: brightness(1.1); }
   .chart-bar .tip {
     display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
-    transform: translateX(-50%); background: var(--text); color: #fff;
+    transform: translateX(-50%); background: var(--text); color: var(--bg);
     padding: 6px 12px; border-radius: 8px; font-size: 11px; white-space: nowrap;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   }
@@ -171,7 +199,7 @@
   /* Table rows */
   .trow { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
   .trow-label {
-    width: 160px; min-width: 80px; font-size: 13px; color: #475569; white-space: nowrap;
+    width: 160px; min-width: 80px; font-size: 13px; color: var(--muted); white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
   }
   @media (max-width: 600px) {
@@ -179,9 +207,9 @@
     .trow-label { width: 90px; min-width: 60px; font-size: 12px; }
     .trow-val { width: 40px; font-size: 12px; }
   }
-  .trow-bar { flex: 1; height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+  .trow-bar { flex: 1; height: 8px; background: var(--subtle); border-radius: 4px; overflow: hidden; }
   .trow-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
-  .trow-val { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: #475569; }
+  .trow-val { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: var(--muted); }
 
   /* Donut */
   .donut-wrap { display: flex; align-items: center; gap: 24px; margin-top: 8px; flex-wrap: wrap; }
@@ -245,20 +273,37 @@
   .ptr-indicator.refreshing .ptr-spinner { animation: spin 0.8s linear infinite; }
   .ptr-text { font-size: 12px; color: var(--muted); margin-left: 10px; font-weight: 500; }
 
+  /* Theme toggle */
+  .theme-toggle {
+    display: flex; background: var(--subtle); border-radius: 10px; padding: 3px;
+    border: 1px solid var(--border);
+  }
+  .theme-toggle button {
+    padding: 5px 8px; border-radius: 7px; border: none; cursor: pointer;
+    background: transparent; color: var(--muted); display: flex; align-items: center;
+    justify-content: center; transition: all 0.15s;
+  }
+  .theme-toggle button:hover { color: var(--text); }
+  .theme-toggle button.active {
+    background: var(--card); color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .theme-toggle svg { width: 14px; height: 14px; }
+
   /* Path filter chip */
   .path-filter {
     display: flex; align-items: center; gap: 8px;
-    background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px;
+    background: var(--subtle); border: 1px solid var(--border); border-radius: 10px;
     padding: 8px 14px; margin-bottom: 14px; font-size: 13px; color: var(--accent);
   }
   .path-filter svg { width: 14px; height: 14px; flex-shrink: 0; }
   .path-filter-path { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .path-filter-clear {
-    margin-left: auto; padding: 2px 8px; border-radius: 6px; border: 1px solid #c7d2fe;
+    margin-left: auto; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border);
     background: transparent; color: var(--accent); cursor: pointer; font-size: 12px; font-weight: 500;
     white-space: nowrap;
   }
-  .path-filter-clear:hover { background: #ddd6fe; }
+  .path-filter-clear:hover { background: var(--subtle); }
 
   /* Command palette */
   .search-btn {
@@ -271,7 +316,7 @@
   .search-btn svg { width: 14px; height: 14px; }
   .search-btn kbd {
     font-size: 11px; font-family: inherit; color: var(--light);
-    background: #f1f5f9; border: 1px solid var(--border);
+    background: var(--subtle); border: 1px solid var(--border);
     padding: 1px 5px; border-radius: 4px; margin-left: 4px;
   }
   @media (max-width: 600px) { .search-btn kbd { display: none; } }
@@ -309,7 +354,7 @@
     padding: 10px 12px; border-radius: 10px; cursor: pointer;
     font-size: 13px; color: var(--text); gap: 12px;
   }
-  .cmd-item:hover, .cmd-item.active { background: #f1f5f9; }
+  .cmd-item:hover, .cmd-item.active { background: var(--subtle); }
   .cmd-item-path {
     flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-weight: 500;
@@ -366,6 +411,11 @@
       <button class="period-btn active" data-days="7">7 dagar</button>
       <button class="period-btn" data-days="30">30 dagar</button>
       <button class="period-btn" data-days="90">90 dagar</button>
+    </div>
+    <div class="theme-toggle" id="theme-toggle">
+      <button data-theme="system" title="System"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></button>
+      <button data-theme="light" title="Ljust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></button>
+      <button data-theme="dark" title="Mörkt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
     </div>
     <a href="/?logout" class="logout-btn">Logga ut</a>
   </div>
@@ -749,7 +799,7 @@
     return '<div class="card"><span class="card-title">' + title + '</span>' +
       '<div class="donut-wrap">' +
         '<svg viewBox="0 0 36 36" width="96" height="96">' + paths +
-        '<circle cx="18" cy="18" r="9" fill="white"/></svg>' +
+        '<circle cx="18" cy="18" r="9" fill="var(--card)"/></svg>' +
         '<div class="donut-legend">' + legend + '</div>' +
       '</div></div>';
   }
@@ -1080,6 +1130,28 @@
     btn.querySelector('span').textContent = isOpen ? 'Dölj verktyg' : 'Visa verktyg';
     localStorage.setItem('puls-tools-open', isOpen ? '1' : '0');
   };
+
+  // --- Theme toggle ---
+  var themeToggle = document.getElementById('theme-toggle');
+  var currentTheme = localStorage.getItem('puls-theme') || 'system';
+
+  function applyTheme(theme) {
+    currentTheme = theme;
+    localStorage.setItem('puls-theme', theme);
+    if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    else if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    else document.documentElement.removeAttribute('data-theme');
+    themeToggle.querySelectorAll('button').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.theme === theme);
+    });
+  }
+
+  applyTheme(currentTheme);
+
+  themeToggle.addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (btn && btn.dataset.theme) applyTheme(btn.dataset.theme);
+  });
 
   // --- Command palette (CMD+K search) ---
   var cmdOverlay = document.getElementById('cmd-overlay');

@@ -2,17 +2,33 @@
 
 ## Kommande
 
-### Sökning / Command Palette (CMD+K)
-- CMD+K öppnar sökfält (command palette-stil)
-- Söker via API med `&path=` param → LIKE-sökning i databasen
-- Visar matchande sidor med views, besökare, trend
-- Stäng/rensa → tillbaka till vanlig dashboard
-- Mobilvänligt (touch-trigger utöver CMD+K)
+### Dark mode
+- System / Dark / Light toggle
+- Bygger på befintliga CSS-variabler
+
+### Delbara dashboards
+- Read-only länk med token (ingen login krävs)
+- Typ `/?share=abc123` — perfekt för kunder
+- Respekterar site-restriktioner
+
+### Veckorapport via email
+- CLI-kommando: `php puls report:send` (körs via cron)
+- Sammanfattning av veckans stats i ett enkelt mail
+- Använder `mail()` — inga externa beroenden
 
 ### Data-export
 - Exportera statistik som CSV eller JSON
 
+### Arkitektur
+- Bryt ut `get_api_data()` till egen fil om index.php växer förbi ~1500 rader
+
 ## Klart
+
+### CMD+K Command Palette (2026-03-19)
+- Sökoverlay med ⌘K/Ctrl+K, debounce, tangentbordsnavigering
+- Klick på resultat filtrerar hela dashboarden (chart, referrers, browsers, UTM)
+- Filter-chip med "Rensa filter"-knapp
+- Backend: `?api&search=` + `?api&path=` endpoints
 
 ### Smartare data (2026-03-19)
 - Bounce rate (stat-kort med trend, inverterad — lägre = bättre)
