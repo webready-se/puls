@@ -551,13 +551,21 @@
     var max = Math.max.apply(null, rows.map(function(r) { return +r[valKey]; }));
     var prefix = '';
     if (labelKey === 'path' && currentSite && rows.length > 1) {
-      var parts = decode(rows[0][labelKey]).split('/');
-      for (var i = 1; i < parts.length; i++) {
-        var candidate = parts.slice(0, i + 1).join('/') + '/';
-        var base = candidate.slice(0, -1);
-        if (rows.every(function(r) { var p = decode(r[labelKey]); return p === base || p.indexOf(candidate) === 0; })) {
-          prefix = candidate;
-        } else break;
+      // Check if site name is a path prefix (subpath sites like /odlingsguiden)
+      var sitePrefix = '/' + currentSite + '/';
+      var sitePrefixBase = '/' + currentSite;
+      if (rows.some(function(r) { var p = decode(r[labelKey]); return p.indexOf(sitePrefix) === 0; })) {
+        prefix = sitePrefix;
+      } else {
+        // Generic common prefix detection
+        var parts = decode(rows[0][labelKey]).split('/');
+        for (var i = 1; i < parts.length; i++) {
+          var candidate = parts.slice(0, i + 1).join('/') + '/';
+          var base = candidate.slice(0, -1);
+          if (rows.every(function(r) { var p = decode(r[labelKey]); return p === base || p.indexOf(candidate) === 0; })) {
+            prefix = candidate;
+          } else break;
+        }
       }
     }
     var html = '<div class="card"><span class="card-title">' + title + (prefix ? ' <span style="font-weight:400;color:var(--light);font-size:12px">' + esc(prefix) + '</span>' : '') + '</span><div style="margin-top:14px">';
