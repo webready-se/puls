@@ -603,14 +603,15 @@ function get_api_data(array $config, array $user): string
     $blTables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='broken_links'")->fetchAll();
     $brokenLinks = [];
     if (!empty($blTables)) {
-        $stmt = $db->prepare("SELECT site, path, status, SUM(hits) as hits,
-            MIN(first_seen) as first_seen, MAX(last_seen) as last_seen,
-            GROUP_CONCAT(DISTINCT referrer) as referrers
-            FROM broken_links
-            WHERE last_seen >= date('now', '-30 days') {$blSiteFilter}
-            GROUP BY site, path, status
-            ORDER BY hits DESC
-            LIMIT 25");
+        $stmt = $db->prepare("SELECT * FROM (
+                SELECT site, path, status, SUM(hits) as hits,
+                    MIN(first_seen) as first_seen, MAX(last_seen) as last_seen,
+                    GROUP_CONCAT(DISTINCT referrer) as referrers,
+                    ROW_NUMBER() OVER (PARTITION BY status ORDER BY SUM(hits) DESC) as rn
+                FROM broken_links
+                WHERE last_seen >= date('now', '-30 days') {$blSiteFilter}
+                GROUP BY site, path, status
+            ) WHERE rn <= 25");
         $stmt->execute($blSiteParams);
         $brokenLinks = $stmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($brokenLinks as &$bl) {
