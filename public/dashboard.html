@@ -245,6 +245,84 @@
   .ptr-indicator.refreshing .ptr-spinner { animation: spin 0.8s linear infinite; }
   .ptr-text { font-size: 12px; color: var(--muted); margin-left: 10px; font-weight: 500; }
 
+  /* Path filter chip */
+  .path-filter {
+    display: flex; align-items: center; gap: 8px;
+    background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px;
+    padding: 8px 14px; margin-bottom: 14px; font-size: 13px; color: var(--accent);
+  }
+  .path-filter svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .path-filter-path { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .path-filter-clear {
+    margin-left: auto; padding: 2px 8px; border-radius: 6px; border: 1px solid #c7d2fe;
+    background: transparent; color: var(--accent); cursor: pointer; font-size: 12px; font-weight: 500;
+    white-space: nowrap;
+  }
+  .path-filter-clear:hover { background: #ddd6fe; }
+
+  /* Command palette */
+  .search-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 12px; border-radius: 10px; border: 1px solid var(--border);
+    font-size: 13px; color: var(--muted); background: var(--card);
+    cursor: pointer; font-weight: 500;
+  }
+  .search-btn:hover { color: var(--text); border-color: var(--accent); }
+  .search-btn svg { width: 14px; height: 14px; }
+  .search-btn kbd {
+    font-size: 11px; font-family: inherit; color: var(--light);
+    background: #f1f5f9; border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 4px; margin-left: 4px;
+  }
+  @media (max-width: 600px) { .search-btn kbd { display: none; } }
+
+  .cmd-overlay {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+    align-items: flex-start; justify-content: center;
+    padding-top: min(20vh, 160px);
+  }
+  .cmd-overlay.open { display: flex; }
+  .cmd-dialog {
+    background: var(--card); border-radius: 16px;
+    width: 90%; max-width: 520px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 0 0 1px var(--border);
+    overflow: hidden; animation: cmd-in 0.15s ease;
+  }
+  @keyframes cmd-in { from { opacity: 0; transform: scale(0.96) translateY(-8px); } }
+  .cmd-input-wrap {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+  }
+  .cmd-input-wrap svg { width: 18px; height: 18px; color: var(--muted); flex-shrink: 0; }
+  .cmd-input {
+    flex: 1; border: none; outline: none; font-size: 15px;
+    color: var(--text); background: transparent; font-family: inherit;
+  }
+  .cmd-input::placeholder { color: var(--light); }
+  .cmd-results {
+    max-height: 320px; overflow-y: auto; padding: 6px;
+  }
+  .cmd-results:empty { display: none; }
+  .cmd-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-radius: 10px; cursor: pointer;
+    font-size: 13px; color: var(--text); gap: 12px;
+  }
+  .cmd-item:hover, .cmd-item.active { background: #f1f5f9; }
+  .cmd-item-path {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-weight: 500;
+  }
+  .cmd-item-stats { display: flex; gap: 14px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .cmd-hint {
+    padding: 12px 18px; font-size: 12px; color: var(--light);
+    border-top: 1px solid var(--border); text-align: center;
+  }
+  .cmd-empty {
+    padding: 24px 18px; text-align: center; font-size: 13px; color: var(--muted);
+  }
+
   /* Footer */
   .footer { text-align: center; padding: 16px 0; font-size: 12px; color: var(--light); }
 
@@ -276,6 +354,10 @@
     </span>
   </div>
   <div class="controls">
+    <button class="search-btn" id="search-btn" onclick="openSearch()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      Sök<kbd>⌘K</kbd>
+    </button>
     <select class="site-select" id="site-select">
       <option value="">Alla sajter</option>
     </select>
@@ -301,6 +383,17 @@
   </div>
 </div>
 
+<div class="cmd-overlay" id="cmd-overlay" onclick="if(event.target===this)closeSearch()">
+  <div class="cmd-dialog">
+    <div class="cmd-input-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input class="cmd-input" id="cmd-input" type="text" placeholder="Sök sidor..." autocomplete="off" spellcheck="false">
+    </div>
+    <div class="cmd-results" id="cmd-results"></div>
+    <div class="cmd-hint">↑↓ navigera · Enter öppna · Esc stäng</div>
+  </div>
+</div>
+
 <script>
 (function() {
   // --- Config ---
@@ -310,6 +403,7 @@
   // --- State ---
   let currentDays = 7;
   let currentSite = '';
+  let currentPath = '';
   let sites = [];
 
   // --- Elements ---
@@ -376,6 +470,7 @@
     currentDays = days;
     let url = API + '?api&days=' + days;
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+    if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
     fetch(url)
       .then(function(r) {
         if (r.status === 401) { location.href = '/?login'; return; }
@@ -464,28 +559,59 @@
       sessionTrend = Math.round(((d.medianSessionSeconds - d.previousMedianSessionSeconds) / d.previousMedianSessionSeconds) * 100);
     }
 
-    app.innerHTML =
-      renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) +
-      renderChart(d) +
-      '<div class="grid-2">' +
+    var filtered = !!d.path;
+    var html = '';
+
+    // Path filter chip
+    if (filtered) {
+      html += '<div class="path-filter">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>' +
+        '<span>Filtrerar på</span>' +
+        '<span class="path-filter-path" title="' + esc(d.path) + '">' + esc(decode(d.path)) + '</span>' +
+        '<button class="path-filter-clear" onclick="clearPathFilter()">Rensa filter</button>' +
+      '</div>';
+    }
+
+    html += renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) +
+      renderChart(d);
+
+    if (!filtered) {
+      html += '<div class="grid-2">' +
         renderTable('Populära sidor', d.pages, 'path', 'views', '#6366f1') +
         renderTable('Trafikkällor', d.referrers, 'source', 'visitors', '#8b5cf6') +
       '</div>' +
       '<div class="grid-2">' +
         renderTable('Ingångssidor', d.entryPages, 'path', 'entries', '#059669') +
         renderTable('Utgångssidor', d.exitPages, 'path', 'exits', '#d97706') +
-      '</div>' +
-      '<div class="grid-2">' +
-        renderDonut('Webbläsare', d.browsers) +
-        renderDonut('Enheter', d.devices) +
-      '</div>' +
-      '<div class="grid-2">' +
+      '</div>';
+    } else {
+      html += '<div class="grid-2">' +
+        renderTable('Trafikkällor', d.referrers, 'source', 'visitors', '#8b5cf6') +
+        renderUtm(d.utm) +
+      '</div>';
+    }
+
+    html += '<div class="grid-2">' +
+      renderDonut('Webbläsare', d.browsers) +
+      renderDonut('Enheter', d.devices) +
+    '</div>';
+
+    if (!filtered) {
+      html += '<div class="grid-2">' +
         renderUtm(d.utm) +
         renderDonut('Språk', d.languages) +
       '</div>' +
       renderBotSection(d) +
-      renderBrokenLinks(d.brokenLinks) +
-      renderTools(d.site);
+      renderBrokenLinks(d.brokenLinks);
+    } else {
+      html += '<div class="grid-2">' +
+        renderDonut('Språk', d.languages) +
+        '<div></div>' +
+      '</div>';
+    }
+
+    html += renderTools(d.site);
+    app.innerHTML = html;
   }
 
   function renderStats(d, views, visitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) {
@@ -942,6 +1068,11 @@
 
   window.updateUtm = updateUtm;
 
+  window.clearPathFilter = function() {
+    currentPath = '';
+    load(currentDays);
+  };
+
   window.toggleTools = function(btn) {
     var content = btn.nextElementSibling;
     var isOpen = content.classList.toggle('open');
@@ -949,6 +1080,116 @@
     btn.querySelector('span').textContent = isOpen ? 'Dölj verktyg' : 'Visa verktyg';
     localStorage.setItem('puls-tools-open', isOpen ? '1' : '0');
   };
+
+  // --- Command palette (CMD+K search) ---
+  var cmdOverlay = document.getElementById('cmd-overlay');
+  var cmdInput = document.getElementById('cmd-input');
+  var cmdResults = document.getElementById('cmd-results');
+  var cmdActive = -1;
+  var cmdTimer = null;
+  var cmdLastQuery = '';
+
+  window.openSearch = function() {
+    cmdOverlay.classList.add('open');
+    cmdInput.value = '';
+    cmdResults.innerHTML = '';
+    cmdActive = -1;
+    cmdLastQuery = '';
+    setTimeout(function() { cmdInput.focus(); }, 50);
+  };
+
+  window.closeSearch = function() {
+    cmdOverlay.classList.remove('open');
+    cmdActive = -1;
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      if (cmdOverlay.classList.contains('open')) closeSearch();
+      else openSearch();
+      return;
+    }
+    if (!cmdOverlay.classList.contains('open')) return;
+    if (e.key === 'Escape') { closeSearch(); return; }
+
+    var items = cmdResults.querySelectorAll('.cmd-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      cmdActive = Math.min(cmdActive + 1, items.length - 1);
+      updateCmdActive(items);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      cmdActive = Math.max(cmdActive - 1, 0);
+      updateCmdActive(items);
+    } else if (e.key === 'Enter' && cmdActive >= 0 && items[cmdActive]) {
+      e.preventDefault();
+      items[cmdActive].click();
+    }
+  });
+
+  function updateCmdActive(items) {
+    items.forEach(function(el, i) {
+      el.classList.toggle('active', i === cmdActive);
+    });
+    if (items[cmdActive]) items[cmdActive].scrollIntoView({ block: 'nearest' });
+  }
+
+  cmdInput.addEventListener('input', function() {
+    var q = cmdInput.value.trim();
+    if (q === cmdLastQuery) return;
+    cmdLastQuery = q;
+    cmdActive = -1;
+
+    if (q.length < 2) {
+      cmdResults.innerHTML = '';
+      return;
+    }
+
+    clearTimeout(cmdTimer);
+    cmdTimer = setTimeout(function() {
+      var url = API + '?api&search=' + encodeURIComponent(q) + '&days=' + currentDays;
+      if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+      fetch(url)
+        .then(function(r) {
+          if (r.status === 401) { location.href = '/?login'; return; }
+          return r.json();
+        })
+        .then(function(data) {
+          if (!data || data.query !== cmdInput.value.trim()) return;
+          renderCmdResults(data.results);
+        })
+        .catch(function() { cmdResults.innerHTML = '<div class="cmd-empty">Kunde inte söka</div>'; });
+    }, 200);
+  });
+
+  function renderCmdResults(results) {
+    if (!results || !results.length) {
+      cmdResults.innerHTML = '<div class="cmd-empty">Inga sidor hittades</div>';
+      return;
+    }
+    var html = '';
+    results.forEach(function(r) {
+      html += '<div class="cmd-item" data-path="' + esc(r.path) + '">' +
+        '<span class="cmd-item-path" title="' + esc(r.path) + '">' + esc(decode(r.path)) + '</span>' +
+        '<span class="cmd-item-stats">' +
+          '<span>' + num(r.views) + ' visn.</span>' +
+          '<span>' + num(r.visitors) + ' bes.</span>' +
+        '</span>' +
+      '</div>';
+    });
+    cmdResults.innerHTML = html;
+    cmdActive = -1;
+
+    cmdResults.querySelectorAll('.cmd-item').forEach(function(el) {
+      el.addEventListener('click', function() {
+        currentPath = this.getAttribute('data-path');
+        closeSearch();
+        load(currentDays);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  }
 
   // --- Pull to refresh (PWA standalone) ---
   if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
@@ -1007,6 +1248,7 @@
 
         var url = API + '?api&days=' + currentDays;
         if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+        if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
         fetch(url)
           .then(function(r) { return r.json(); })
           .then(function(data) { if (data) render(data); })
