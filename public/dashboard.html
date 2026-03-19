@@ -572,7 +572,8 @@
     rows.forEach(function(r) {
       var pct = (+r[valKey] / max) * 100;
       var full = decode(r[labelKey]);
-      var label = prefix ? full.substring(prefix.length) || '/' : full;
+      var stripped = prefix ? full.substring(prefix.length) : '';
+      var label = prefix ? (stripped ? '/' + stripped : '/') : full;
       html += '<div class="trow">' +
         '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
