@@ -982,7 +982,7 @@
 
     var BROKEN_SHOW = 5;
 
-    function renderGroup(title, color, items) {
+    function renderGroup(title, color, items, showStatus) {
       if (!items.length) return '';
       var id = 'bl-' + title.replace(/\s/g, '-').toLowerCase();
       var hasMore = items.length > BROKEN_SHOW;
@@ -999,6 +999,7 @@
             '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
             (l.site ? '<span style="color:var(--light);font-size:11px;min-width:80px">' + esc(l.site) + '</span>' : '') +
             '<span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(l.path) + '">' + esc(l.path) + '</span>' +
+            (showStatus ? '<span style="font-size:11px;color:' + color + ';font-weight:600">' + l.status + '</span>' : '') +
             '<span style="color:var(--muted);white-space:nowrap;font-size:12px">' + num(l.hits) + ' tr\u00e4ffar</span>' +
             '<span style="color:var(--light);white-space:nowrap;font-size:12px">' + time + '</span>' +
           '</div>';
@@ -1017,7 +1018,7 @@
 
     html += renderGroup('404 Saknas', '#dc2626', links404);
     html += renderGroup('301 Redirects', '#d97706', links301);
-    html += renderGroup('\u00d6vriga felkoder', '#94a3b8', linksOther);
+    html += renderGroup('\u00d6vriga felkoder', '#94a3b8', linksOther, true);
     html += '</div>';
     return html;
   }
