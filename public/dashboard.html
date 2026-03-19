@@ -83,14 +83,12 @@
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
   .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .site-select, .logout-btn {
+  .site-select {
     padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border);
     font-size: 13px; color: var(--text); background: var(--card);
     cursor: pointer; font-weight: 500; outline: none;
   }
   .site-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
-  .logout-btn { color: var(--muted); text-decoration: none; }
-  .logout-btn:hover { color: var(--red); border-color: var(--red); }
   .period-group { display: flex; background: var(--subtle); border-radius: 10px; padding: 3px; }
   .period-btn {
     padding: 7px 14px; border-radius: 8px; border: none; font-size: 13px;
@@ -273,22 +271,70 @@
   .ptr-indicator.refreshing .ptr-spinner { animation: spin 0.8s linear infinite; }
   .ptr-text { font-size: 12px; color: var(--muted); margin-left: 10px; font-weight: 500; }
 
+  /* Hamburger menu */
+  .menu-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); cursor: pointer; color: var(--muted);
+  }
+  .menu-btn:hover { color: var(--text); border-color: var(--accent); }
+  .menu-btn svg { width: 18px; height: 18px; }
+  .menu-overlay {
+    display: none; position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,0.3); backdrop-filter: blur(2px);
+  }
+  .menu-overlay.open { display: block; }
+  .menu-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 51;
+    width: 260px; max-width: 80vw; background: var(--card);
+    border-left: 1px solid var(--border);
+    box-shadow: -8px 0 30px rgba(0,0,0,0.1);
+    padding: 20px; display: none; flex-direction: column; gap: 20px;
+    animation: menu-in 0.2s ease;
+  }
+  .menu-panel.open { display: flex; }
+  @keyframes menu-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  .menu-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-bottom: 14px; border-bottom: 1px solid var(--border);
+  }
+  .menu-header span { font-weight: 600; font-size: 14px; color: var(--text); }
+  .menu-close {
+    width: 28px; height: 28px; border-radius: 8px; border: none;
+    background: var(--subtle); cursor: pointer; color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .menu-close:hover { color: var(--text); }
+  .menu-close svg { width: 16px; height: 16px; }
+  .menu-section { display: flex; flex-direction: column; gap: 8px; }
+  .menu-label { font-size: 11px; color: var(--light); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+
   /* Theme toggle */
   .theme-toggle {
     display: flex; background: var(--subtle); border-radius: 10px; padding: 3px;
-    border: 1px solid var(--border);
   }
   .theme-toggle button {
-    padding: 5px 8px; border-radius: 7px; border: none; cursor: pointer;
+    flex: 1; padding: 7px 8px; border-radius: 8px; border: none; cursor: pointer;
     background: transparent; color: var(--muted); display: flex; align-items: center;
-    justify-content: center; transition: all 0.15s;
+    justify-content: center; gap: 6px; transition: all 0.15s; font-size: 12px;
+    font-weight: 400; font-family: inherit;
   }
   .theme-toggle button:hover { color: var(--text); }
   .theme-toggle button.active {
-    background: var(--card); color: var(--text);
+    background: var(--card); color: var(--text); font-weight: 600;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
   .theme-toggle svg { width: 14px; height: 14px; }
+
+  .menu-logout {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--muted); font-size: 13px;
+    font-weight: 500; cursor: pointer; text-decoration: none; font-family: inherit;
+    transition: all 0.15s;
+  }
+  .menu-logout:hover { color: var(--red); border-color: var(--red); }
+  .menu-logout svg { width: 16px; height: 16px; }
 
   /* Path filter chip */
   .path-filter {
@@ -412,12 +458,9 @@
       <button class="period-btn" data-days="30">30 dagar</button>
       <button class="period-btn" data-days="90">90 dagar</button>
     </div>
-    <div class="theme-toggle" id="theme-toggle">
-      <button data-theme="system" title="System"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></button>
-      <button data-theme="light" title="Ljust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></button>
-      <button data-theme="dark" title="Mörkt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
-    </div>
-    <a href="/?logout" class="logout-btn">Logga ut</a>
+    <button class="menu-btn" id="menu-btn" onclick="openMenu()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12h16"/><path d="M4 6h16"/><path d="M4 18h16"/></svg>
+    </button>
   </div>
 </div>
 
@@ -431,6 +474,27 @@
     <div class="loading-spinner"></div>
     Laddar statistik...
   </div>
+</div>
+
+<div class="menu-overlay" id="menu-overlay" onclick="closeMenu()"></div>
+<div class="menu-panel" id="menu-panel">
+  <div class="menu-header">
+    <span>Inställningar</span>
+    <button class="menu-close" onclick="closeMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  </div>
+  <div class="menu-section">
+    <span class="menu-label">Utseende</span>
+    <div class="theme-toggle" id="theme-toggle">
+      <button data-value="system" title="System"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Auto</button>
+      <button data-value="light" title="Ljust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>Ljust</button>
+      <button data-value="dark" title="Mörkt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>Mörkt</button>
+    </div>
+  </div>
+  <div style="flex:1"></div>
+  <a href="/?logout" class="menu-logout">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    Logga ut
+  </a>
 </div>
 
 <div class="cmd-overlay" id="cmd-overlay" onclick="if(event.target===this)closeSearch()">
@@ -1131,6 +1195,20 @@
     localStorage.setItem('puls-tools-open', isOpen ? '1' : '0');
   };
 
+  // --- Menu ---
+  var menuOverlay = document.getElementById('menu-overlay');
+  var menuPanel = document.getElementById('menu-panel');
+
+  window.openMenu = function() {
+    menuOverlay.classList.add('open');
+    menuPanel.classList.add('open');
+  };
+
+  window.closeMenu = function() {
+    menuOverlay.classList.remove('open');
+    menuPanel.classList.remove('open');
+  };
+
   // --- Theme toggle ---
   var themeToggle = document.getElementById('theme-toggle');
   var currentTheme = localStorage.getItem('puls-theme') || 'system';
@@ -1142,7 +1220,7 @@
     else if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
     else document.documentElement.removeAttribute('data-theme');
     themeToggle.querySelectorAll('button').forEach(function(b) {
-      b.classList.toggle('active', b.dataset.theme === theme);
+      b.classList.toggle('active', b.dataset.value === theme);
     });
   }
 
@@ -1150,7 +1228,7 @@
 
   themeToggle.addEventListener('click', function(e) {
     var btn = e.target.closest('button');
-    if (btn && btn.dataset.theme) applyTheme(btn.dataset.theme);
+    if (btn && btn.dataset.value) applyTheme(btn.dataset.value);
   });
 
   // --- Command palette (CMD+K search) ---
