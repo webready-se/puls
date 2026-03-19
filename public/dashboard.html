@@ -95,7 +95,7 @@
   @media (max-width: 600px) { .wrap { padding: 14px 12px 30px; } }
 
   /* Stat cards */
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
   @media (max-width: 800px) { .stats { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 400px) { .stats { grid-template-columns: 1fr; gap: 10px; } }
   .stat {
@@ -326,11 +326,20 @@
     layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>',
     zap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>',
     chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>',
+    bounce: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
   };
 
   // --- Helpers ---
   function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function num(n) { return Number(n || 0).toLocaleString('sv-SE'); }
+  function formatDuration(s) {
+    if (!s || s < 10) return '< 10s';
+    if (s < 60) return Math.round(s) + 's';
+    var m = Math.floor(s / 60);
+    var sec = Math.round(s % 60);
+    return sec > 0 ? m + 'm ' + sec + 's' : m + 'm';
+  }
   function formatTime(dt) {
     var d = new Date(dt.replace(' ', 'T') + 'Z');
     var now = new Date();
@@ -443,12 +452,28 @@
       }
     }
 
+    // Bounce rate trend (inverted: lower is better)
+    var bounceTrend = null;
+    if (d.previousBounceRate !== null && d.previousBounceRate > 0) {
+      bounceTrend = Math.round(((d.bounceRate - d.previousBounceRate) / d.previousBounceRate) * 100);
+    }
+
+    // Session length trend
+    var sessionTrend = null;
+    if (d.previousMedianSessionSeconds !== null && d.previousMedianSessionSeconds > 0) {
+      sessionTrend = Math.round(((d.medianSessionSeconds - d.previousMedianSessionSeconds) / d.previousMedianSessionSeconds) * 100);
+    }
+
     app.innerHTML =
-      renderStats(totalViews, totalVisitors, pagesPerVisitor, d.live, viewsTrend, visitorsTrend, ppvTrend) +
+      renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) +
       renderChart(d) +
       '<div class="grid-2">' +
         renderTable('Populära sidor', d.pages, 'path', 'views', '#6366f1') +
         renderTable('Trafikkällor', d.referrers, 'source', 'visitors', '#8b5cf6') +
+      '</div>' +
+      '<div class="grid-2">' +
+        renderTable('Ingångssidor', d.entryPages, 'path', 'entries', '#059669') +
+        renderTable('Utgångssidor', d.exitPages, 'path', 'exits', '#d97706') +
       '</div>' +
       '<div class="grid-2">' +
         renderDonut('Webbläsare', d.browsers) +
@@ -463,19 +488,23 @@
       renderTools(d.site);
   }
 
-  function renderStats(views, visitors, pagesPerVisitor, live, viewsTrend, visitorsTrend, ppvTrend) {
+  function renderStats(d, views, visitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) {
     return '<div class="stats">' +
       statCard('Sidvisningar', num(views), icons.eye, viewsTrend) +
       statCard('Unika besökare', num(visitors), icons.users, visitorsTrend) +
+      statCard('Bounce rate', d.bounceRate + '%', icons.bounce, bounceTrend, true) +
       statCard('Sidor / besökare', pagesPerVisitor, icons.layers, ppvTrend) +
-      statCard('Live nu', num(live), icons.zap, null) +
+      statCard('Tid / session', formatDuration(d.medianSessionSeconds), icons.clock, sessionTrend) +
+      statCard('Live nu', num(d.live), icons.zap, null) +
     '</div>';
   }
 
-  function statCard(label, value, icon, trend) {
+  function statCard(label, value, icon, trend, inverted) {
     var trendHtml = '';
     if (trend !== null && trend !== undefined) {
-      var cls = trend > 0 ? 'up' : (trend < 0 ? 'down' : 'flat');
+      var good = inverted ? trend < 0 : trend > 0;
+      var bad = inverted ? trend > 0 : trend < 0;
+      var cls = good ? 'up' : (bad ? 'down' : 'flat');
       var arrow = trend > 0 ? '▲' : (trend < 0 ? '▼' : '–');
       var sign = trend > 0 ? '+' : '';
       trendHtml = '<div class="stat-trend ' + cls + '">' + arrow + ' ' + sign + trend + '%</div>';

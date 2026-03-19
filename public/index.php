@@ -482,6 +482,38 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$prevSince, $since], $siteParams));
     $previousTotals = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    // Bounce rate (visitors with only 1 pageview)
+    $stmt = $db->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN cnt = 1 THEN 1 ELSE 0 END) as bounced FROM (SELECT visitor_hash, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY visitor_hash)");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $bounceData = $stmt->fetch(PDO::FETCH_ASSOC);
+    $bounceRate = $bounceData['total'] > 0 ? round(100 * $bounceData['bounced'] / $bounceData['total'], 1) : 0;
+
+    $stmt = $db->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN cnt = 1 THEN 1 ELSE 0 END) as bounced FROM (SELECT visitor_hash, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} GROUP BY visitor_hash)");
+    $stmt->execute(array_merge([$prevSince, $since], $siteParams));
+    $prevBounce = $stmt->fetch(PDO::FETCH_ASSOC);
+    $previousBounceRate = $prevBounce['total'] > 0 ? round(100 * $prevBounce['bounced'] / $prevBounce['total'], 1) : null;
+
+    // Median session length (exclude bounces, use median to avoid outliers)
+    $stmt = $db->prepare("SELECT duration FROM (SELECT (julianday(MAX(created_at)) - julianday(MIN(created_at))) * 86400 as duration FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY visitor_hash HAVING COUNT(*) > 1) ORDER BY duration");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $durations = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $medianSession = !empty($durations) ? (int) $durations[intval(count($durations) / 2)] : 0;
+
+    $stmt = $db->prepare("SELECT duration FROM (SELECT (julianday(MAX(created_at)) - julianday(MIN(created_at))) * 86400 as duration FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} GROUP BY visitor_hash HAVING COUNT(*) > 1) ORDER BY duration");
+    $stmt->execute(array_merge([$prevSince, $since], $siteParams));
+    $prevDurations = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $previousMedianSession = !empty($prevDurations) ? (int) $prevDurations[intval(count($prevDurations) / 2)] : null;
+
+    // Entry pages (first page per visitor)
+    $stmt = $db->prepare("SELECT path, COUNT(*) as entries FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at ASC) as rn FROM pageviews WHERE created_at >= ? {$siteFilter}) WHERE rn = 1 GROUP BY path ORDER BY entries DESC LIMIT 10");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $entryPages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Exit pages (last page per visitor)
+    $stmt = $db->prepare("SELECT path, COUNT(*) as exits FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at DESC) as rn FROM pageviews WHERE created_at >= ? {$siteFilter}) WHERE rn = 1 GROUP BY path ORDER BY exits DESC LIMIT 10");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $exitPages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     $stmt = $db->prepare("SELECT browser as name, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY browser ORDER BY cnt DESC");
     $stmt->execute(array_merge([$since], $siteParams));
     $browsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -573,6 +605,12 @@ function get_api_data(array $config, array $user): string
         'live'      => (int)$live,
         'totals'    => $totals,
         'previousTotals' => $previousTotals,
+        'bounceRate' => $bounceRate,
+        'previousBounceRate' => $previousBounceRate,
+        'medianSessionSeconds' => $medianSession,
+        'previousMedianSessionSeconds' => $previousMedianSession,
+        'entryPages' => $entryPages,
+        'exitPages'  => $exitPages,
         'pageviews' => $byDay,
         'pages'     => $pages,
         'referrers' => $referrers,
