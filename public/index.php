@@ -460,6 +460,17 @@ function get_api_data(array $config, array $user): string
         $siteParams = $allowedSites;
     }
 
+    // Search endpoint (early return)
+    if (isset($_GET['search'])) {
+        $search = mb_substr(trim($_GET['search']), 0, 100);
+        if (mb_strlen($search) < 2) {
+            return json_encode(['results' => [], 'query' => $search, 'days' => $days]);
+        }
+        $stmt = $db->prepare("SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} AND path LIKE ? GROUP BY path ORDER BY views DESC LIMIT 20");
+        $stmt->execute(array_merge([$since], $siteParams, ['%' . $search . '%']));
+        return json_encode(['results' => $stmt->fetchAll(PDO::FETCH_ASSOC), 'query' => $search, 'days' => $days]);
+    }
+
     $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY date ORDER BY date");
     $stmt->execute(array_merge([$since], $siteParams));
     $byDay = $stmt->fetchAll(PDO::FETCH_ASSOC);
