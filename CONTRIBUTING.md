@@ -60,6 +60,7 @@ The pre-push hook runs tests automatically before every push.
 ## Reporting Bugs
 
 Open a [GitHub issue](../../issues) with:
+
 - What you expected
 - What happened instead
 - Steps to reproduce

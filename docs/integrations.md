@@ -9,6 +9,7 @@ Puls works with any website or framework that serves HTML. The tracking script i
 ```
 
 Puls automatically tracks:
+
 - Page views (including SPA client-side navigation via `pushState`/`popstate`)
 - Referrers, UTM parameters, browsers, devices, languages
 
@@ -203,7 +204,7 @@ php puls user:add admin
 
 If your site uses CSP headers, allow the Puls domain:
 
-```
+```text
 script-src https://your-puls-domain;
 connect-src https://your-puls-domain;
 ```

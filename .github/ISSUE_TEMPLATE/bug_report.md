@@ -10,14 +10,18 @@ assignees: ''
 A clear description of what the bug is.
 
 **To reproduce**
+
 Steps to reproduce the behavior:
+
 1. ...
 2. ...
 
 **Expected behavior**
+
 What you expected to happen.
 
 **Environment**
+
 - PHP version:
 - OS:
 - Browser (if dashboard issue):

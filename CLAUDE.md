@@ -29,7 +29,7 @@ Static file requests (anything with `.` in path) return 404 early to prevent rou
 
 ### Files
 
-```
+```text
 public/index.php        — All backend logic (routing, tracking, API, auth, bot detection)
 public/dashboard.html   — Self-contained dashboard (CSS + JS, no build step)
 config.php              — Configuration (loads .env, auto-detects Forge paths)
