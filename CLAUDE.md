@@ -47,7 +47,7 @@ scripts/normalize-paths.php — One-time migration to clean old tracking params 
 
 ### Key Design Decisions
 
-- **No framework** — pure PHP 8.1+, only requires `pdo_sqlite`
+- **No framework** — pure PHP 8.2+, only requires `pdo_sqlite`
 - **SQLite with WAL mode** — good concurrent read performance, single-file database
 - **Session-based auth** — CSRF-protected, brute-force lockout, bcrypt passwords
 - **Per-user site access** — users can be restricted to specific sites

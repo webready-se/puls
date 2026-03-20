@@ -17,7 +17,7 @@ Puls is a cookieless, lightweight analytics tool built with a single PHP file an
 - **Bot detection** — Separates real visitors from bots (AI crawlers, search engines, social, SEO tools)
 - **Privacy-first** — Daily-rotating visitor hashes, no PII stored
 - **Multi-user** — Bcrypt auth with per-user site access control
-- **Zero dependencies** — PHP 8.1+ and SQLite, nothing else
+- **Zero dependencies** — PHP 8.2+ and SQLite, nothing else
 
 ## Quick Start
 
@@ -132,7 +132,7 @@ ALLOWED_ORIGINS=https://example.com,https://another-site.com
 
 ### Requirements
 
-- PHP 8.1+
+- PHP 8.2+
 - `pdo_sqlite` extension (included in most PHP installations)
 - Write access to `data/` directory
 

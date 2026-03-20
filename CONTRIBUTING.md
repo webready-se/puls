@@ -4,7 +4,7 @@ Thanks for your interest in contributing! Puls is intentionally minimal — one 
 
 ## Ground Rules
 
-- **No runtime dependencies.** Puls must remain deployable as a file drop on any PHP 8.1+ host.
+- **No runtime dependencies.** Puls must remain deployable as a file drop on any PHP 8.2+ host.
 - **No build step.** The dashboard is self-contained HTML/CSS/JS.
 - **Keep it simple.** If a feature needs a framework, it's probably out of scope.
 
