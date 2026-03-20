@@ -123,13 +123,14 @@
   /* Stat cards */
   .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
   @media (max-width: 800px) { .stats { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 400px) { .stats { grid-template-columns: 1fr; gap: 10px; } }
+  @media (max-width: 400px) { .stats { gap: 10px; } }
+  @media (max-width: 374px) { .stats { grid-template-columns: 1fr; } }
   .stat {
     background: var(--card); border-radius: var(--radius); padding: 18px 22px;
     border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }
-  .stat-top { display: flex; justify-content: space-between; align-items: center; }
-  .stat-label { font-size: 12px; color: var(--light); font-weight: 500; margin-bottom: 4px; }
+  .stat-label { font-size: 12px; color: var(--light); font-weight: 500; margin-bottom: 6px; }
+  .stat-top { display: flex; justify-content: space-between; align-items: flex-start; }
   .stat-value { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
   @media (max-width: 600px) { .stat-value { font-size: 22px; } }
   .stat-icon {
@@ -162,18 +163,20 @@
     border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     margin-bottom: 14px;
   }
-  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 8px; }
+  @media (max-width: 600px) { .card-header { flex-direction: column; align-items: flex-start; } }
   .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
   .card-subtitle { font-size: 12px; color: var(--light); }
   .chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 30px 4px 0; overflow: visible; }
-  @media (max-width: 600px) { .chart { height: 130px; gap: 3px; } }
-  .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; min-width: 28px; }
-  .chart-val { font-size: 10px; color: var(--muted); font-weight: 600; }
+  @media (max-width: 600px) { .chart { height: 130px; gap: 3px; overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch; } }
+  .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; min-width: 36px; padding: 0 2px; }
+  .chart-val { font-size: 10px; color: var(--muted); font-weight: 600; white-space: nowrap; }
   .chart-bar {
     width: 100%; border-radius: 6px 6px 0 0; min-height: 4px;
     background: linear-gradient(180deg, var(--accent) 0%, var(--accent-light) 100%);
     transition: height 0.4s ease; position: relative; cursor: pointer;
   }
+  .chart-col:hover { z-index: 10; }
   .chart-bar:hover { filter: brightness(1.1); }
   .chart-bar .tip {
     display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
@@ -187,7 +190,7 @@
     border-top-color: var(--text);
   }
   .chart-bar:hover .tip { display: block; }
-  .chart-date { font-size: 10px; color: var(--light); }
+  .chart-date { font-size: 10px; color: var(--light); white-space: nowrap; }
 
   /* Grid */
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
@@ -197,17 +200,28 @@
   /* Table rows */
   .trow { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
   .trow-label {
-    width: 160px; min-width: 80px; font-size: 13px; color: var(--muted); white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
+    width: 220px; min-width: 120px; font-size: 13px; color: var(--muted); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;
   }
   @media (max-width: 600px) {
     .trow { gap: 6px; }
-    .trow-label { width: 90px; min-width: 60px; font-size: 12px; }
+    .trow-label { width: 50%; min-width: 100px; font-size: 12px; }
     .trow-val { width: 40px; font-size: 12px; }
   }
   .trow-bar { flex: 1; height: 8px; background: var(--subtle); border-radius: 4px; overflow: hidden; }
   .trow-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
   .trow-val { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+  /* Card tabs */
+  .card-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: -22px -22px 16px; padding: 0 22px; }
+  .card-tab {
+    padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--light);
+    cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.2s, border-color 0.2s;
+    user-select: none;
+  }
+  .card-tab:hover { color: var(--text); }
+  .card-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  @media (max-width: 600px) { .card-tab { padding: 8px 12px; font-size: 12px; } }
 
   /* Donut */
   .donut-wrap { display: flex; align-items: center; gap: 24px; margin-top: 8px; flex-wrap: wrap; }
@@ -621,7 +635,9 @@
   setInterval(function() { load(currentDays); }, 60000);
 
   // --- Render ---
+  var lastData = null;
   function render(d) {
+    lastData = d;
     if (d.error) {
       app.innerHTML = '<div class="empty"><p>' + esc(d.error) + '</p></div>';
       return;
@@ -691,37 +707,24 @@
 
     if (!filtered) {
       html += '<div class="grid-2">' +
-        renderTable('Populära sidor', d.pages, 'path', 'views', '#6366f1') +
-        renderTable('Trafikkällor', d.referrers, 'source', 'visitors', '#8b5cf6') +
-      '</div>' +
-      '<div class="grid-2">' +
-        renderTable('Ingångssidor', d.entryPages, 'path', 'entries', '#059669') +
-        renderTable('Utgångssidor', d.exitPages, 'path', 'exits', '#d97706') +
+        renderTabbedPages(d.pages, d.entryPages, d.exitPages) +
+        renderTabbedTraffic(d.referrers, d.utm) +
       '</div>';
     } else {
       html += '<div class="grid-2">' +
-        renderTable('Trafikkällor', d.referrers, 'source', 'visitors', '#8b5cf6') +
-        renderUtm(d.utm) +
+        renderTabbedTraffic(d.referrers, d.utm) +
+        '<div></div>' +
       '</div>';
     }
 
     html += '<div class="grid-2">' +
-      renderDonut('Webbläsare', d.browsers) +
-      renderDonut('Enheter', d.devices) +
+      renderTabbedVisitors(d.browsers, d.devices, d.languages) +
+      '<div></div>' +
     '</div>';
 
     if (!filtered) {
-      html += '<div class="grid-2">' +
-        renderUtm(d.utm) +
-        renderDonut('Språk', d.languages) +
-      '</div>' +
-      renderBotSection(d) +
+      html += renderBotSection(d) +
       renderBrokenLinks(d.brokenLinks);
-    } else {
-      html += '<div class="grid-2">' +
-        renderDonut('Språk', d.languages) +
-        '<div></div>' +
-      '</div>';
     }
 
     html += renderTools(d.site);
@@ -749,39 +752,59 @@
       var sign = trend > 0 ? '+' : '';
       trendHtml = '<div class="stat-trend ' + cls + '">' + arrow + ' ' + sign + trend + '%</div>';
     }
-    return '<div class="stat"><div class="stat-top"><div>' +
+    return '<div class="stat">' +
       '<div class="stat-label">' + label + '</div>' +
+      '<div class="stat-top"><div>' +
       '<div class="stat-value">' + value + '</div>' +
       trendHtml +
       '</div><div class="stat-icon">' + icon + '</div></div></div>';
   }
 
+  var chartMode = 'views';
+
   function renderChart(d) {
     if (!d.pageviews || !d.pageviews.length) return '';
-    var maxViews = Math.max.apply(null, d.pageviews.map(function(p) { return +p.views; }).concat([1]));
     var siteName = currentSite || 'alla sajter';
 
+    return '<div class="card" id="chart-card">' +
+      '<div class="card-header">' +
+        '<div class="card-tabs" style="margin:0;border:0;padding:0">' +
+          '<div class="card-tab' + (chartMode === 'views' ? ' active' : '') + '" data-chart="views" onclick="switchChartMode(this)">Sidvisningar</div>' +
+          '<div class="card-tab' + (chartMode === 'visitors' ? ' active' : '') + '" data-chart="visitors" onclick="switchChartMode(this)">Besökare</div>' +
+        '</div>' +
+        '<span class="card-subtitle">' + siteName + ' — senaste ' + currentDays + ' dagarna</span>' +
+      '</div>' +
+      '<div class="chart">' + buildBars(d.pageviews) + '</div>' +
+    '</div>';
+  }
+
+  function buildBars(pageviews) {
+    var key = chartMode === 'visitors' ? 'visitors' : 'views';
+    var tipLabel = chartMode === 'visitors' ? 'besökare' : 'visningar';
+    var maxVal = Math.max.apply(null, pageviews.map(function(p) { return +p[key]; }).concat([1]));
     var bars = '';
-    d.pageviews.forEach(function(p) {
-      var h = Math.max(4, (+p.views / maxViews) * 140);
+    pageviews.forEach(function(p) {
+      var h = Math.max(4, (+p[key] / maxVal) * 140);
       var label = formatDay(p.date);
       bars += '<div class="chart-col">' +
-        '<span class="chart-val">' + num(p.views) + '</span>' +
+        '<span class="chart-val">' + num(p[key]) + '</span>' +
         '<div class="chart-bar" style="height:' + h + 'px">' +
           '<div class="tip">' + label + ': ' + num(p.views) + ' visningar, ' + num(p.visitors) + ' besökare</div>' +
         '</div>' +
         '<span class="chart-date">' + label + '</span>' +
       '</div>';
     });
-
-    return '<div class="card">' +
-      '<div class="card-header">' +
-        '<span class="card-title">Sidvisningar per dag</span>' +
-        '<span class="card-subtitle">' + siteName + ' — senaste ' + currentDays + ' dagarna</span>' +
-      '</div>' +
-      '<div class="chart">' + bars + '</div>' +
-    '</div>';
+    return bars;
   }
+
+  window.switchChartMode = function(el) {
+    chartMode = el.getAttribute('data-chart');
+    var card = el.closest('.card');
+    card.querySelectorAll('.card-tab').forEach(function(t) { t.classList.remove('active'); });
+    el.classList.add('active');
+    var chartEl = card.querySelector('.chart');
+    chartEl.innerHTML = buildBars(lastData.pageviews);
+  };
 
   function renderTable(title, rows, labelKey, valKey, color) {
     if (!rows || !rows.length) {
@@ -824,10 +847,79 @@
     return html;
   }
 
-  function renderDonut(title, items) {
+  function renderTableContent(rows, labelKey, valKey, color) {
+    if (!rows || !rows.length) {
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
+    }
+    var max = Math.max.apply(null, rows.map(function(r) { return +r[valKey]; }));
+    var prefix = '';
+    if (labelKey === 'path' && currentSite && rows.length > 1) {
+      var sitePrefix = '/' + currentSite + '/';
+      if (rows.some(function(r) { var p = decode(r[labelKey]); return p.indexOf(sitePrefix) === 0; })) {
+        prefix = sitePrefix;
+      } else {
+        var parts = decode(rows[0][labelKey]).split('/');
+        for (var i = 1; i < parts.length; i++) {
+          var candidate = parts.slice(0, i + 1).join('/') + '/';
+          var base = candidate.slice(0, -1);
+          if (rows.every(function(r) { var p = decode(r[labelKey]); return p === base || p.indexOf(candidate) === 0; })) {
+            prefix = candidate;
+          } else break;
+        }
+      }
+    }
+    var html = '';
+    rows.forEach(function(r) {
+      var pct = (+r[valKey] / max) * 100;
+      var full = decode(r[labelKey]);
+      var stripped = prefix ? full.substring(prefix.length) : '';
+      var label = prefix ? (stripped ? '/' + stripped : '/') : full;
+      html += '<div class="trow">' +
+        '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<span class="trow-val">' + num(r[valKey]) + '</span>' +
+      '</div>';
+    });
+    return html;
+  }
+
+  function renderTabbedPages(pages, entryPages, exitPages) {
+    var tabs = [
+      { id: 'popular', label: 'Populära', rows: pages, valKey: 'views', color: '#6366f1' },
+      { id: 'entry', label: 'Ingång', rows: entryPages, valKey: 'entries', color: '#059669' },
+      { id: 'exit', label: 'Utgång', rows: exitPages, valKey: 'exits', color: '#d97706' }
+    ];
+
+    var html = '<div class="card">' +
+      '<div class="card-tabs">';
+    tabs.forEach(function(t, i) {
+      html += '<div class="card-tab' + (i === 0 ? ' active' : '') + '" data-tab="' + t.id + '" onclick="switchPageTab(this)">' + t.label + '</div>';
+    });
+    html += '</div>';
+
+    tabs.forEach(function(t, i) {
+      html += '<div class="tab-panel" data-panel="' + t.id + '"' + (i !== 0 ? ' style="display:none"' : '') + '>' +
+        renderTableContent(t.rows, 'path', t.valKey, t.color) +
+      '</div>';
+    });
+
+    html += '</div>';
+    return html;
+  }
+
+  window.switchPageTab = function(el) {
+    var card = el.closest('.card');
+    var tabId = el.getAttribute('data-tab');
+    card.querySelectorAll('.card-tab').forEach(function(t) { t.classList.remove('active'); });
+    el.classList.add('active');
+    card.querySelectorAll('.tab-panel').forEach(function(p) {
+      p.style.display = p.getAttribute('data-panel') === tabId ? '' : 'none';
+    });
+  }
+
+  function renderDonutContent(items) {
     if (!items || !items.length) {
-      return '<div class="card"><span class="card-title">' + title + '</span>' +
-        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p></div>';
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
     }
 
     var cum = 0;
@@ -860,21 +952,54 @@
       '</div>';
     });
 
-    return '<div class="card"><span class="card-title">' + title + '</span>' +
-      '<div class="donut-wrap">' +
-        '<svg viewBox="0 0 36 36" width="96" height="96">' + paths +
-        '<circle cx="18" cy="18" r="9" fill="var(--card)"/></svg>' +
-        '<div class="donut-legend">' + legend + '</div>' +
-      '</div></div>';
+    return '<div class="donut-wrap">' +
+      '<svg viewBox="0 0 36 36" width="96" height="96">' + paths +
+      '<circle cx="18" cy="18" r="9" fill="var(--card)"/></svg>' +
+      '<div class="donut-legend">' + legend + '</div>' +
+    '</div>';
   }
 
-  function renderUtm(rows) {
+  function renderDonut(title, items) {
+    return '<div class="card"><span class="card-title">' + title + '</span>' +
+      renderDonutContent(items) + '</div>';
+  }
+
+  function renderTabbedTraffic(referrers, utm) {
+    var html = '<div class="card">' +
+      '<div class="card-tabs">' +
+        '<div class="card-tab active" data-tab="sources" onclick="switchPageTab(this)">Källor</div>' +
+        '<div class="card-tab" data-tab="utm" onclick="switchPageTab(this)">UTM</div>' +
+      '</div>' +
+      '<div class="tab-panel" data-panel="sources">' +
+        renderTableContent(referrers, 'source', 'visitors', '#8b5cf6') +
+      '</div>' +
+      '<div class="tab-panel" data-panel="utm" style="display:none"><div style="margin-top:0">' +
+        renderUtmContent(utm) +
+      '</div></div>' +
+    '</div>';
+    return html;
+  }
+
+  function renderTabbedVisitors(browsers, devices, languages) {
+    var html = '<div class="card">' +
+      '<div class="card-tabs">' +
+        '<div class="card-tab active" data-tab="browsers" onclick="switchPageTab(this)">Webbläsare</div>' +
+        '<div class="card-tab" data-tab="devices" onclick="switchPageTab(this)">Enheter</div>' +
+        '<div class="card-tab" data-tab="languages" onclick="switchPageTab(this)">Språk</div>' +
+      '</div>' +
+      '<div class="tab-panel" data-panel="browsers">' + renderDonutContent(browsers) + '</div>' +
+      '<div class="tab-panel" data-panel="devices" style="display:none">' + renderDonutContent(devices) + '</div>' +
+      '<div class="tab-panel" data-panel="languages" style="display:none">' + renderDonutContent(languages) + '</div>' +
+    '</div>';
+    return html;
+  }
+
+  function renderUtmContent(rows) {
     if (!rows || !rows.length) {
-      return '<div class="card"><span class="card-title">UTM-kampanjer</span>' +
-        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p></div>';
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r.visitors; }));
-    var html = '<div class="card"><span class="card-title">UTM-kampanjer</span><div style="margin-top:14px">';
+    var html = '';
     rows.forEach(function(r) {
       var pct = (+r.visitors / max) * 100;
       var label = esc(r.source) + (r.medium ? ' / ' + esc(r.medium) : '') + (r.campaign ? ' — ' + esc(r.campaign) : '') + (r.term ? ' [' + esc(r.term) + ']' : '') + (r.content ? ' (' + esc(r.content) + ')' : '');
@@ -884,8 +1009,12 @@
         '<span class="trow-val">' + num(r.visitors) + '</span>' +
       '</div>';
     });
-    html += '</div></div>';
     return html;
+  }
+
+  function renderUtm(rows) {
+    return '<div class="card"><span class="card-title">UTM-kampanjer</span><div style="margin-top:14px">' +
+      renderUtmContent(rows) + '</div></div>';
   }
 
   function renderBotSection(d) {
