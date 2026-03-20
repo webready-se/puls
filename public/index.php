@@ -1112,22 +1112,20 @@ function run_migrations(PDO $db): void
         foreach ($rows as $row) {
             $update->execute([normalize_path($row['path']), $row['id']]);
         }
-        // Clean broken_links too
-        $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%gad_%' OR path LIKE '%gbraid=%' OR path LIKE '%wbraid=%'")->fetchAll(PDO::FETCH_ASSOC);
-        $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
-        foreach ($rows as $row) {
-            $update->execute([normalize_path($row['path']), $row['id']]);
-        }
         // Strip _gl and ved params from paths
         $rows = $db->query("SELECT id, path FROM pageviews WHERE path LIKE '%_gl=%' OR path LIKE '%ved=%'")->fetchAll(PDO::FETCH_ASSOC);
         $update = $db->prepare("UPDATE pageviews SET path = ? WHERE id = ?");
         foreach ($rows as $row) {
             $update->execute([normalize_path($row['path']), $row['id']]);
         }
-        $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%_gl=%' OR path LIKE '%ved=%'")->fetchAll(PDO::FETCH_ASSOC);
-        $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
-        foreach ($rows as $row) {
-            $update->execute([normalize_path($row['path']), $row['id']]);
+        // Clean broken_links too (table may not exist on all installations)
+        $hasBrokenLinks = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='broken_links'")->fetch();
+        if ($hasBrokenLinks) {
+            $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%gad_%' OR path LIKE '%gbraid=%' OR path LIKE '%wbraid=%' OR path LIKE '%_gl=%' OR path LIKE '%ved=%'")->fetchAll(PDO::FETCH_ASSOC);
+            $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
+            foreach ($rows as $row) {
+                $update->execute([normalize_path($row['path']), $row['id']]);
+            }
         }
     }
 
