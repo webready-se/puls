@@ -1093,8 +1093,13 @@ function run_migrations(PDO $db): void
         if ($hasBL) {
             $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%utm_id=%'")->fetchAll(PDO::FETCH_ASSOC);
             $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
+            $delete = $db->prepare("DELETE FROM broken_links WHERE id = ?");
             foreach ($rows as $row) {
-                $update->execute([normalize_path($row['path']), $row['id']]);
+                try {
+                    $update->execute([normalize_path($row['path']), $row['id']]);
+                } catch (PDOException $e) {
+                    $delete->execute([$row['id']]);
+                }
             }
         }
     }
@@ -1126,8 +1131,15 @@ function run_migrations(PDO $db): void
         if ($hasBrokenLinks) {
             $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%gad_%' OR path LIKE '%gbraid=%' OR path LIKE '%wbraid=%' OR path LIKE '%_gl=%' OR path LIKE '%ved=%'")->fetchAll(PDO::FETCH_ASSOC);
             $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
+            $delete = $db->prepare("DELETE FROM broken_links WHERE id = ?");
             foreach ($rows as $row) {
-                $update->execute([normalize_path($row['path']), $row['id']]);
+                $cleanPath = normalize_path($row['path']);
+                try {
+                    $update->execute([$cleanPath, $row['id']]);
+                } catch (PDOException $e) {
+                    // UNIQUE conflict: merge hits into existing row and delete duplicate
+                    $delete->execute([$row['id']]);
+                }
             }
         }
     }
