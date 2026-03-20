@@ -123,7 +123,7 @@ Första kunden live — bilkompani.se.
 
 ## Epic 9: Djupare insikter
 
-- [ ] **Realtidsvy** — "Just nu: N besökare" (senaste 5 min), ger en levande känsla
+- [x] **Realtidsvy** — "N online nu" badge + stat-kort (senaste 5 min) — redan implementerat
 - [ ] **Utgående länkklick** — Auto-spåra klick på externa länkar via JS click-listener
 - [ ] **Länder/regioner** — Baserat på Accept-Language, visuell karta eller lista
 - [ ] **Jämförelseläge** — "Denna vecka vs förra" som overlay i grafen
