@@ -9,6 +9,8 @@ See your traffic. Respect their privacy.
 
 Puls is a cookieless, lightweight analytics tool built with a single PHP file and SQLite. No frameworks, no dependencies, no build step. Drop it on any PHP host and go.
 
+![Puls Dashboard](docs/screenshots/dashboard.png)
+
 ## Features
 
 - **Cookieless** — GDPR-friendly by default, no consent banners needed
@@ -18,6 +20,15 @@ Puls is a cookieless, lightweight analytics tool built with a single PHP file an
 - **Privacy-first** — Daily-rotating visitor hashes, no PII stored
 - **Multi-user** — Bcrypt auth with per-user site access control
 - **Zero dependencies** — PHP 8.2+ and SQLite, nothing else
+
+<details>
+<summary>Bot detection & broken link tracking</summary>
+
+![Bots & Crawlers](docs/screenshots/bots.png)
+
+![Pages to fix](docs/screenshots/broken-links.png)
+
+</details>
 
 ## Quick Start
 
