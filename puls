@@ -10,6 +10,7 @@
  *   php puls user:remove <name>                  Remove a user
  *   php puls user:list                           List all users
  *   php puls sites:list                          List all tracked sites
+ *   php puls sites:rename <old> <new>              Rename a site
  */
 
 $config = require __DIR__ . '/config.php';
@@ -22,6 +23,7 @@ match ($command) {
     'user:remove'  => userRemove($config['users_file'], $argv[2] ?? null),
     'user:list'    => userList($config['users_file']),
     'sites:list'   => sitesList($config['db_path']),
+    'sites:rename' => sitesRename($config, $argv[2] ?? null, $argv[3] ?? null),
     default        => printHelp(),
 };
 
@@ -263,6 +265,88 @@ function sitesList(string $dbPath): void
 }
 
 // =====================================================================
+// sites:rename
+// =====================================================================
+
+function sitesRename(array $config, ?string $oldName, ?string $newName): void
+{
+    if (!$oldName || !$newName) {
+        echo "Usage: php puls sites:rename <old-name> <new-name>\n";
+        exit(1);
+    }
+
+    if ($oldName === $newName) {
+        echo "Old and new name are the same.\n";
+        exit(1);
+    }
+
+    $dbPath = $config['db_path'];
+    if (!file_exists($dbPath)) {
+        echo "No database found.\n";
+        exit(1);
+    }
+
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Check that old site exists
+    $stmt = $db->prepare('SELECT COUNT(*) FROM pageviews WHERE site = ?');
+    $stmt->execute([$oldName]);
+    $count = $stmt->fetchColumn();
+
+    if ($count === 0) {
+        echo "Site '{$oldName}' not found in database.\n";
+        exit(1);
+    }
+
+    // Check that new name doesn't already exist
+    $stmt = $db->prepare('SELECT COUNT(*) FROM pageviews WHERE site = ?');
+    $stmt->execute([$newName]);
+    if ($stmt->fetchColumn() > 0) {
+        echo "Site '{$newName}' already exists. Cannot rename to an existing site.\n";
+        exit(1);
+    }
+
+    // Rename in all tables
+    $db->beginTransaction();
+
+    $tables = ['pageviews', 'bot_visits', 'broken_links'];
+    foreach ($tables as $table) {
+        $stmt = $db->prepare("UPDATE {$table} SET site = ? WHERE site = ?");
+        $stmt->execute([$newName, $oldName]);
+        $affected = $stmt->rowCount();
+        if ($affected > 0) {
+            echo "  {$table}: {$affected} rows updated\n";
+        }
+    }
+
+    $db->commit();
+
+    // Update users.json
+    $usersFile = $config['users_file'];
+    $users = loadUsers($usersFile);
+    $usersUpdated = 0;
+
+    foreach ($users as &$user) {
+        if (!empty($user['sites']) && in_array($oldName, $user['sites'])) {
+            $user['sites'] = array_values(array_map(
+                fn($s) => $s === $oldName ? $newName : $s,
+                $user['sites']
+            ));
+            $usersUpdated++;
+        }
+    }
+    unset($user);
+
+    if ($usersUpdated > 0) {
+        saveUsers($usersFile, $users);
+        echo "  users.json: {$usersUpdated} user(s) updated\n";
+    }
+
+    echo "\nRenamed '{$oldName}' → '{$newName}'.\n";
+}
+
+// =====================================================================
 // Helpers
 // =====================================================================
 
@@ -278,6 +362,7 @@ function printHelp(): void
       php puls user:remove <name>              Remove a user
       php puls user:list                       List all users
       php puls sites:list                      List all tracked sites
+      php puls sites:rename <old> <new>        Rename a site
 
     Options:
       --sites    Comma-separated list of sites the user can access.
