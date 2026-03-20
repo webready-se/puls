@@ -121,6 +121,17 @@ Första kunden live — bilkompani.se.
 
 > Delbara dashboards ger mest kundvärde snabbast — kunder vill kunna titta utan att behöva login. En enkel `/?share=<token>` som visar read-only dashboard.
 
+## Epic 9: Djupare insikter
+
+- [ ] **Realtidsvy** — "Just nu: N besökare" (senaste 5 min), ger en levande känsla
+- [ ] **Utgående länkklick** — Auto-spåra klick på externa länkar via JS click-listener
+- [ ] **Länder/regioner** — Baserat på Accept-Language, visuell karta eller lista
+- [ ] **Jämförelseläge** — "Denna vecka vs förra" som overlay i grafen
+- [ ] **Mål/konverteringar** — Definiera målsida (t.ex. /tack), visa konverteringsgrad
+- [ ] **Anpassat datumintervall** — Datumväljare utöver 24h/7d/30d/90d
+- [ ] **Sammanfattningskort** — "Bästa dagen: Tisdag", "Mest trafik: 14-15"
+- [ ] **Notiser** — Trafikspike- eller 404-varning via webhook/email
+
 ## Epic: Automatisering
 
 - [ ] **Veckorapport via email** — CLI-kommando + cron som skickar sammanfattning
