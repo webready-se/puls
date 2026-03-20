@@ -335,7 +335,7 @@ function get_tracking_script(): string
       var sc=document.currentScript||{src:'/stats.php',dataset:{}};
       var ep=sc.src.split('?')[0]+'?collect';
       var site=sc.dataset.site||location.hostname;
-      function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});return Object.keys(o).length?o:null}
+      function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});if(!o.source&&p.get('gad_source')){o.source='google';o.medium='cpc';var c=p.get('gad_campaignid');if(c)o.campaign=c}return Object.keys(o).length?o:null}
       function s(){
         var d=JSON.stringify({u:location.pathname+location.search,r:document.referrer,w:innerWidth,site:site,utm:utm()});
         navigator.sendBeacon?navigator.sendBeacon(ep,d):0;
@@ -391,6 +391,19 @@ function handle_collect(array $config): void
     $utmCampaign = $utm && !empty($utm['campaign']) ? substr($utm['campaign'], 0, 200) : null;
     $utmTerm     = $utm && !empty($utm['term'])     ? substr($utm['term'], 0, 200)     : null;
     $utmContent  = $utm && !empty($utm['content'])  ? substr($utm['content'], 0, 200)  : null;
+
+    // Server-side fallback: detect Google Ads params if JS missed them
+    if (!$utmSource) {
+        $rawUrl = $input['u'] ?? '';
+        if (str_contains($rawUrl, 'gad_source=')) {
+            $utmSource = 'google';
+            $utmMedium = 'cpc';
+            parse_str(parse_url($rawUrl, PHP_URL_QUERY) ?? '', $gadParams);
+            if (!empty($gadParams['gad_campaignid'])) {
+                $utmCampaign = substr($gadParams['gad_campaignid'], 0, 200);
+            }
+        }
+    }
 
     $lang = null;
     if (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
@@ -943,6 +956,8 @@ function normalize_path(string $path): string
         [$pathPart, $query] = explode('?', $path, 2);
         parse_str($query, $params);
         $strip = ['fbclid', 'gclid', 'gclsrc', 'dclid', 'msclkid', 'mc_eid',
+                   'gad_source', 'gad_campaignid', 'gbraid', 'wbraid',
+                   '_gl', 'ved',
                    'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id',
                    'ref', 'hsa_cam', 'hsa_grp', 'hsa_mt', 'hsa_src', 'hsa_ad', 'hsa_acc',
                    'hsa_net', 'hsa_ver', 'hsa_la', 'hsa_ol', 'hsa_kw'];
@@ -964,7 +979,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 7; // Bump this when adding new migrations
+    $currentVersion = 8; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -1075,6 +1090,41 @@ function run_migrations(PDO $db): void
             $update->execute([normalize_path($row['path']), $row['id']]);
         }
         $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%utm_id=%'")->fetchAll(PDO::FETCH_ASSOC);
+        $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
+        foreach ($rows as $row) {
+            $update->execute([normalize_path($row['path']), $row['id']]);
+        }
+    }
+
+    // v8: strip Google Ads params from paths + backfill utm for gad_ traffic
+    if ($version < 8) {
+        // Backfill utm_source/medium/campaign for pageviews with gad_ params in path
+        $rows = $db->query("SELECT id, path FROM pageviews WHERE path LIKE '%gad_source=%' AND utm_source IS NULL")->fetchAll(PDO::FETCH_ASSOC);
+        $update = $db->prepare("UPDATE pageviews SET path = ?, utm_source = 'google', utm_medium = 'cpc', utm_campaign = ? WHERE id = ?");
+        foreach ($rows as $row) {
+            parse_str(parse_url($row['path'], PHP_URL_QUERY) ?? '', $params);
+            $campaign = !empty($params['gad_campaignid']) ? $params['gad_campaignid'] : null;
+            $update->execute([normalize_path($row['path']), $campaign, $row['id']]);
+        }
+        // Also strip gad_/gbraid/wbraid params from paths that already have utm
+        $rows = $db->query("SELECT id, path FROM pageviews WHERE (path LIKE '%gad_%' OR path LIKE '%gbraid=%' OR path LIKE '%wbraid=%') AND utm_source IS NOT NULL")->fetchAll(PDO::FETCH_ASSOC);
+        $update = $db->prepare("UPDATE pageviews SET path = ? WHERE id = ?");
+        foreach ($rows as $row) {
+            $update->execute([normalize_path($row['path']), $row['id']]);
+        }
+        // Clean broken_links too
+        $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%gad_%' OR path LIKE '%gbraid=%' OR path LIKE '%wbraid=%'")->fetchAll(PDO::FETCH_ASSOC);
+        $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
+        foreach ($rows as $row) {
+            $update->execute([normalize_path($row['path']), $row['id']]);
+        }
+        // Strip _gl and ved params from paths
+        $rows = $db->query("SELECT id, path FROM pageviews WHERE path LIKE '%_gl=%' OR path LIKE '%ved=%'")->fetchAll(PDO::FETCH_ASSOC);
+        $update = $db->prepare("UPDATE pageviews SET path = ? WHERE id = ?");
+        foreach ($rows as $row) {
+            $update->execute([normalize_path($row['path']), $row['id']]);
+        }
+        $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%_gl=%' OR path LIKE '%ved=%'")->fetchAll(PDO::FETCH_ASSOC);
         $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
         foreach ($rows as $row) {
             $update->execute([normalize_path($row['path']), $row['id']]);

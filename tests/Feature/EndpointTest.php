@@ -87,6 +87,24 @@ test('js snippet captures all five utm params', function () {
     expect($r['body'])->toContain("'source','medium','campaign','term','content'");
 });
 
+test('js snippet detects Google Ads gad_source param', function () {
+    $r = http('GET', '/?js');
+    expect($r['body'])->toContain('gad_source');
+});
+
+test('collect endpoint detects Google Ads params server-side', function () {
+    $r = http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode([
+            'u' => '/dackhotell?gad_source=1&gad_campaignid=21828512064',
+            'r' => '',
+            'w' => 1920,
+            'site' => 'test',
+        ]),
+    ]);
+    expect($r['status'])->toBe(204);
+});
+
 test('log endpoint tracks bot visits', function () {
     $r = http('GET', '/?log&s=test&p=/some-page', [
         'header' => 'User-Agent: Mozilla/5.0 (compatible; GPTBot/1.0; +https://openai.com/gptbot)',

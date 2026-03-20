@@ -65,3 +65,27 @@ test('strips fbclid with utm params from subpath', function () {
     $path = '/odlingsguiden/?fbclid=IwZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQKNjYyODU2ODM3OQABHlijNEh0JKXI85QilabUiYJE_XInh2gPyfjOV8-pqiZqcOCuRUY7JhN5gnNl_aem_ZwpzPSX_ONy9Ei9syt8R5A';
     expect(normalize_path($path))->toBe('/odlingsguiden');
 });
+
+test('strips Google Ads params (gad_source, gad_campaignid, gbraid)', function () {
+    $path = '/?gad_source=1&gad_campaignid=21124256144&gbraid=0AAAAA9fQM27DWZymnDr5tqd7ZEnWiaCVU';
+    expect(normalize_path($path))->toBe('/');
+});
+
+test('strips wbraid param', function () {
+    expect(normalize_path('/page?wbraid=abc123'))->toBe('/page');
+});
+
+test('strips Google Ads params but keeps other params', function () {
+    $path = '/dackhotell?size=205&gad_source=1&gad_campaignid=21828512064';
+    expect(normalize_path($path))->toBe('/dackhotell?size=205');
+});
+
+test('strips _gl cross-domain linker param', function () {
+    $path = '/?_gl=1*z2sgze*_gcl_au*MTkxMTk3NjAzOC4xNzczOTQzMjQz';
+    expect(normalize_path($path))->toBe('/');
+});
+
+test('strips ved Google Search param', function () {
+    $path = '/?ved=2ahUKEwjNts6us6yTAxV6FBAIHYSBI2kQgU96BAgdEAQ';
+    expect(normalize_path($path))->toBe('/');
+});
