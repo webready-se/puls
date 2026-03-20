@@ -53,6 +53,14 @@ test('strips all utm params including term and content', function () {
     expect(normalize_path($path))->toBe('/page');
 });
 
+test('strips utm_id from Meta Ads', function () {
+    expect(normalize_path('/varumarken/volkswagen?utm_id=120240651630670599'))->toBe('/varumarken/volkswagen');
+});
+
+test('strips utm_id but keeps other params', function () {
+    expect(normalize_path('/page?model=golf&utm_id=120240651630670599'))->toBe('/page?model=golf');
+});
+
 test('strips fbclid with utm params from subpath', function () {
     $path = '/odlingsguiden/?fbclid=IwZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQKNjYyODU2ODM3OQABHlijNEh0JKXI85QilabUiYJE_XInh2gPyfjOV8-pqiZqcOCuRUY7JhN5gnNl_aem_ZwpzPSX_ONy9Ei9syt8R5A';
     expect(normalize_path($path))->toBe('/odlingsguiden');

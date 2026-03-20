@@ -161,20 +161,22 @@
   .card {
     background: var(--card); border-radius: var(--radius); padding: 22px;
     border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    margin-bottom: 14px;
+    margin-bottom: 14px; min-width: 0;
   }
   .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 8px; }
   @media (max-width: 600px) { .card-header { flex-direction: column; align-items: flex-start; } }
   .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
   .card-subtitle { font-size: 12px; color: var(--light); }
-  .chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 30px 4px 0; overflow: visible; }
-  @media (max-width: 600px) { .chart { height: 130px; gap: 3px; overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch; } }
+  .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-top: 30px; }
+  .chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 0 4px; }
+  @media (max-width: 600px) { .chart { gap: 3px; } }
   .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; min-width: 36px; padding: 0 2px; }
   .chart-val { font-size: 10px; color: var(--muted); font-weight: 600; white-space: nowrap; }
   .chart-bar {
     width: 100%; border-radius: 6px 6px 0 0; min-height: 4px;
     background: linear-gradient(180deg, var(--accent) 0%, var(--accent-light) 100%);
     transition: height 0.4s ease; position: relative; cursor: pointer;
+    flex: none;
   }
   .chart-col:hover { z-index: 10; }
   .chart-bar:hover { filter: brightness(1.1); }
@@ -211,6 +213,8 @@
   .trow-bar { flex: 1; height: 8px; background: var(--subtle); border-radius: 4px; overflow: hidden; }
   .trow-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
   .trow-val { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .trow-clickable { cursor: pointer; border-radius: 6px; padding: 7px 6px; margin: 0 -6px; transition: background 0.15s; }
+  .trow-clickable:hover { background: var(--subtle); }
 
   /* Card tabs */
   .card-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: -22px -22px 16px; padding: 0 22px; }
@@ -222,6 +226,26 @@
   .card-tab:hover { color: var(--text); }
   .card-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
   @media (max-width: 600px) { .card-tab { padding: 8px 12px; font-size: 12px; } }
+
+  /* Overlay */
+  .overlay { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
+  .overlay.open { display: flex; align-items: center; justify-content: center; }
+  .overlay-panel {
+    background: var(--card); border-radius: var(--radius); border: 1px solid var(--border);
+    width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; padding: 22px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+  .overlay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .overlay-close {
+    background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px;
+    font-size: 20px; line-height: 1;
+  }
+  .overlay-close:hover { color: var(--text); }
+  .show-all {
+    display: block; text-align: center; padding: 10px; margin-top: 8px; font-size: 12px;
+    color: var(--accent); cursor: pointer; border: none; background: none; width: 100%;
+  }
+  .show-all:hover { text-decoration: underline; }
 
   /* Donut */
   .donut-wrap { display: flex; align-items: center; gap: 24px; margin-top: 8px; flex-wrap: wrap; }
@@ -532,6 +556,7 @@
   let currentDays = 7;
   let currentSite = '';
   let currentPath = '';
+  let currentChannel = '';
   let sites = [];
 
   // --- Elements ---
@@ -582,6 +607,8 @@
   // --- Events ---
   siteSelect.addEventListener('change', function() {
     currentSite = this.value;
+    currentChannel = '';
+    currentPath = '';
     load(currentDays);
   });
 
@@ -599,6 +626,7 @@
     let url = API + '?api&days=' + days;
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
     if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
+    if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
     fetch(url)
       .then(function(r) {
         if (r.status === 401) { location.href = '/?login'; return; }
@@ -692,7 +720,7 @@
     var filtered = !!d.path;
     var html = '';
 
-    // Path filter chip
+    // Filter chips
     if (filtered) {
       html += '<div class="path-filter">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>' +
@@ -701,26 +729,35 @@
         '<button class="path-filter-clear" onclick="clearPathFilter()">Rensa filter</button>' +
       '</div>';
     }
+    if (d.channel) {
+      var channelName = Object.keys(channelSlugs).find(function(k) { return channelSlugs[k] === d.channel; }) || d.channel;
+      var cColor = channelColors[channelName] || '#6366f1';
+      html += '<div class="path-filter">' +
+        '<span style="width:10px;height:10px;border-radius:50%;background:' + cColor + ';flex-shrink:0"></span>' +
+        '<span>Kanal</span>' +
+        '<span class="path-filter-path">' + esc(channelName) + '</span>' +
+        '<button class="path-filter-clear" onclick="filterChannel(\'\')">Rensa filter</button>' +
+      '</div>';
+    }
 
     html += renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) +
       renderChart(d);
 
     if (!filtered) {
       html += '<div class="grid-2">' +
-        renderTabbedPages(d.pages, d.entryPages, d.exitPages) +
-        renderTabbedTraffic(d.referrers, d.utm) +
+        renderTabbedPages(d.pages, d.entryPages, d.exitPages, d.pagesTotal) +
+        renderChannels(d.channels) +
+      '</div>' +
+      '<div class="grid-2">' +
+        renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal) +
+        renderTabbedVisitors(d.browsers, d.devices, d.languages) +
       '</div>';
     } else {
       html += '<div class="grid-2">' +
-        renderTabbedTraffic(d.referrers, d.utm) +
-        '<div></div>' +
+        renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal) +
+        renderTabbedVisitors(d.browsers, d.devices, d.languages) +
       '</div>';
     }
-
-    html += '<div class="grid-2">' +
-      renderTabbedVisitors(d.browsers, d.devices, d.languages) +
-      '<div></div>' +
-    '</div>';
 
     if (!filtered) {
       html += renderBotSection(d) +
@@ -774,7 +811,7 @@
         '</div>' +
         '<span class="card-subtitle">' + siteName + ' — senaste ' + currentDays + ' dagarna</span>' +
       '</div>' +
-      '<div class="chart">' + buildBars(d.pageviews) + '</div>' +
+      '<div class="chart-scroll"><div class="chart">' + buildBars(d.pageviews) + '</div></div>' +
     '</div>';
   }
 
@@ -883,11 +920,27 @@
     return html;
   }
 
-  function renderTabbedPages(pages, entryPages, exitPages) {
+  var expandRenderers = {
+    pages: function(d) { return renderTableContent(d.pages, 'path', 'views', '#6366f1'); },
+    entryPages: function(d) { return renderTableContent(d.entryPages, 'path', 'entries', '#059669'); },
+    exitPages: function(d) { return renderTableContent(d.exitPages, 'path', 'exits', '#d97706'); },
+    referrers: function(d) { return renderTableContent(d.referrers, 'source', 'visitors', '#8b5cf6'); },
+    utm: function(d) { return renderUtmContent(d.utm); },
+    bots: function(d) { return renderBotTableContent(d.bots); },
+    botPages: function(d) { return renderTableContent(d.botPages, 'path', 'visits', '#2563eb'); },
+    botActivity: function(d) { return renderBotActivityContent(d.botActivity); }
+  };
+
+  function showAllBtn(total, expandType, title) {
+    if (total <= 10) return '';
+    return '<button class="show-all" onclick="showAll(\'' + expandType + '\', \'' + esc(title) + '\')">Visa alla (' + total + ')</button>';
+  }
+
+  function renderTabbedPages(pages, entryPages, exitPages, pagesTotal) {
     var tabs = [
-      { id: 'popular', label: 'Populära', rows: pages, valKey: 'views', color: '#6366f1' },
-      { id: 'entry', label: 'Ingång', rows: entryPages, valKey: 'entries', color: '#059669' },
-      { id: 'exit', label: 'Utgång', rows: exitPages, valKey: 'exits', color: '#d97706' }
+      { id: 'popular', label: 'Populära', rows: pages, valKey: 'views', color: '#6366f1', expand: 'pages', total: pagesTotal },
+      { id: 'entry', label: 'Ingång', rows: entryPages, valKey: 'entries', color: '#059669', expand: 'entryPages', total: 0 },
+      { id: 'exit', label: 'Utgång', rows: exitPages, valKey: 'exits', color: '#d97706', expand: 'exitPages', total: 0 }
     ];
 
     var html = '<div class="card">' +
@@ -900,6 +953,7 @@
     tabs.forEach(function(t, i) {
       html += '<div class="tab-panel" data-panel="' + t.id + '"' + (i !== 0 ? ' style="display:none"' : '') + '>' +
         renderTableContent(t.rows, 'path', t.valKey, t.color) +
+        showAllBtn(t.total, t.expand, t.label + ' sidor') +
       '</div>';
     });
 
@@ -964,7 +1018,12 @@
       renderDonutContent(items) + '</div>';
   }
 
-  function renderTabbedTraffic(referrers, utm) {
+  function renderChannels(channels) {
+    return '<div class="card"><span class="card-title">Kanaler</span><div style="margin-top:14px">' +
+      renderChannelsContent(channels) + '</div></div>';
+  }
+
+  function renderTabbedTraffic(referrers, utm, referrersTotal, utmTotal) {
     var html = '<div class="card">' +
       '<div class="card-tabs">' +
         '<div class="card-tab active" data-tab="sources" onclick="switchPageTab(this)">Källor</div>' +
@@ -972,11 +1031,30 @@
       '</div>' +
       '<div class="tab-panel" data-panel="sources">' +
         renderTableContent(referrers, 'source', 'visitors', '#8b5cf6') +
+        showAllBtn(referrersTotal, 'referrers', 'Trafikkällor') +
       '</div>' +
-      '<div class="tab-panel" data-panel="utm" style="display:none"><div style="margin-top:0">' +
+      '<div class="tab-panel" data-panel="utm" style="display:none">' +
         renderUtmContent(utm) +
-      '</div></div>' +
+        showAllBtn(utmTotal, 'utm', 'UTM-kampanjer') +
+      '</div>' +
     '</div>';
+    return html;
+  }
+
+  function renderPctBars(items, color) {
+    if (!items || !items.length) {
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
+    }
+    var maxPct = Math.max.apply(null, items.map(function(i) { return +i.pct; }));
+    var html = '';
+    items.forEach(function(i) {
+      var w = maxPct > 0 ? (+i.pct / maxPct) * 100 : 0;
+      html += '<div class="trow">' +
+        '<span class="trow-label">' + esc(i.name) + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + w + '%;background:' + color + '"></div></div>' +
+        '<span class="trow-val">' + i.pct + '%</span>' +
+      '</div>';
+    });
     return html;
   }
 
@@ -987,12 +1065,47 @@
         '<div class="card-tab" data-tab="devices" onclick="switchPageTab(this)">Enheter</div>' +
         '<div class="card-tab" data-tab="languages" onclick="switchPageTab(this)">Språk</div>' +
       '</div>' +
-      '<div class="tab-panel" data-panel="browsers">' + renderDonutContent(browsers) + '</div>' +
-      '<div class="tab-panel" data-panel="devices" style="display:none">' + renderDonutContent(devices) + '</div>' +
-      '<div class="tab-panel" data-panel="languages" style="display:none">' + renderDonutContent(languages) + '</div>' +
+      '<div class="tab-panel" data-panel="browsers">' + renderPctBars(browsers, '#6366f1') + '</div>' +
+      '<div class="tab-panel" data-panel="devices" style="display:none">' + renderPctBars(devices, '#8b5cf6') + '</div>' +
+      '<div class="tab-panel" data-panel="languages" style="display:none">' + renderPctBars(languages, '#059669') + '</div>' +
     '</div>';
     return html;
   }
+
+  var channelSlugs = {
+    'Betald': 'betald', 'Kampanj': 'kampanj', 'Organisk sök': 'organisk-sok',
+    'Social': 'social', 'Referral': 'referral', 'Direkt': 'direkt'
+  };
+  var channelColors = {
+    'Betald': '#ef4444', 'Kampanj': '#f59e0b', 'Organisk sök': '#22c55e',
+    'Social': '#8b5cf6', 'Referral': '#06b6d4', 'Direkt': '#6b7280'
+  };
+
+  function renderChannelsContent(channels) {
+    if (!channels || !channels.length) {
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
+    }
+    var maxVisitors = Math.max.apply(null, channels.map(function(c) { return +c.visitors; }));
+    var html = '';
+    channels.forEach(function(c) {
+      var pct = (+c.visitors / maxVisitors) * 100;
+      var color = channelColors[c.channel] || '#6366f1';
+      var slug = channelSlugs[c.channel] || '';
+      html += '<div class="trow trow-clickable" onclick="filterChannel(\'' + slug + '\')">' +
+        '<span class="trow-label">' + esc(c.channel) +
+          ' <span style="color:var(--light);font-size:11px">' + c.pages_per_visitor + ' s/b</span>' +
+        '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<span class="trow-val">' + num(c.visitors) + '</span>' +
+      '</div>';
+    });
+    return html;
+  }
+
+  window.filterChannel = function(slug) {
+    currentChannel = currentChannel === slug ? '' : slug;
+    load(currentDays);
+  };
 
   function renderUtmContent(rows) {
     if (!rows || !rows.length) {
@@ -1029,10 +1142,9 @@
         '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen botaktivitet ännu</p></div>';
     }
 
-    var catColors = { 'AI': '#dc2626', 'Sökmotor': '#2563eb', 'Social': '#7c3aed', 'SEO': '#d97706', 'Monitor': '#059669', 'Övrigt': '#94a3b8' };
     var badges = '';
     cats.forEach(function(c) {
-      var color = catColors[c.category] || catColors['Övrigt'];
+      var color = botCatColors[c.category] || botCatColors['Övrigt'];
       badges += '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;background:' + color + '15;color:' + color + '">' +
         esc(c.category) + ' <span style="opacity:0.7">' + num(c.visits) + '</span></span> ';
     });
@@ -1045,8 +1157,11 @@
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' + badges + '</div>' +
       '<div class="grid-2">';
 
-    html += renderBotTable(bots, catColors);
-    html += renderTable('Mest crawlade sidor', pages, 'path', 'visits', '#2563eb');
+    html += renderBotTable(bots, d.botsTotal);
+    html += '<div class="card"><span class="card-title">Mest crawlade sidor</span><div style="margin-top:14px">' +
+      renderTableContent(pages, 'path', 'visits', '#2563eb') + '</div>' +
+      showAllBtn(d.botPagesTotal, 'botPages', 'Mest crawlade sidor') +
+    '</div>';
 
     html += '</div>';
 
@@ -1054,35 +1169,28 @@
     var activity = d.botActivity || [];
     if (activity.length) {
       html += '<div class="card" style="margin-top:14px"><span class="card-title">Senaste bot-aktivitet</span>' +
-        '<div style="margin-top:12px">';
-      activity.forEach(function(a) {
-        var color = catColors[a.category] || catColors['Övrigt'];
-        var time = formatTime(a.created_at);
-        html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">' +
-          '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
-          '<span style="font-weight:600;min-width:120px">' + esc(a.name) + '</span>' +
-          '<span style="color:var(--light);font-size:11px;min-width:80px">' + esc(a.site) + '</span>' +
-          '<span style="color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(a.path) + '</span>' +
-          '<span style="color:var(--light);white-space:nowrap;font-size:12px">' + time + '</span>' +
-        '</div>';
-      });
-      html += '</div></div>';
+        '<div style="margin-top:12px">' +
+        renderBotActivityContent(activity) +
+        '</div>' +
+        showAllBtn(activity.length >= 10 ? 11 : 0, 'botActivity', 'Bot-aktivitet') +
+      '</div>';
     }
 
     html += '</div>';
     return html;
   }
 
-  function renderBotTable(bots, catColors) {
+  var botCatColors = { 'AI': '#dc2626', 'Sökmotor': '#2563eb', 'Social': '#7c3aed', 'SEO': '#d97706', 'Monitor': '#059669', 'Övrigt': '#94a3b8' };
+
+  function renderBotTableContent(bots) {
     if (!bots || !bots.length) {
-      return '<div class="card"><span class="card-title">Aktiva botar</span>' +
-        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p></div>';
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
     }
     var max = Math.max.apply(null, bots.map(function(b) { return +b.visits; }));
-    var html = '<div class="card"><span class="card-title">Aktiva botar</span><div style="margin-top:14px">';
+    var html = '';
     bots.forEach(function(b) {
       var pct = (+b.visits / max) * 100;
-      var color = catColors[b.category] || catColors['Övrigt'];
+      var color = botCatColors[b.category] || botCatColors['Övrigt'];
       html += '<div class="trow">' +
         '<span class="trow-label" title="' + esc(b.name) + ' (' + esc(b.category) + ')">' +
           '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:6px;flex-shrink:0"></span>' +
@@ -1092,7 +1200,55 @@
         '<span class="trow-val">' + num(b.visits) + '</span>' +
       '</div>';
     });
-    html += '</div></div>';
+    return html;
+  }
+
+  function renderBotTable(bots, botsTotal) {
+    return '<div class="card"><span class="card-title">Aktiva botar</span><div style="margin-top:14px">' +
+      renderBotTableContent(bots) + '</div>' +
+      showAllBtn(botsTotal, 'bots', 'Aktiva botar') +
+    '</div>';
+  }
+
+  function renderBotActivityContent(activity) {
+    if (!activity || !activity.length) {
+      return '<p style="color:var(--muted);font-size:13px">Ingen data ännu</p>';
+    }
+    var html = '';
+    activity.forEach(function(a) {
+      var color = botCatColors[a.category] || botCatColors['Övrigt'];
+      var time = formatTime(a.created_at);
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
+        '<span style="font-weight:600;min-width:120px">' + esc(a.name) + '</span>' +
+        '<span style="color:var(--light);font-size:11px;min-width:80px">' + esc(a.site) + '</span>' +
+        '<span style="color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(a.path) + '</span>' +
+        '<span style="color:var(--light);white-space:nowrap;font-size:12px">' + time + '</span>' +
+      '</div>';
+    });
+    return html;
+  }
+
+  function renderBrokenGroup(items, color, showStatus) {
+    var html = '';
+    items.forEach(function(l) {
+      var time = formatTime(l.last_seen);
+      var refs = (l.referrers || []).filter(function(r) { return r; });
+      html += '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="display:flex;align-items:center;gap:10px;font-size:13px">' +
+          '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
+          (l.site ? '<span style="color:var(--light);font-size:11px;min-width:80px">' + esc(l.site) + '</span>' : '') +
+          '<span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(l.path) + '">' + esc(l.path) + '</span>' +
+          (showStatus ? '<span style="font-size:11px;color:' + color + ';font-weight:600">' + l.status + '</span>' : '') +
+          '<span style="color:var(--muted);white-space:nowrap;font-size:12px">' + num(l.hits) + ' tr\u00e4ffar</span>' +
+          '<span style="color:var(--light);white-space:nowrap;font-size:12px">' + time + '</span>' +
+        '</div>';
+      if (refs.length) {
+        html += '<div style="margin-left:18px;margin-top:4px;font-size:12px;color:var(--light)">' +
+          '\u2190 ' + refs.map(esc).join(', ') + '</div>';
+      }
+      html += '</div>';
+    });
     return html;
   }
 
@@ -1109,39 +1265,21 @@
         '<span style="font-size:13px;color:var(--muted)">Senaste 30 dagarna</span>' +
       '</div>';
 
-    var BROKEN_SHOW = 5;
+    var BROKEN_SHOW = 10;
 
     function renderGroup(title, color, items, showStatus) {
       if (!items.length) return '';
-      var id = 'bl-' + title.replace(/\s/g, '-').toLowerCase();
-      var hasMore = items.length > BROKEN_SHOW;
+      var visible = items.slice(0, BROKEN_SHOW);
       var g = '<div class="card" style="margin-bottom:14px">' +
         '<span class="card-title" style="display:flex;align-items:center;gap:8px">' + title +
         ' <span style="font-size:12px;font-weight:400;color:var(--muted)">' + items.length + ' sidor</span></span>' +
-        '<div style="margin-top:12px">';
-      items.forEach(function(l, i) {
-        var time = formatTime(l.last_seen);
-        var refs = (l.referrers || []).filter(function(r) { return r; });
-        var hidden = hasMore && i >= BROKEN_SHOW ? ' style="padding:8px 0;border-bottom:1px solid var(--border);display:none" data-bl-group="' + id + '"' : ' style="padding:8px 0;border-bottom:1px solid var(--border)"';
-        g += '<div' + hidden + '>' +
-          '<div style="display:flex;align-items:center;gap:10px;font-size:13px">' +
-            '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
-            (l.site ? '<span style="color:var(--light);font-size:11px;min-width:80px">' + esc(l.site) + '</span>' : '') +
-            '<span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(l.path) + '">' + esc(l.path) + '</span>' +
-            (showStatus ? '<span style="font-size:11px;color:' + color + ';font-weight:600">' + l.status + '</span>' : '') +
-            '<span style="color:var(--muted);white-space:nowrap;font-size:12px">' + num(l.hits) + ' tr\u00e4ffar</span>' +
-            '<span style="color:var(--light);white-space:nowrap;font-size:12px">' + time + '</span>' +
-          '</div>';
-        if (refs.length) {
-          g += '<div style="margin-left:18px;margin-top:4px;font-size:12px;color:var(--light)">' +
-            '\u2190 ' + refs.map(esc).join(', ') + '</div>';
-        }
-        g += '</div>';
-      });
-      if (hasMore) {
-        g += '<button data-bl-toggle="' + id + '" onclick="toggleBrokenGroup(this)" style="margin-top:8px;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:var(--subtle);color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit">Visa alla ' + items.length + '</button>';
+        '<div style="margin-top:12px">' +
+        renderBrokenGroup(visible, color, showStatus) +
+        '</div>';
+      if (items.length > BROKEN_SHOW) {
+        g += '<button class="show-all" onclick="showBrokenAll(\'' + esc(title) + '\',\'' + color + '\',' + !!showStatus + ')">Visa alla (' + items.length + ')</button>';
       }
-      g += '</div></div>';
+      g += '</div>';
       return g;
     }
 
@@ -1324,6 +1462,49 @@
     currentPath = '';
     load(currentDays);
   };
+
+  window.showAll = function(type, title) {
+    var renderFn = expandRenderers[type];
+    var overlay = document.getElementById('overlay');
+    var overlayTitle = document.getElementById('overlay-title');
+    var overlayContent = document.getElementById('overlay-content');
+    overlayTitle.textContent = title;
+    overlayContent.innerHTML = '<p style="color:var(--muted);font-size:13px">Laddar...</p>';
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    var url = API + '?api&days=' + currentDays + '&expand=' + type;
+    if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+    if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
+    if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(d) { overlayContent.innerHTML = renderFn(d); });
+  };
+
+  window.closeOverlay = function() {
+    document.getElementById('overlay').classList.remove('open');
+    document.body.style.overflow = '';
+  };
+
+  window.showBrokenAll = function(title, color, showStatus) {
+    var overlay = document.getElementById('overlay');
+    var overlayTitle = document.getElementById('overlay-title');
+    var overlayContent = document.getElementById('overlay-content');
+    overlayTitle.textContent = title;
+    var links = lastData.brokenLinks || [];
+    var filtered;
+    if (title.indexOf('404') >= 0) filtered = links.filter(function(l) { return l.status === 404; });
+    else if (title.indexOf('301') >= 0) filtered = links.filter(function(l) { return l.status === 301 || l.status === 302; });
+    else filtered = links.filter(function(l) { return l.status !== 404 && l.status !== 301 && l.status !== 302; });
+    overlayContent.innerHTML = renderBrokenGroup(filtered, color, showStatus);
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeOverlay();
+  });
 
   window.toggleTools = function(btn) {
     var content = btn.nextElementSibling;
@@ -1545,6 +1726,7 @@
         var url = API + '?api&days=' + currentDays;
         if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
         if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
+        if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
         fetch(url)
           .then(function(r) { return r.json(); })
           .then(function(data) { if (data) render(data); })
@@ -1570,5 +1752,14 @@
   }
 })();
 </script>
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeOverlay()">
+  <div class="overlay-panel">
+    <div class="overlay-header">
+      <span class="card-title" id="overlay-title"></span>
+      <button class="overlay-close" onclick="closeOverlay()">&times;</button>
+    </div>
+    <div id="overlay-content"></div>
+  </div>
+</div>
 </body>
 </html>

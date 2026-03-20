@@ -471,35 +471,68 @@ function get_api_data(array $config, array $user): string
         return json_encode(['results' => $stmt->fetchAll(PDO::FETCH_ASSOC), 'query' => $search, 'days' => $days]);
     }
 
+    // Expand mode (returns all rows for a specific data type)
+    $expand = $_GET['expand'] ?? '';
+
     // Path filter (for single-page drill-down)
     $path = $_GET['path'] ?? '';
     $pathFilter = $path ? 'AND path = ?' : '';
     $pathParams = $path ? [$path] : [];
 
-    $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} GROUP BY date ORDER BY date");
-    $stmt->execute(array_merge([$since], $siteParams, $pathParams));
+    // Channel filter
+    $channel = $_GET['channel'] ?? '';
+    $channelFilter = '';
+    $channelParams = [];
+    if ($channel) {
+        $channelConditions = [
+            'betald'        => "MAX(utm_medium) IN ('paid','cpc','cpm','ppc','retargeting','paid_social')",
+            'kampanj'       => "MAX(utm_source) IS NOT NULL AND MAX(utm_medium) NOT IN ('paid','cpc','cpm','ppc','retargeting','paid_social')",
+            'organisk-sok'  => "MAX(utm_source) IS NULL AND MAX(referrer) IN ('Google','Bing')",
+            'social'        => "MAX(utm_source) IS NULL AND MAX(referrer) IN ('Facebook','Instagram','Twitter/X','LinkedIn')",
+            'referral'      => "MAX(utm_source) IS NULL AND MAX(referrer) IS NOT NULL AND MAX(referrer) NOT IN ('Google','Bing','Facebook','Instagram','Twitter/X','LinkedIn')",
+            'direkt'        => "MAX(utm_source) IS NULL AND MAX(referrer) IS NULL",
+        ];
+        if (isset($channelConditions[$channel])) {
+            $cond = $channelConditions[$channel];
+            $channelFilter = "AND visitor_hash IN (SELECT visitor_hash FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY visitor_hash HAVING {$cond})";
+            $channelParams = array_merge([$since], $siteParams);
+        }
+    }
+
+    $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY date ORDER BY date");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
     $byDay = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Pages table (skip when filtered to a single path)
     $pages = [];
+    $pagesTotal = 0;
     if (!$path) {
-        $stmt = $db->prepare("SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY path ORDER BY views DESC LIMIT 10");
-        $stmt->execute(array_merge([$since], $siteParams));
+        $limit = $expand === 'pages' ? 1000 : 10;
+        $stmt = $db->prepare("SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} {$channelFilter} GROUP BY path ORDER BY views DESC LIMIT {$limit}");
+        $stmt->execute(array_merge([$since], $siteParams, $channelParams));
         $pages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $db->prepare("SELECT COUNT(DISTINCT path) FROM pageviews WHERE created_at >= ? {$siteFilter} {$channelFilter}");
+        $stmt->execute(array_merge([$since], $siteParams, $channelParams));
+        $pagesTotal = (int) $stmt->fetchColumn();
     }
 
-    $stmt = $db->prepare("SELECT referrer as source, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} AND referrer IS NOT NULL GROUP BY referrer ORDER BY visitors DESC LIMIT 10");
-    $stmt->execute(array_merge([$since], $siteParams, $pathParams));
+    $refLimit = $expand === 'referrers' ? 1000 : 10;
+    $stmt = $db->prepare("SELECT referrer as source, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter} AND referrer IS NOT NULL GROUP BY referrer ORDER BY visitors DESC LIMIT {$refLimit}");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
     $referrers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare("SELECT COUNT(DISTINCT referrer) FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter} AND referrer IS NOT NULL");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
+    $referrersTotal = (int) $stmt->fetchColumn();
 
-    $stmt = $db->prepare("SELECT COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter}");
-    $stmt->execute(array_merge([$since], $siteParams, $pathParams));
+    $stmt = $db->prepare("SELECT COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter}");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
     $totals = $stmt->fetch(PDO::FETCH_ASSOC);
 
     // Previous period for trend comparison
     $prevSince = date('Y-m-d', strtotime("-" . ($days * 2) . " days"));
-    $stmt = $db->prepare("SELECT COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$pathFilter}");
-    $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams));
+    $prevChannelFilter = str_replace('created_at >= ?', 'created_at >= ?', $channelFilter);
+    $stmt = $db->prepare("SELECT COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$pathFilter} {$channelFilter}");
+    $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
     $previousTotals = $stmt->fetch(PDO::FETCH_ASSOC);
 
     // Bounce rate and session length (skip when filtered to a single path — not meaningful)
@@ -508,23 +541,23 @@ function get_api_data(array $config, array $user): string
     $medianSession = 0;
     $previousMedianSession = null;
     if (!$path) {
-        $stmt = $db->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN cnt = 1 THEN 1 ELSE 0 END) as bounced FROM (SELECT visitor_hash, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY visitor_hash)");
-        $stmt->execute(array_merge([$since], $siteParams));
+        $stmt = $db->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN cnt = 1 THEN 1 ELSE 0 END) as bounced FROM (SELECT visitor_hash, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} {$channelFilter} GROUP BY visitor_hash)");
+        $stmt->execute(array_merge([$since], $siteParams, $channelParams));
         $bounceData = $stmt->fetch(PDO::FETCH_ASSOC);
         $bounceRate = $bounceData['total'] > 0 ? round(100 * $bounceData['bounced'] / $bounceData['total'], 1) : 0;
 
-        $stmt = $db->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN cnt = 1 THEN 1 ELSE 0 END) as bounced FROM (SELECT visitor_hash, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} GROUP BY visitor_hash)");
-        $stmt->execute(array_merge([$prevSince, $since], $siteParams));
+        $stmt = $db->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN cnt = 1 THEN 1 ELSE 0 END) as bounced FROM (SELECT visitor_hash, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$channelFilter} GROUP BY visitor_hash)");
+        $stmt->execute(array_merge([$prevSince, $since], $siteParams, $channelParams));
         $prevBounce = $stmt->fetch(PDO::FETCH_ASSOC);
         $previousBounceRate = $prevBounce['total'] > 0 ? round(100 * $prevBounce['bounced'] / $prevBounce['total'], 1) : null;
 
-        $stmt = $db->prepare("SELECT duration FROM (SELECT (julianday(MAX(created_at)) - julianday(MIN(created_at))) * 86400 as duration FROM pageviews WHERE created_at >= ? {$siteFilter} GROUP BY visitor_hash HAVING COUNT(*) > 1) ORDER BY duration");
-        $stmt->execute(array_merge([$since], $siteParams));
+        $stmt = $db->prepare("SELECT duration FROM (SELECT (julianday(MAX(created_at)) - julianday(MIN(created_at))) * 86400 as duration FROM pageviews WHERE created_at >= ? {$siteFilter} {$channelFilter} GROUP BY visitor_hash HAVING COUNT(*) > 1) ORDER BY duration");
+        $stmt->execute(array_merge([$since], $siteParams, $channelParams));
         $durations = $stmt->fetchAll(PDO::FETCH_COLUMN);
         $medianSession = !empty($durations) ? (int) $durations[intval(count($durations) / 2)] : 0;
 
-        $stmt = $db->prepare("SELECT duration FROM (SELECT (julianday(MAX(created_at)) - julianday(MIN(created_at))) * 86400 as duration FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} GROUP BY visitor_hash HAVING COUNT(*) > 1) ORDER BY duration");
-        $stmt->execute(array_merge([$prevSince, $since], $siteParams));
+        $stmt = $db->prepare("SELECT duration FROM (SELECT (julianday(MAX(created_at)) - julianday(MIN(created_at))) * 86400 as duration FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$channelFilter} GROUP BY visitor_hash HAVING COUNT(*) > 1) ORDER BY duration");
+        $stmt->execute(array_merge([$prevSince, $since], $siteParams, $channelParams));
         $prevDurations = $stmt->fetchAll(PDO::FETCH_COLUMN);
         $previousMedianSession = !empty($prevDurations) ? (int) $prevDurations[intval(count($prevDurations) / 2)] : null;
     }
@@ -533,55 +566,98 @@ function get_api_data(array $config, array $user): string
     $entryPages = [];
     $exitPages = [];
     if (!$path) {
-        $stmt = $db->prepare("SELECT path, COUNT(*) as entries FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at ASC) as rn FROM pageviews WHERE created_at >= ? {$siteFilter}) WHERE rn = 1 GROUP BY path ORDER BY entries DESC LIMIT 10");
-        $stmt->execute(array_merge([$since], $siteParams));
+        $entryLimit = $expand === 'entryPages' ? 1000 : 10;
+        $stmt = $db->prepare("SELECT path, COUNT(*) as entries FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at ASC) as rn FROM pageviews WHERE created_at >= ? {$siteFilter} {$channelFilter}) WHERE rn = 1 GROUP BY path ORDER BY entries DESC LIMIT {$entryLimit}");
+        $stmt->execute(array_merge([$since], $siteParams, $channelParams));
         $entryPages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT path, COUNT(*) as exits FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at DESC) as rn FROM pageviews WHERE created_at >= ? {$siteFilter}) WHERE rn = 1 GROUP BY path ORDER BY exits DESC LIMIT 10");
-        $stmt->execute(array_merge([$since], $siteParams));
+        $exitLimit = $expand === 'exitPages' ? 1000 : 10;
+        $stmt = $db->prepare("SELECT path, COUNT(*) as exits FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at DESC) as rn FROM pageviews WHERE created_at >= ? {$siteFilter} {$channelFilter}) WHERE rn = 1 GROUP BY path ORDER BY exits DESC LIMIT {$exitLimit}");
+        $stmt->execute(array_merge([$since], $siteParams, $channelParams));
         $exitPages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    $stmt = $db->prepare("SELECT browser as name, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} GROUP BY browser ORDER BY cnt DESC");
-    $stmt->execute(array_merge([$since], $siteParams, $pathParams));
+    $stmt = $db->prepare("SELECT browser as name, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY browser ORDER BY cnt DESC");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
     $browsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $total = array_sum(array_column($browsers, 'cnt'));
     $smartPct = fn($cnt, $sum) => $sum > 0 ? (($p = $cnt / $sum * 100) < 1 && $p > 0 ? round($p, 1) : round($p)) : 0;
     $browsers = array_map(fn($b) => ['name' => $b['name'], 'pct' => $smartPct($b['cnt'], $total)], $browsers);
 
-    $stmt = $db->prepare("SELECT device as name, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} GROUP BY device ORDER BY cnt DESC");
-    $stmt->execute(array_merge([$since], $siteParams, $pathParams));
+    $stmt = $db->prepare("SELECT device as name, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY device ORDER BY cnt DESC");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
     $devices = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $devices = array_map(fn($d) => ['name' => $d['name'], 'pct' => $smartPct($d['cnt'], $total)], $devices);
 
-    $stmt = $db->prepare("SELECT COUNT(DISTINCT visitor_hash) as live FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter}");
-    $stmt->execute(array_merge([date('Y-m-d H:i:s', strtotime('-5 minutes'))], $siteParams, $pathParams));
+    $stmt = $db->prepare("SELECT COUNT(DISTINCT visitor_hash) as live FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter}");
+    $stmt->execute(array_merge([date('Y-m-d H:i:s', strtotime('-5 minutes'))], $siteParams, $pathParams, $channelParams));
     $live = $stmt->fetch(PDO::FETCH_ASSOC)['live'] ?? 0;
 
-    $stmt = $db->prepare("SELECT utm_source as source, utm_medium as medium, utm_campaign as campaign, utm_term as term, utm_content as content, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} AND utm_source IS NOT NULL GROUP BY utm_source, utm_medium, utm_campaign, utm_term, utm_content ORDER BY visitors DESC LIMIT 10");
-    $stmt->execute(array_merge([$since], $siteParams, $pathParams));
+    $utmLimit = $expand === 'utm' ? 1000 : 10;
+    $stmt = $db->prepare("SELECT utm_source as source, utm_medium as medium, utm_campaign as campaign, utm_term as term, utm_content as content, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter} AND utm_source IS NOT NULL GROUP BY utm_source, utm_medium, utm_campaign, utm_term, utm_content ORDER BY visitors DESC LIMIT {$utmLimit}");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
     $utm = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare("SELECT COUNT(*) FROM (SELECT 1 FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter} AND utm_source IS NOT NULL GROUP BY utm_source, utm_medium, utm_campaign, utm_term, utm_content)");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
+    $utmTotal = (int) $stmt->fetchColumn();
 
-    $stmt = $db->prepare("SELECT language as name, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} AND language IS NOT NULL GROUP BY language ORDER BY cnt DESC");
-    $stmt->execute(array_merge([$since], $siteParams, $pathParams));
+    $stmt = $db->prepare("SELECT language as name, COUNT(*) as cnt FROM pageviews WHERE created_at >= ? {$siteFilter} {$pathFilter} {$channelFilter} AND language IS NOT NULL GROUP BY language ORDER BY cnt DESC");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
     $languages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $langTotal = array_sum(array_column($languages, 'cnt'));
-    $languages = array_map(fn($l) => ['name' => $l['name'], 'pct' => $smartPct($l['cnt'], $langTotal)], $languages);
+    $langNames = ['sv' => 'Svenska', 'en' => 'English', 'nb' => 'Norsk', 'da' => 'Dansk', 'fi' => 'Finska',
+                   'de' => 'Tyska', 'fr' => 'Franska', 'es' => 'Spanska', 'nl' => 'Nederländska', 'pl' => 'Polska',
+                   'it' => 'Italienska', 'pt' => 'Portugisiska', 'ru' => 'Ryska', 'zh' => 'Kinesiska', 'ja' => 'Japanska',
+                   'ko' => 'Koreanska', 'ar' => 'Arabiska', 'tr' => 'Turkiska', 'th' => 'Thailändska', 'vi' => 'Vietnamesiska'];
+    $languages = array_map(fn($l) => ['name' => $langNames[$l['name']] ?? strtoupper($l['name']), 'pct' => $smartPct($l['cnt'], $langTotal)], $languages);
+
+    // Traffic channels: classify each visitor's first pageview
+    $stmt = $db->prepare("
+        SELECT channel, COUNT(*) as visitors, SUM(pv) as views,
+               ROUND(AVG(pv), 1) as pages_per_visitor
+        FROM (
+            SELECT visitor_hash, COUNT(*) as pv,
+                CASE
+                    WHEN MAX(utm_medium) IN ('paid', 'cpc', 'cpm', 'ppc', 'retargeting', 'paid_social') THEN 'Betald'
+                    WHEN MAX(utm_source) IS NOT NULL THEN 'Kampanj'
+                    WHEN MAX(referrer) IN ('Google', 'Bing') THEN 'Organisk sök'
+                    WHEN MAX(referrer) IN ('Facebook', 'Instagram', 'Twitter/X', 'LinkedIn') THEN 'Social'
+                    WHEN MAX(referrer) IS NOT NULL THEN 'Referral'
+                    ELSE 'Direkt'
+                END as channel
+            FROM pageviews
+            WHERE created_at >= ? {$siteFilter} {$pathFilter}
+            GROUP BY visitor_hash
+        )
+        GROUP BY channel
+        ORDER BY visitors DESC
+    ");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams));
+    $channels = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Bot data
-    $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, COUNT(*) as visits FROM bot_visits WHERE created_at >= ? {$siteFilter} GROUP BY bot_name, bot_category ORDER BY visits DESC");
+    $botsLimit = $expand === 'bots' ? 1000 : 10;
+    $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, COUNT(*) as visits FROM bot_visits WHERE created_at >= ? {$siteFilter} GROUP BY bot_name, bot_category ORDER BY visits DESC LIMIT {$botsLimit}");
     $stmt->execute(array_merge([$since], $siteParams));
     $bots = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare("SELECT COUNT(*) FROM (SELECT 1 FROM bot_visits WHERE created_at >= ? {$siteFilter} GROUP BY bot_name, bot_category)");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $botsTotal = (int) $stmt->fetchColumn();
 
     $stmt = $db->prepare("SELECT bot_category as category, COUNT(*) as visits FROM bot_visits WHERE created_at >= ? {$siteFilter} GROUP BY bot_category ORDER BY visits DESC");
     $stmt->execute(array_merge([$since], $siteParams));
     $botCategories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmt = $db->prepare("SELECT path, COUNT(*) as visits FROM bot_visits WHERE created_at >= ? {$siteFilter} GROUP BY path ORDER BY visits DESC LIMIT 10");
+    $botPagesLimit = $expand === 'botPages' ? 1000 : 10;
+    $stmt = $db->prepare("SELECT path, COUNT(*) as visits FROM bot_visits WHERE created_at >= ? {$siteFilter} GROUP BY path ORDER BY visits DESC LIMIT {$botPagesLimit}");
     $stmt->execute(array_merge([$since], $siteParams));
     $botPages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare("SELECT COUNT(DISTINCT path) FROM bot_visits WHERE created_at >= ? {$siteFilter}");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $botPagesTotal = (int) $stmt->fetchColumn();
 
-    $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, site, path, created_at FROM bot_visits WHERE created_at >= ? {$siteFilter} ORDER BY created_at DESC LIMIT 20");
+    $activityLimit = $expand === 'botActivity' ? 1000 : 10;
+    $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, site, path, created_at FROM bot_visits WHERE created_at >= ? {$siteFilter} ORDER BY created_at DESC LIMIT {$activityLimit}");
     $stmt->execute(array_merge([$since], $siteParams));
     $botActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if (function_exists('idn_to_utf8')) {
@@ -631,6 +707,7 @@ function get_api_data(array $config, array $user): string
     return json_encode([
         'site'      => $site ?: 'Alla sajter',
         'path'      => $path ?: null,
+        'channel'   => $channel ?: null,
         'days'      => $days,
         'live'      => (int)$live,
         'totals'    => $totals,
@@ -643,14 +720,20 @@ function get_api_data(array $config, array $user): string
         'exitPages'  => $exitPages,
         'pageviews' => $byDay,
         'pages'     => $pages,
+        'pagesTotal' => $pagesTotal,
         'referrers' => $referrers,
+        'referrersTotal' => $referrersTotal,
         'browsers'  => $browsers,
         'devices'   => $devices,
         'utm'       => $utm,
+        'utmTotal'  => $utmTotal,
+        'channels'  => $channels,
         'languages' => $languages,
         'bots'      => $bots,
+        'botsTotal' => $botsTotal,
         'botCategories' => $botCategories,
         'botPages'  => $botPages,
+        'botPagesTotal' => $botPagesTotal,
         'botActivity' => $botActivity,
         'brokenLinks' => $brokenLinks,
     ], JSON_PRETTY_PRINT);
@@ -860,7 +943,7 @@ function normalize_path(string $path): string
         [$pathPart, $query] = explode('?', $path, 2);
         parse_str($query, $params);
         $strip = ['fbclid', 'gclid', 'gclsrc', 'dclid', 'msclkid', 'mc_eid',
-                   'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+                   'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id',
                    'ref', 'hsa_cam', 'hsa_grp', 'hsa_mt', 'hsa_src', 'hsa_ad', 'hsa_acc',
                    'hsa_net', 'hsa_ver', 'hsa_la', 'hsa_ol', 'hsa_kw'];
         foreach ($strip as $key) {
@@ -881,7 +964,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 6; // Bump this when adding new migrations
+    $currentVersion = 7; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -981,6 +1064,20 @@ function run_migrations(PDO $db): void
             if ($decoded !== $row['referrer']) {
                 $update->execute([$decoded, $row['id']]);
             }
+        }
+    }
+
+    // v7: strip utm_id from stored paths
+    if ($version < 7) {
+        $rows = $db->query("SELECT id, path FROM pageviews WHERE path LIKE '%utm_id=%'")->fetchAll(PDO::FETCH_ASSOC);
+        $update = $db->prepare("UPDATE pageviews SET path = ? WHERE id = ?");
+        foreach ($rows as $row) {
+            $update->execute([normalize_path($row['path']), $row['id']]);
+        }
+        $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%utm_id=%'")->fetchAll(PDO::FETCH_ASSOC);
+        $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
+        foreach ($rows as $row) {
+            $update->execute([normalize_path($row['path']), $row['id']]);
         }
     }
 
