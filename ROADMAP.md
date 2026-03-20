@@ -1,179 +1,136 @@
-# Puls — Roadmap
+# Roadmap
 
-## Klart
+## Done
 
-- [x] Tracking script (JS + pixel)
-- [x] Pageview collection med privacy-first visitor hash
-- [x] Bot detection (25+ botar: AI, sökmotorer, social, SEO, monitor)
-- [x] Dashboard med grafer, tabeller, donuts
-- [x] Multi-site hub med site-selector
-- [x] UTM-kampanjspårning + guidad UTM-länkwizard i dashboarden
-- [x] Språk- och enhetsstatistik
-- [x] Session-baserad auth med CSRF-skydd
-- [x] Fleranvändarstöd med per-sajt åtkomstkontroll
-- [x] Brute-force-skydd på login
-- [x] CLI-verktyg (`php puls`) för key:generate + användarhantering
-- [x] SQLite med WAL mode + auto-migration
-- [x] CORS-stöd för cross-origin tracking
-- [x] Path-normalisering (trailing slash, URL-decode, query param-strippning)
-- [x] Referrer-gruppering (Facebook, Instagram, Twitter/X, Google etc.)
-- [x] IDN/punycode-decode på referrers
-- [x] Self-referral-filtrering
-- [x] Stabil visitor hash-salt via APP_KEY i .env
-- [x] .env-baserad konfiguration
-- [x] Hälsokontroll-endpoint (`/?health`)
-- [x] Auto-detect Forge zero-deploy paths (ingen symlink behövs)
-- [x] Pest-testsvit (99 tester, 175 assertions)
-- [x] Favicon (inline SVG)
-- [x] Live på puls.wrlabs.se med data från 4 sajter
-- [x] Fullständig UTM-spårning (alla 5 parametrar)
-- [x] Pre-push hook — tester körs automatiskt före varje push
-- [x] Server-side bot-tracking via Nginx mirror + `/?log` endpoint
-- [x] Broken link tracking (404/301/övriga) via Nginx post_action + `/?status_log`
-- [x] Data retention — auto-rensning av gamla pageviews, bot_visits, broken_links
-- [x] Lazy migrations med versionsflagga (inga PRAGMA-anrop per request)
-- [x] PWA — installerbar, pull-to-refresh
+- [x] Tracking script (JS + pixel + server-side Nginx mirror)
+- [x] Pageview collection with privacy-first daily-rotating visitor hash
+- [x] Bot detection (25+ bots: AI, search engines, social, SEO, monitors, automated clients)
+- [x] Dashboard with charts, tables, donuts
+- [x] Multi-site hub with site selector
+- [x] UTM campaign tracking + guided UTM link wizard
+- [x] Language and device stats
+- [x] Session-based auth with CSRF protection
+- [x] Multi-user with per-site access control
+- [x] Brute-force protection on login
+- [x] CLI tool (`php puls`) for key generation, user management, site management
+- [x] SQLite with WAL mode + auto-migration
+- [x] CORS support for cross-origin tracking
+- [x] Path normalization (trailing slash, URL-decode, tracking param stripping)
+- [x] Referrer grouping (Facebook, Instagram, Twitter/X, Google, etc.)
+- [x] IDN/punycode decode on referrers
+- [x] Self-referral filtering
+- [x] Health check endpoint (`/?health`)
+- [x] Auto-detect Forge zero-deploy paths
+- [x] Pest test suite (106 tests)
+- [x] Pre-push hook — tests run automatically before every push
+- [x] GitHub Actions CI (PHP 8.1–8.4)
+- [x] Broken link tracking (404/301/other) via Nginx post_action
+- [x] Data retention — auto-cleanup of old pageviews, bot visits, broken links
+- [x] PWA — installable, pull-to-refresh
 - [x] Content-Security-Policy + security headers
-- [x] Trendpilar på stat-kort (jämförelse mot föregående period)
-- [x] Bounce rate + median sessionslängd
+- [x] Trend indicators on stat cards (comparison with previous period)
+- [x] Bounce rate + median session length
 - [x] Entry/exit pages (window functions)
-- [x] CMD+K command palette med sök + sidfiltrering
-- [x] Dark mode (System/Dark/Light) med hamburger-meny
-- [x] Broken links: per-status limit, expand/collapse, statuskod-badge
-- [x] Trafikkanaler (Betald/Kampanj/Organisk/Social/Referral/Direkt) med klickbar filtrering
-- [x] Tabbade kort (Chart, Sidor, Trafik, Besökare) — reducerar scroll ~50%
-- [x] Overlay drill-down med "Visa alla" på alla listor (limit 10 + expand)
-- [x] Google Ads-detektering (gad_source/gad_campaignid → utm auto-fill, JS + server-side)
-- [x] Strippning av gad_*, gbraid, wbraid, _gl, ved från paths
-- [x] CLI: sites:list, user:edit, interaktiv sajt-väljare
-- [x] Kundpilot live (bilkompani.se) med webhook-deploy
-- [x] Guidad UTM-länkwizard (3-stegs wizard, redigerbar domän, auto-refresh paus)
+- [x] CMD+K command palette with search + page filtering
+- [x] Dark mode (System/Dark/Light)
+- [x] Traffic channels (Paid/Campaign/Organic/Social/Referral/Direct) with click filtering
+- [x] Tabbed cards (Chart, Pages, Traffic, Visitors)
+- [x] Overlay drill-down with "Show all" on all lists
+- [x] Google Ads detection (gad_source/gad_campaignid auto-fill, JS + server-side)
+- [x] Stripping of gad\_\*, gbraid, wbraid, \_gl, ved from paths
+- [x] Realtime view — "N online now" badge (last 5 min)
 
 ---
 
-## Epic 1: Deploya & gå live ✅
+## Epic 1: Deploy & Go Live
 
-- [x] **Nginx-config + SSL** — Laravel Forge, puls.wrlabs.se
-- [x] **Migrera SQLite från lillabosgarden.se** — Kopierad, auto-migration kördes
-- [x] **Skapa admin-user** — `php puls user:add admin`
-- [x] **Uppdatera tracking-snippets** — lillabosgarden.se, odlingsguiden, snittränta.se, jarnesjo.com
-- [x] **Verifiera CORS** — Cross-origin tracking fungerar
-- [x] **Hälsokontroll-endpoint** — `/?health` → 200/503
-- [x] **Stabil visitor hash-salt** — APP_KEY i .env istället för hash_file(users.json)
-- [x] **Strippa tracking query params** — fbclid, gclid, utm_* m.fl. strippas i normalize_path
-- [x] **Referrer-gruppering** — Facebook, Instagram, Twitter/X, Google etc.
-- [x] **Auto-detect Forge zero-deploy** — resolve_path() hittar sajtroten automatiskt
-- [x] **Pest-testsvit** — 99 tester (175 assertions)
-- [x] **UTM-länkgenerator** — Guidad 3-stegs wizard i dashboarden
-- [x] **.env-baserad konfiguration** — php puls key:generate
+- [x] Nginx config + SSL via Laravel Forge
+- [x] Migrate existing SQLite data — auto-migration ran on first load
+- [x] Create admin user — `php puls user:add admin`
+- [x] Verify CORS — cross-origin tracking working
+- [x] Health check endpoint — `/?health` returns 200/503
+- [x] Stable visitor hash salt — APP_KEY in .env
+- [x] Strip tracking query params — fbclid, gclid, utm\_\* etc. in normalize_path
+- [x] Referrer grouping — Facebook, Instagram, Twitter/X, Google etc.
+- [x] Auto-detect Forge zero-deploy — resolve_path() finds site root automatically
+- [x] Pest test suite
+- [x] UTM link wizard — guided 3-step wizard in dashboard
+- [x] .env-based configuration — `php puls key:generate`
 
-## Epic 2: Stabilitet & datahygien ✅
+## Epic 2: Stability & Data Hygiene
 
-- [x] **Data retention** — Auto-rensa pageviews/bot_visits/broken_links äldre än N dagar
-- [x] **Lazy migration-check** — Versionsflagga, inga PRAGMA-anrop per request
+- [x] Data retention — auto-cleanup of old pageviews/bot_visits/broken_links
+- [x] Lazy migration check — version flag, no PRAGMA calls per request
 
-## Epic 3: Säkerhet & härdning (pågår)
+## Epic 3: Security & Hardening
 
-- [x] **Content-Security-Policy** — Strikt CSP på dashboard + security headers
-- [ ] **Rate limiting (Nginx)** — `limit_req_zone` på collect-endpoint
-- [ ] **Session-rotation** — Förnya session-ID periodiskt
-- [ ] **Audit log** — Logga login-försök i SQLite
+- [x] Content-Security-Policy — strict CSP on dashboard + security headers
+- [ ] Rate limiting (Nginx) — `limit_req_zone` on collect endpoint
+- [ ] Session rotation — renew session ID periodically
+- [ ] Audit log — log login attempts in SQLite
 
-## Epic 4: Dashboard-förbättringar ✅
+## Epic 4: Dashboard Improvements
 
-- [x] **Trendpilar** — Jämförelse mot föregående period (▲12%)
-- [x] **Dark mode** — System/Dark/Light via CSS variables + hamburger-meny
-- [x] **CMD+K command palette** — Sök + sidfiltrering med drill-down
-- [x] **PWA** — Installerbar, pull-to-refresh
-- [x] **Collapsible tools** — Dölj/visa verktyg-sektionen
+- [x] Trend indicators — comparison with previous period (▲12%)
+- [x] Dark mode — System/Dark/Light via CSS variables + hamburger menu
+- [x] CMD+K command palette — search + page filtering with drill-down
+- [x] PWA — installable, pull-to-refresh
+- [x] Collapsible tools — show/hide tools section
 
-## Epic 5: Server-side bot-tracking ✅
+## Epic 5: Server-side Bot Tracking
 
-- [x] **`/?log` endpoint** — Tar emot site, path och User-Agent, loggar i bot_visits
-- [x] **Nginx mirror** — Zero latency bot-fångare, konfigureras per sajt i Forge
-- [x] **Deduplicering** — Samma bot + path + site inom 10s skippas
-- [x] **Separat visning** — Bot-aktivitetstidslinje i dashboarden
+- [x] `/?log` endpoint — receives site, path, and User-Agent, logs to bot_visits
+- [x] Nginx mirror — zero latency bot capture, configured per site
+- [x] Deduplication — same bot + path + site within 10s is skipped
+- [x] Separate view — bot activity timeline in dashboard
 
-## Epic 6: Smartare data ✅
+## Epic 6: Smarter Data
 
-- [x] **Bounce rate** — Med inverterad trend (lägre = grönt)
-- [x] **Median sessionslängd** — Undviker outlier-distortion från idle tabs
-- [x] **Entry/exit pages** — Window functions (ROW_NUMBER per visitor_hash)
-- [x] **Broken link tracking** — 404/301/övriga via Nginx post_action, per-status limit, expand/collapse, statuskod-badge
+- [x] Bounce rate — with inverted trend (lower = green)
+- [x] Median session length — avoids outlier distortion from idle tabs
+- [x] Entry/exit pages — window functions (ROW_NUMBER per visitor_hash)
+- [x] Broken link tracking — 404/301/other via Nginx post_action, per-status limit, expand/collapse
 
-## Epic 7: Kundpilot ✅
+## Epic 7: First Customer Pilot
 
-Första kunden live — bilkompani.se.
+- [x] Deploy to customer — live with webhook auto-deploy
+- [x] Google Ads detection — gad_source/gad_campaignid auto-fill (JS + server-side fallback)
+- [x] Traffic channels — Paid/Campaign/Organic search/Social/Referral/Direct with click filtering
+- [x] Tabbed cards — Chart, Pages, Traffic, Visitors — reduces scroll ~50%
+- [x] Overlay drill-down — "Show all" on all lists (limit 10 + expand)
+- [x] CLI improvements — sites:list, user:edit, interactive site selector
+- [x] Guided UTM wizard — 3-step wizard, editable domain, auto-refresh pause
 
-- [x] **Deploya hos kund** — puls.bilkompani.se live med webhook-deploy
-- [x] **Google Ads-detektering** — gad_source/gad_campaignid → utm auto-fill (JS + server-side fallback)
-- [x] **Trafikkanaler** — Betald/Kampanj/Organisk sök/Social/Referral/Direkt med klickbar filtrering
-- [x] **Tabbade kort** — Chart, Sidor, Trafik, Besökare — reducerar scroll ~50%
-- [x] **Overlay drill-down** — "Visa alla" på alla listor (limit 10 + expand)
-- [x] **CLI-förbättringar** — sites:list, user:edit, interaktiv sajt-väljare
-- [x] **Guidad UTM-wizard** — 3-stegs wizard, redigerbar domän, auto-refresh paus
+## Epic 8: Customer Value
 
-## Epic 8: Kundvärde 🎯
+- [ ] **Shareable dashboards** — token-based read-only links (share stats without login)
+- [ ] **Data export** — CSV/JSON export from dashboard
 
-- [ ] **Delbara dashboards** — Token-baserade read-only-länkar (dela statistik utan login)
-- [ ] **Data-export** — CSV/JSON-export från dashboarden
-- [ ] **Flerspråkig dashboard** — sv/en med språkväljare (parkerat tills vi går publikt)
+> Shareable dashboards deliver the most customer value fastest — clients want to view stats without needing a login. A simple `/?share=<token>` showing a read-only dashboard.
 
-> Delbara dashboards ger mest kundvärde snabbast — kunder vill kunna titta utan att behöva login. En enkel `/?share=<token>` som visar read-only dashboard.
+## Epic 9: Deeper Insights
 
-## Epic 9: Djupare insikter
+- [x] **Realtime view** — "N online now" badge + stat card (last 5 min) — already implemented
+- [ ] **Outbound link tracking** — auto-track clicks on external links via JS click listener
+- [ ] **Country/region stats** — based on Accept-Language, visual list or map
+- [ ] **Comparison mode** — "This week vs last" as overlay in chart
+- [ ] **Goals/conversions** — define target page (e.g. /thank-you), show conversion rate
+- [ ] **Custom date range** — date picker beyond 7d/30d/90d
+- [ ] **Summary cards** — "Best day: Tuesday", "Peak traffic: 2–3 PM"
+- [ ] **Notifications** — traffic spike or 404 alerts via webhook/email
 
-- [x] **Realtidsvy** — "N online nu" badge + stat-kort (senaste 5 min) — redan implementerat
-- [ ] **Utgående länkklick** — Auto-spåra klick på externa länkar via JS click-listener
-- [ ] **Länder/regioner** — Baserat på Accept-Language, visuell karta eller lista
-- [ ] **Jämförelseläge** — "Denna vecka vs förra" som overlay i grafen
-- [ ] **Mål/konverteringar** — Definiera målsida (t.ex. /tack), visa konverteringsgrad
-- [ ] **Anpassat datumintervall** — Datumväljare utöver 24h/7d/30d/90d
-- [ ] **Sammanfattningskort** — "Bästa dagen: Tisdag", "Mest trafik: 14-15"
-- [ ] **Notiser** — Trafikspike- eller 404-varning via webhook/email
+## Epic: Automation
 
-## Epic: Automatisering
-
-- [ ] **Veckorapport via email** — CLI-kommando + cron som skickar sammanfattning
-- [x] **Auto-refresh** — Dashboard uppdateras var 60:e sekund (pausas vid UTM-wizard)
-
-## Epic: Säkerhet & härdning
-
-- [ ] **Rate limiting (Nginx)** — `limit_req_zone` på collect-endpoint
-- [ ] **Session-rotation** — Förnya session-ID periodiskt
-- [ ] **Audit log** — Logga login-försök i SQLite
-
-## Epic: Skalning & underhåll
-
-Inte relevant förrän det finns riktig volym. Avvakta.
-
-- [ ] **Aggregeringstabeller** — Daglig sammanställning för snabbare queries
-- [ ] **Backup-script** — Automatisk SQLite-backup (cron)
-- [ ] **Datumväljare** — Anpassat datumintervall utöver 24h/7d/30d/90d
+- [ ] **Weekly report via email** — CLI command + cron for summaries, uses `mail()` — no dependencies
+- [x] **Auto-refresh** — dashboard refreshes every 60 seconds (paused during UTM wizard)
 
 ---
 
-## Idéer & tankar
+## Ideas
 
-Saker att bolla längre fram — inget att agera på nu.
+Things to explore later — not committed to.
 
-### Open Source
-
-- "En PHP-fil" är en unik nisch — Plausible/Fathom kräver Docker+Postgres
-- MIT eller AGPL-licens (AGPL skyddar mot att någon hostar en konkurrent utan att dela kod)
-
-### Managed Hosting
-
-- Hosted version ("Puls by Webready") för kunder som inte vill sköta drift
-- Per-sajt/månad-prissättning, Plausible-modellen
-
-### Kundisolering
-
-- Unik login-URL per kund eller white-label dashboard
-- Eventuellt: separata SQLite-filer per kund (enkel isolation, enkel backup)
-
-### Integrationer
-
-- **Slack/Discord-notiser** — Daglig sammanfattning
-- **WordPress-plugin** — Auto-inject tracking snippet
-- **API-nycklar** — Alternativ till session-auth för headless API-access
+- **API keys** — alternative to session auth for headless API access
+- **Slack/Discord notifications** — daily summary
+- **Aggregation tables** — daily rollups for faster queries at scale
+- **Backup script** — automated SQLite backup via cron

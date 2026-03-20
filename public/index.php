@@ -146,7 +146,7 @@ function handle_login(array $config): void
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_login'])) {
         // Verify CSRF token
         if (!hash_equals($_SESSION['csrf_token'] ?? '', $_POST['_token'] ?? '')) {
-            show_login('Ogiltig förfrågan. Försök igen.');
+            show_login('Invalid request. Try again.');
             return;
         }
 
@@ -155,7 +155,7 @@ function handle_login(array $config): void
 
         // Check brute-force lockout
         if (is_locked_out($config)) {
-            show_login("För många misslyckade försök. Vänta {$config['lockout_minutes']} minuter.");
+            show_login("Too many failed attempts. Wait {$config['lockout_minutes']} minutes.");
             return;
         }
 
@@ -175,7 +175,7 @@ function handle_login(array $config): void
         // Failed login
         $_SESSION['login_attempts'] = ($_SESSION['login_attempts'] ?? 0) + 1;
         $_SESSION['last_attempt'] = time();
-        show_login('Felaktigt användarnamn eller lösenord.');
+        show_login('Incorrect username or password.');
         return;
     }
 
@@ -251,7 +251,7 @@ function show_login(?string $error = null): void
     <meta name="theme-color" content="#6366f1">
     <link rel="manifest" href="/?manifest">
     <link rel="apple-touch-icon" href="/icon-180.png">
-    <title>Puls — Logga in</title>
+    <title>Puls — Log in</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='%236366f1'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -311,11 +311,11 @@ function show_login(?string $error = null): void
       <form method="POST" action="/?login">
         <input type="hidden" name="_login" value="1">
         <input type="hidden" name="_token" value="{$token}">
-        <label for="username">Användarnamn</label>
+        <label for="username">Username</label>
         <input type="text" id="username" name="username" required autofocus>
-        <label for="password">Lösenord</label>
+        <label for="password">Password</label>
         <input type="password" id="password" name="password" required>
-        <button type="submit">Logga in</button>
+        <button type="submit">Log in</button>
       </form>
     </div>
     </body>
@@ -498,12 +498,12 @@ function get_api_data(array $config, array $user): string
     $channelParams = [];
     if ($channel) {
         $channelConditions = [
-            'betald'        => "MAX(utm_medium) IN ('paid','cpc','cpm','ppc','retargeting','paid_social')",
-            'kampanj'       => "MAX(utm_source) IS NOT NULL AND MAX(utm_medium) NOT IN ('paid','cpc','cpm','ppc','retargeting','paid_social')",
-            'organisk-sok'  => "MAX(utm_source) IS NULL AND MAX(referrer) IN ('Google','Bing')",
-            'social'        => "MAX(utm_source) IS NULL AND MAX(referrer) IN ('Facebook','Instagram','Twitter/X','LinkedIn')",
-            'referral'      => "MAX(utm_source) IS NULL AND MAX(referrer) IS NOT NULL AND MAX(referrer) NOT IN ('Google','Bing','Facebook','Instagram','Twitter/X','LinkedIn')",
-            'direkt'        => "MAX(utm_source) IS NULL AND MAX(referrer) IS NULL",
+            'paid'           => "MAX(utm_medium) IN ('paid','cpc','cpm','ppc','retargeting','paid_social')",
+            'campaign'       => "MAX(utm_source) IS NOT NULL AND MAX(utm_medium) NOT IN ('paid','cpc','cpm','ppc','retargeting','paid_social')",
+            'organic-search' => "MAX(utm_source) IS NULL AND MAX(referrer) IN ('Google','Bing')",
+            'social'         => "MAX(utm_source) IS NULL AND MAX(referrer) IN ('Facebook','Instagram','Twitter/X','LinkedIn')",
+            'referral'       => "MAX(utm_source) IS NULL AND MAX(referrer) IS NOT NULL AND MAX(referrer) NOT IN ('Google','Bing','Facebook','Instagram','Twitter/X','LinkedIn')",
+            'direct'         => "MAX(utm_source) IS NULL AND MAX(referrer) IS NULL",
         ];
         if (isset($channelConditions[$channel])) {
             $cond = $channelConditions[$channel];
@@ -618,10 +618,10 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$since], $siteParams, $pathParams, $channelParams));
     $languages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $langTotal = array_sum(array_column($languages, 'cnt'));
-    $langNames = ['sv' => 'Svenska', 'en' => 'English', 'nb' => 'Norsk', 'da' => 'Dansk', 'fi' => 'Finska',
-                   'de' => 'Tyska', 'fr' => 'Franska', 'es' => 'Spanska', 'nl' => 'Nederländska', 'pl' => 'Polska',
-                   'it' => 'Italienska', 'pt' => 'Portugisiska', 'ru' => 'Ryska', 'zh' => 'Kinesiska', 'ja' => 'Japanska',
-                   'ko' => 'Koreanska', 'ar' => 'Arabiska', 'tr' => 'Turkiska', 'th' => 'Thailändska', 'vi' => 'Vietnamesiska'];
+    $langNames = ['sv' => 'Swedish', 'en' => 'English', 'nb' => 'Norwegian', 'da' => 'Danish', 'fi' => 'Finnish',
+                   'de' => 'German', 'fr' => 'French', 'es' => 'Spanish', 'nl' => 'Dutch', 'pl' => 'Polish',
+                   'it' => 'Italian', 'pt' => 'Portuguese', 'ru' => 'Russian', 'zh' => 'Chinese', 'ja' => 'Japanese',
+                   'ko' => 'Korean', 'ar' => 'Arabic', 'tr' => 'Turkish', 'th' => 'Thai', 'vi' => 'Vietnamese'];
     $languages = array_map(fn($l) => ['name' => $langNames[$l['name']] ?? strtoupper($l['name']), 'pct' => $smartPct($l['cnt'], $langTotal)], $languages);
 
     // Traffic channels: classify each visitor's first pageview
@@ -631,12 +631,12 @@ function get_api_data(array $config, array $user): string
         FROM (
             SELECT visitor_hash, COUNT(*) as pv,
                 CASE
-                    WHEN MAX(utm_medium) IN ('paid', 'cpc', 'cpm', 'ppc', 'retargeting', 'paid_social') THEN 'Betald'
-                    WHEN MAX(utm_source) IS NOT NULL THEN 'Kampanj'
-                    WHEN MAX(referrer) IN ('Google', 'Bing') THEN 'Organisk sök'
+                    WHEN MAX(utm_medium) IN ('paid', 'cpc', 'cpm', 'ppc', 'retargeting', 'paid_social') THEN 'Paid'
+                    WHEN MAX(utm_source) IS NOT NULL THEN 'Campaign'
+                    WHEN MAX(referrer) IN ('Google', 'Bing') THEN 'Organic search'
                     WHEN MAX(referrer) IN ('Facebook', 'Instagram', 'Twitter/X', 'LinkedIn') THEN 'Social'
                     WHEN MAX(referrer) IS NOT NULL THEN 'Referral'
-                    ELSE 'Direkt'
+                    ELSE 'Direct'
                 END as channel
             FROM pageviews
             WHERE created_at >= ? {$siteFilter} {$pathFilter}
@@ -718,7 +718,7 @@ function get_api_data(array $config, array $user): string
     }
 
     return json_encode([
-        'site'      => $site ?: 'Alla sajter',
+        'site'      => $site ?: 'All sites',
         'path'      => $path ?: null,
         'channel'   => $channel ?: null,
         'days'      => $days,
@@ -841,7 +841,7 @@ function handle_log(array $config): void
 
     // If Nginx sent it here, something non-human made the request
     if (!$bot) {
-        $bot = ['name' => 'Okänd klient', 'category' => 'Klient'];
+        $bot = ['name' => 'Unknown client', 'category' => 'Client'];
     }
 
     $db = get_db($config['db_path']);
@@ -979,7 +979,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 8; // Bump this when adding new migrations
+    $currentVersion = 9; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -1144,6 +1144,36 @@ function run_migrations(PDO $db): void
         }
     }
 
+    // v9: Translate Swedish values to English
+    if ($version < 9) {
+        $db->exec("UPDATE pageviews SET device = CASE device
+            WHEN 'Mobil' THEN 'Mobile'
+            WHEN 'Surfplatta' THEN 'Tablet'
+            WHEN 'Okänd' THEN 'Unknown'
+            ELSE device END
+            WHERE device IN ('Mobil', 'Surfplatta', 'Okänd')");
+
+        $db->exec("UPDATE pageviews SET browser = 'Other' WHERE browser = 'Övrigt'");
+
+        $hasBotVisits = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='bot_visits'")->fetch();
+        if ($hasBotVisits) {
+            $db->exec("UPDATE bot_visits SET bot_category = CASE bot_category
+                WHEN 'Sökmotor' THEN 'Search engine'
+                WHEN 'Klient' THEN 'Client'
+                WHEN 'Övrigt' THEN 'Other'
+                ELSE bot_category END
+                WHERE bot_category IN ('Sökmotor', 'Klient', 'Övrigt')");
+
+            $db->exec("UPDATE bot_visits SET bot_name = CASE bot_name
+                WHEN 'Okänd klient' THEN 'Unknown client'
+                WHEN 'Okänd bot' THEN 'Unknown bot'
+                WHEN 'Okänd crawler' THEN 'Unknown crawler'
+                WHEN 'Okänd spider' THEN 'Unknown spider'
+                ELSE bot_name END
+                WHERE bot_name IN ('Okänd klient', 'Okänd bot', 'Okänd crawler', 'Okänd spider')");
+        }
+    }
+
     file_put_contents($marker, (string) $currentVersion);
 }
 
@@ -1224,12 +1254,12 @@ function detect_bot(string $ua): ?array
         ['pattern' => 'Meta-ExternalAgent','name' => 'Meta AI',          'category' => 'AI'],
         ['pattern' => 'OAI-SearchBot',    'name' => 'OAI-SearchBot',   'category' => 'AI'],
         // Search engines
-        ['pattern' => 'Googlebot',         'name' => 'Googlebot',        'category' => 'Sökmotor'],
-        ['pattern' => 'bingbot',           'name' => 'Bingbot',          'category' => 'Sökmotor'],
-        ['pattern' => 'YandexBot',         'name' => 'YandexBot',        'category' => 'Sökmotor'],
-        ['pattern' => 'DuckDuckBot',       'name' => 'DuckDuckBot',      'category' => 'Sökmotor'],
-        ['pattern' => 'Baiduspider',       'name' => 'Baiduspider',      'category' => 'Sökmotor'],
-        ['pattern' => 'Applebot',          'name' => 'Applebot',         'category' => 'Sökmotor'],
+        ['pattern' => 'Googlebot',         'name' => 'Googlebot',        'category' => 'Search engine'],
+        ['pattern' => 'bingbot',           'name' => 'Bingbot',          'category' => 'Search engine'],
+        ['pattern' => 'YandexBot',         'name' => 'YandexBot',        'category' => 'Search engine'],
+        ['pattern' => 'DuckDuckBot',       'name' => 'DuckDuckBot',      'category' => 'Search engine'],
+        ['pattern' => 'Baiduspider',       'name' => 'Baiduspider',      'category' => 'Search engine'],
+        ['pattern' => 'Applebot',          'name' => 'Applebot',         'category' => 'Search engine'],
         // Social
         ['pattern' => 'facebookexternalhit','name' => 'Facebook',        'category' => 'Social'],
         ['pattern' => 'Twitterbot',        'name' => 'Twitterbot',       'category' => 'Social'],
@@ -1246,27 +1276,27 @@ function detect_bot(string $ua): ?array
         ['pattern' => 'uptime checker',   'name' => 'Uptime Checker',  'category' => 'Monitor'],
         ['pattern' => 'Pingdom',          'name' => 'Pingdom',         'category' => 'Monitor'],
         // Automated clients
-        ['pattern' => 'axios/',           'name' => 'Axios',           'category' => 'Klient'],
-        ['pattern' => 'python-requests',  'name' => 'Python Requests', 'category' => 'Klient'],
-        ['pattern' => 'Go-http-client',   'name' => 'Go HTTP',        'category' => 'Klient'],
-        ['pattern' => 'curl/',            'name' => 'curl',            'category' => 'Klient'],
-        ['pattern' => 'wget/',            'name' => 'Wget',            'category' => 'Klient'],
-        ['pattern' => 'node-fetch',       'name' => 'Node Fetch',     'category' => 'Klient'],
-        ['pattern' => 'undici',           'name' => 'Undici',          'category' => 'Klient'],
-        ['pattern' => 'httpie',           'name' => 'HTTPie',          'category' => 'Klient'],
-        ['pattern' => 'java/',            'name' => 'Java HTTP',       'category' => 'Klient'],
-        ['pattern' => 'ruby',             'name' => 'Ruby HTTP',       'category' => 'Klient'],
-        ['pattern' => 'perl',             'name' => 'Perl HTTP',       'category' => 'Klient'],
-        ['pattern' => 'libwww-perl',      'name' => 'Perl LWP',       'category' => 'Klient'],
-        ['pattern' => 'scrapy',           'name' => 'Scrapy',          'category' => 'Klient'],
-        ['pattern' => 'puppeteer',        'name' => 'Puppeteer',       'category' => 'Klient'],
-        ['pattern' => 'playwright',       'name' => 'Playwright',      'category' => 'Klient'],
-        ['pattern' => 'HeadlessChrome',   'name' => 'Headless Chrome', 'category' => 'Klient'],
-        ['pattern' => 'PhantomJS',        'name' => 'PhantomJS',       'category' => 'Klient'],
+        ['pattern' => 'axios/',           'name' => 'Axios',           'category' => 'Client'],
+        ['pattern' => 'python-requests',  'name' => 'Python Requests', 'category' => 'Client'],
+        ['pattern' => 'Go-http-client',   'name' => 'Go HTTP',        'category' => 'Client'],
+        ['pattern' => 'curl/',            'name' => 'curl',            'category' => 'Client'],
+        ['pattern' => 'wget/',            'name' => 'Wget',            'category' => 'Client'],
+        ['pattern' => 'node-fetch',       'name' => 'Node Fetch',     'category' => 'Client'],
+        ['pattern' => 'undici',           'name' => 'Undici',          'category' => 'Client'],
+        ['pattern' => 'httpie',           'name' => 'HTTPie',          'category' => 'Client'],
+        ['pattern' => 'java/',            'name' => 'Java HTTP',       'category' => 'Client'],
+        ['pattern' => 'ruby',             'name' => 'Ruby HTTP',       'category' => 'Client'],
+        ['pattern' => 'perl',             'name' => 'Perl HTTP',       'category' => 'Client'],
+        ['pattern' => 'libwww-perl',      'name' => 'Perl LWP',       'category' => 'Client'],
+        ['pattern' => 'scrapy',           'name' => 'Scrapy',          'category' => 'Client'],
+        ['pattern' => 'puppeteer',        'name' => 'Puppeteer',       'category' => 'Client'],
+        ['pattern' => 'playwright',       'name' => 'Playwright',      'category' => 'Client'],
+        ['pattern' => 'HeadlessChrome',   'name' => 'Headless Chrome', 'category' => 'Client'],
+        ['pattern' => 'PhantomJS',        'name' => 'PhantomJS',       'category' => 'Client'],
         // Generic bot patterns (keep last)
-        ['pattern' => 'bot',               'name' => 'Okänd bot',        'category' => 'Övrigt'],
-        ['pattern' => 'crawler',           'name' => 'Okänd crawler',    'category' => 'Övrigt'],
-        ['pattern' => 'spider',            'name' => 'Okänd spider',     'category' => 'Övrigt'],
+        ['pattern' => 'bot',               'name' => 'Unknown bot',      'category' => 'Other'],
+        ['pattern' => 'crawler',           'name' => 'Unknown crawler',  'category' => 'Other'],
+        ['pattern' => 'spider',            'name' => 'Unknown spider',   'category' => 'Other'],
     ];
 
     foreach ($bots as $bot) {
@@ -1284,13 +1314,13 @@ function detect_browser(string $ua): string
     if (str_contains($ua, 'Chrome'))   return 'Chrome';
     if (str_contains($ua, 'Safari'))   return 'Safari';
     if (str_contains($ua, 'Opera'))    return 'Opera';
-    return 'Övrigt';
+    return 'Other';
 }
 
 function detect_device(int $width): string
 {
-    if ($width === 0)    return 'Okänd';
-    if ($width < 768)    return 'Mobil';
-    if ($width < 1024)   return 'Surfplatta';
+    if ($width === 0)    return 'Unknown';
+    if ($width < 768)    return 'Mobile';
+    if ($width < 1024)   return 'Tablet';
     return 'Desktop';
 }

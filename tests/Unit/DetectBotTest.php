@@ -17,7 +17,7 @@ test('detects search engine bots', function (string $ua, string $name) {
     $result = detect_bot($ua);
     expect($result)->not->toBeNull()
         ->and($result['name'])->toBe($name)
-        ->and($result['category'])->toBe('Sökmotor');
+        ->and($result['category'])->toBe('Search engine');
 })->with([
     ['Mozilla/5.0 (compatible; Googlebot/2.1)', 'Googlebot'],
     ['Mozilla/5.0 (compatible; bingbot/2.0)', 'Bingbot'],
@@ -55,7 +55,7 @@ test('detects automated clients', function (string $ua, string $name) {
     $result = detect_bot($ua);
     expect($result)->not->toBeNull()
         ->and($result['name'])->toBe($name)
-        ->and($result['category'])->toBe('Klient');
+        ->and($result['category'])->toBe('Client');
 })->with([
     ['axios/1.8.4', 'Axios'],
     ['python-requests/2.31.0', 'Python Requests'],

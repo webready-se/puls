@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -274,7 +274,7 @@
   }
   .snippet pre:hover { background: rgba(0,0,0,0.4); }
   .snippet pre.copied::after {
-    content: 'Kopierad!'; position: absolute; top: 8px; right: 12px;
+    content: 'Copied!'; position: absolute; top: 8px; right: 12px;
     font-size: 11px; color: #a5f3fc; font-weight: 600;
   }
   .snippet input, .snippet select {
@@ -529,22 +529,22 @@
     </div>
     <span class="logo-text">Puls</span>
     <span class="live-badge" id="live-badge" style="display:none">
-      <span class="live-dot"></span><span id="live-count">0</span> online nu
+      <span class="live-dot"></span><span id="live-count">0</span> online now
     </span>
   </div>
   <div class="controls">
     <button class="search-btn" id="search-btn" onclick="openSearch()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      Sök<kbd>⌘K</kbd>
+      Search<kbd>⌘K</kbd>
     </button>
     <select class="site-select" id="site-select">
-      <option value="">Alla sajter</option>
+      <option value="">All sites</option>
     </select>
     <div class="period-group" id="period-group">
       <button class="period-btn" data-days="1">24h</button>
-      <button class="period-btn active" data-days="7">7 dagar</button>
-      <button class="period-btn" data-days="30">30 dagar</button>
-      <button class="period-btn" data-days="90">90 dagar</button>
+      <button class="period-btn active" data-days="7">7 days</button>
+      <button class="period-btn" data-days="30">30 days</button>
+      <button class="period-btn" data-days="90">90 days</button>
     </div>
     <button class="menu-btn" id="menu-btn" onclick="openMenu()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12h16"/><path d="M4 6h16"/><path d="M4 18h16"/></svg>
@@ -554,34 +554,34 @@
 
 <div class="ptr-indicator" id="ptr">
   <div class="ptr-spinner" id="ptr-spinner"></div>
-  <span class="ptr-text" id="ptr-text">Uppdatera</span>
+  <span class="ptr-text" id="ptr-text">Refresh</span>
 </div>
 
 <div class="wrap" id="app">
   <div class="loading">
     <div class="loading-spinner"></div>
-    Laddar statistik...
+    Loading stats...
   </div>
 </div>
 
 <div class="menu-overlay" id="menu-overlay" onclick="closeMenu()"></div>
 <div class="menu-panel" id="menu-panel">
   <div class="menu-header">
-    <span>Inställningar</span>
+    <span>Settings</span>
     <button class="menu-close" onclick="closeMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
   </div>
   <div class="menu-section">
-    <span class="menu-label">Utseende</span>
+    <span class="menu-label">Appearance</span>
     <div class="theme-toggle" id="theme-toggle">
       <button data-value="system" title="System"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Auto</button>
-      <button data-value="light" title="Ljust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>Ljust</button>
-      <button data-value="dark" title="Mörkt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>Mörkt</button>
+      <button data-value="light" title="Light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>Light</button>
+      <button data-value="dark" title="Dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>Dark</button>
     </div>
   </div>
   <div style="flex:1"></div>
   <a href="/?logout" class="menu-logout">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-    Logga ut
+    Log out
   </a>
 </div>
 
@@ -589,10 +589,10 @@
   <div class="cmd-dialog">
     <div class="cmd-input-wrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input class="cmd-input" id="cmd-input" type="text" placeholder="Sök sidor..." autocomplete="off" spellcheck="false">
+      <input class="cmd-input" id="cmd-input" type="text" placeholder="Search pages..." autocomplete="off" spellcheck="false">
     </div>
     <div class="cmd-results" id="cmd-results"></div>
-    <div class="cmd-hint">↑↓ navigera · Enter öppna · Esc stäng</div>
+    <div class="cmd-hint">↑↓ navigate · Enter open · Esc close</div>
   </div>
 </div>
 
@@ -629,7 +629,7 @@
 
   // --- Helpers ---
   function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-  function num(n) { return Number(n || 0).toLocaleString('sv-SE'); }
+  function num(n) { return Number(n || 0).toLocaleString('en-US'); }
   function formatDuration(s) {
     if (!s || s < 10) return '< 10s';
     if (s < 60) return Math.round(s) + 's';
@@ -641,17 +641,17 @@
     var d = new Date(dt.replace(' ', 'T') + 'Z');
     var now = new Date();
     var diff = (now - d) / 1000;
-    if (diff < 60) return 'just nu';
-    if (diff < 3600) return Math.floor(diff / 60) + ' min sedan';
-    if (diff < 86400) return Math.floor(diff / 3600) + ' tim sedan';
-    if (diff < 172800) return 'igår ' + d.toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit'});
-    return d.toLocaleDateString('sv-SE', {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit'});
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + ' hr ago';
+    if (diff < 172800) return 'yesterday ' + d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+    return d.toLocaleDateString('en-US', {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
   }
   function decode(s) { try { return decodeURIComponent(s); } catch(e) { return s; } }
 
   function formatDay(dateStr) {
     const dt = new Date(dateStr + 'T00:00:00');
-    return dt.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric' });
+    return dt.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
   }
 
   // --- Events ---
@@ -685,7 +685,7 @@
       .then(function(data) { if (data) render(data); })
       .catch(function() {
         app.innerHTML = '<div class="empty">' + icons.chart +
-          '<p>Kunde inte ladda data. Kontrollera att allt är korrekt konfigurerat.</p></div>';
+          '<p>Could not load data. Check that everything is configured correctly.</p></div>';
       });
   }
 
@@ -740,7 +740,7 @@
 
     if (!hasData) {
       app.innerHTML = '<div class="empty">' + icons.chart +
-        '<p>Ingen data ännu. Lägg till tracking-scriptet nedan för att börja samla in besöksstatistik.</p></div>' +
+        '<p>No data yet. Add the tracking snippet below to start collecting visitor stats.</p></div>' +
         renderSnippet(d.site) +
         '<div class="footer">Puls — One file. No cookies. Full picture.</div>';
       return;
@@ -781,9 +781,9 @@
     if (filtered) {
       html += '<div class="path-filter">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>' +
-        '<span>Filtrerar på</span>' +
+        '<span>Filtering on</span>' +
         '<span class="path-filter-path" title="' + esc(d.path) + '">' + esc(decode(d.path)) + '</span>' +
-        '<button class="path-filter-clear" onclick="clearPathFilter()">Rensa filter</button>' +
+        '<button class="path-filter-clear" onclick="clearPathFilter()">Clear filter</button>' +
       '</div>';
     }
     if (d.channel) {
@@ -791,9 +791,9 @@
       var cColor = channelColors[channelName] || '#6366f1';
       html += '<div class="path-filter">' +
         '<span style="width:10px;height:10px;border-radius:50%;background:' + cColor + ';flex-shrink:0"></span>' +
-        '<span>Kanal</span>' +
+        '<span>Channel</span>' +
         '<span class="path-filter-path">' + esc(channelName) + '</span>' +
-        '<button class="path-filter-clear" onclick="filterChannel(\'\')">Rensa filter</button>' +
+        '<button class="path-filter-clear" onclick="filterChannel(\'\')">Clear filter</button>' +
       '</div>';
     }
 
@@ -827,12 +827,12 @@
 
   function renderStats(d, views, visitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) {
     return '<div class="stats">' +
-      statCard('Sidvisningar', num(views), icons.eye, viewsTrend) +
-      statCard('Unika besökare', num(visitors), icons.users, visitorsTrend) +
+      statCard('Pageviews', num(views), icons.eye, viewsTrend) +
+      statCard('Unique visitors', num(visitors), icons.users, visitorsTrend) +
       statCard('Bounce rate', d.bounceRate + '%', icons.bounce, bounceTrend, true) +
-      statCard('Sidor / besökare', pagesPerVisitor, icons.layers, ppvTrend) +
-      statCard('Tid / session', formatDuration(d.medianSessionSeconds), icons.clock, sessionTrend) +
-      statCard('Live nu', num(d.live), icons.zap, null) +
+      statCard('Pages / visitor', pagesPerVisitor, icons.layers, ppvTrend) +
+      statCard('Time / session', formatDuration(d.medianSessionSeconds), icons.clock, sessionTrend) +
+      statCard('Live now', num(d.live), icons.zap, null) +
     '</div>';
   }
 
@@ -858,15 +858,15 @@
 
   function renderChart(d) {
     if (!d.pageviews || !d.pageviews.length) return '';
-    var siteName = currentSite || 'alla sajter';
+    var siteName = currentSite || 'all sites';
 
     return '<div class="card" id="chart-card">' +
       '<div class="card-header">' +
         '<div class="card-tabs" style="margin:0;border:0;padding:0">' +
-          '<div class="card-tab' + (chartMode === 'views' ? ' active' : '') + '" data-chart="views" onclick="switchChartMode(this)">Sidvisningar</div>' +
-          '<div class="card-tab' + (chartMode === 'visitors' ? ' active' : '') + '" data-chart="visitors" onclick="switchChartMode(this)">Besökare</div>' +
+          '<div class="card-tab' + (chartMode === 'views' ? ' active' : '') + '" data-chart="views" onclick="switchChartMode(this)">Pageviews</div>' +
+          '<div class="card-tab' + (chartMode === 'visitors' ? ' active' : '') + '" data-chart="visitors" onclick="switchChartMode(this)">Visitors</div>' +
         '</div>' +
-        '<span class="card-subtitle">' + siteName + ' — senaste ' + currentDays + ' dagarna</span>' +
+        '<span class="card-subtitle">' + siteName + ' — last ' + currentDays + ' days</span>' +
       '</div>' +
       '<div class="chart-scroll"><div class="chart">' + buildBars(d.pageviews) + '</div></div>' +
     '</div>';
@@ -874,7 +874,7 @@
 
   function buildBars(pageviews) {
     var key = chartMode === 'visitors' ? 'visitors' : 'views';
-    var tipLabel = chartMode === 'visitors' ? 'besökare' : 'visningar';
+    var tipLabel = chartMode === 'visitors' ? 'visitors' : 'views';
     var maxVal = Math.max.apply(null, pageviews.map(function(p) { return +p[key]; }).concat([1]));
     var bars = '';
     pageviews.forEach(function(p) {
@@ -883,7 +883,7 @@
       bars += '<div class="chart-col">' +
         '<span class="chart-val">' + num(p[key]) + '</span>' +
         '<div class="chart-bar" style="height:' + h + 'px">' +
-          '<div class="tip">' + label + ': ' + num(p.views) + ' visningar, ' + num(p.visitors) + ' besökare</div>' +
+          '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
         '</div>' +
         '<span class="chart-date">' + label + '</span>' +
       '</div>';
@@ -903,7 +903,7 @@
   function renderTable(title, rows, labelKey, valKey, color) {
     if (!rows || !rows.length) {
       return '<div class="card"><span class="card-title">' + title + '</span>' +
-        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p></div>';
+        '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p></div>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r[valKey]; }));
     var prefix = '';
@@ -943,7 +943,7 @@
 
   function renderTableContent(rows, labelKey, valKey, color) {
     if (!rows || !rows.length) {
-      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r[valKey]; }));
     var prefix = '';
@@ -990,14 +990,14 @@
 
   function showAllBtn(total, expandType, title) {
     if (total <= 10) return '';
-    return '<button class="show-all" onclick="showAll(\'' + expandType + '\', \'' + esc(title) + '\')">Visa alla (' + total + ')</button>';
+    return '<button class="show-all" onclick="showAll(\'' + expandType + '\', \'' + esc(title) + '\')">Show all (' + total + ')</button>';
   }
 
   function renderTabbedPages(pages, entryPages, exitPages, pagesTotal) {
     var tabs = [
-      { id: 'popular', label: 'Populära', rows: pages, valKey: 'views', color: '#6366f1', expand: 'pages', total: pagesTotal },
-      { id: 'entry', label: 'Ingång', rows: entryPages, valKey: 'entries', color: '#059669', expand: 'entryPages', total: 0 },
-      { id: 'exit', label: 'Utgång', rows: exitPages, valKey: 'exits', color: '#d97706', expand: 'exitPages', total: 0 }
+      { id: 'popular', label: 'Popular', rows: pages, valKey: 'views', color: '#6366f1', expand: 'pages', total: pagesTotal },
+      { id: 'entry', label: 'Entry', rows: entryPages, valKey: 'entries', color: '#059669', expand: 'entryPages', total: 0 },
+      { id: 'exit', label: 'Exit', rows: exitPages, valKey: 'exits', color: '#d97706', expand: 'exitPages', total: 0 }
     ];
 
     var html = '<div class="card">' +
@@ -1010,7 +1010,7 @@
     tabs.forEach(function(t, i) {
       html += '<div class="tab-panel" data-panel="' + t.id + '"' + (i !== 0 ? ' style="display:none"' : '') + '>' +
         renderTableContent(t.rows, 'path', t.valKey, t.color) +
-        showAllBtn(t.total, t.expand, t.label + ' sidor') +
+        showAllBtn(t.total, t.expand, t.label + ' pages') +
       '</div>';
     });
 
@@ -1030,7 +1030,7 @@
 
   function renderDonutContent(items) {
     if (!items || !items.length) {
-      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
     }
 
     var cum = 0;
@@ -1076,23 +1076,23 @@
   }
 
   function renderChannels(channels) {
-    return '<div class="card"><span class="card-title">Kanaler</span><div style="margin-top:14px">' +
+    return '<div class="card"><span class="card-title">Channels</span><div style="margin-top:14px">' +
       renderChannelsContent(channels) + '</div></div>';
   }
 
   function renderTabbedTraffic(referrers, utm, referrersTotal, utmTotal) {
     var html = '<div class="card">' +
       '<div class="card-tabs">' +
-        '<div class="card-tab active" data-tab="sources" onclick="switchPageTab(this)">Källor</div>' +
+        '<div class="card-tab active" data-tab="sources" onclick="switchPageTab(this)">Sources</div>' +
         '<div class="card-tab" data-tab="utm" onclick="switchPageTab(this)">UTM</div>' +
       '</div>' +
       '<div class="tab-panel" data-panel="sources">' +
         renderTableContent(referrers, 'source', 'visitors', '#8b5cf6') +
-        showAllBtn(referrersTotal, 'referrers', 'Trafikkällor') +
+        showAllBtn(referrersTotal, 'referrers', 'Traffic sources') +
       '</div>' +
       '<div class="tab-panel" data-panel="utm" style="display:none">' +
         renderUtmContent(utm) +
-        showAllBtn(utmTotal, 'utm', 'UTM-kampanjer') +
+        showAllBtn(utmTotal, 'utm', 'UTM campaigns') +
       '</div>' +
     '</div>';
     return html;
@@ -1100,7 +1100,7 @@
 
   function renderPctBars(items, color) {
     if (!items || !items.length) {
-      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
     }
     var maxPct = Math.max.apply(null, items.map(function(i) { return +i.pct; }));
     var html = '';
@@ -1118,9 +1118,9 @@
   function renderTabbedVisitors(browsers, devices, languages) {
     var html = '<div class="card">' +
       '<div class="card-tabs">' +
-        '<div class="card-tab active" data-tab="browsers" onclick="switchPageTab(this)">Webbläsare</div>' +
-        '<div class="card-tab" data-tab="devices" onclick="switchPageTab(this)">Enheter</div>' +
-        '<div class="card-tab" data-tab="languages" onclick="switchPageTab(this)">Språk</div>' +
+        '<div class="card-tab active" data-tab="browsers" onclick="switchPageTab(this)">Browsers</div>' +
+        '<div class="card-tab" data-tab="devices" onclick="switchPageTab(this)">Devices</div>' +
+        '<div class="card-tab" data-tab="languages" onclick="switchPageTab(this)">Languages</div>' +
       '</div>' +
       '<div class="tab-panel" data-panel="browsers">' + renderPctBars(browsers, '#6366f1') + '</div>' +
       '<div class="tab-panel" data-panel="devices" style="display:none">' + renderPctBars(devices, '#8b5cf6') + '</div>' +
@@ -1130,17 +1130,17 @@
   }
 
   var channelSlugs = {
-    'Betald': 'betald', 'Kampanj': 'kampanj', 'Organisk sök': 'organisk-sok',
-    'Social': 'social', 'Referral': 'referral', 'Direkt': 'direkt'
+    'Paid': 'paid', 'Campaign': 'campaign', 'Organic search': 'organic-search',
+    'Social': 'social', 'Referral': 'referral', 'Direct': 'direct'
   };
   var channelColors = {
-    'Betald': '#ef4444', 'Kampanj': '#f59e0b', 'Organisk sök': '#22c55e',
-    'Social': '#8b5cf6', 'Referral': '#06b6d4', 'Direkt': '#6b7280'
+    'Paid': '#ef4444', 'Campaign': '#f59e0b', 'Organic search': '#22c55e',
+    'Social': '#8b5cf6', 'Referral': '#06b6d4', 'Direct': '#6b7280'
   };
 
   function renderChannelsContent(channels) {
     if (!channels || !channels.length) {
-      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
     }
     var maxVisitors = Math.max.apply(null, channels.map(function(c) { return +c.visitors; }));
     var html = '';
@@ -1150,7 +1150,7 @@
       var slug = channelSlugs[c.channel] || '';
       html += '<div class="trow trow-clickable" onclick="filterChannel(\'' + slug + '\')">' +
         '<span class="trow-label">' + esc(c.channel) +
-          ' <span style="color:var(--light);font-size:11px">' + c.pages_per_visitor + ' s/b</span>' +
+          ' <span style="color:var(--light);font-size:11px">' + c.pages_per_visitor + ' p/v</span>' +
         '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
         '<span class="trow-val">' + num(c.visitors) + '</span>' +
@@ -1166,7 +1166,7 @@
 
   function renderUtmContent(rows) {
     if (!rows || !rows.length) {
-      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r.visitors; }));
     var html = '';
@@ -1183,7 +1183,7 @@
   }
 
   function renderUtm(rows) {
-    return '<div class="card"><span class="card-title">UTM-kampanjer</span><div style="margin-top:14px">' +
+    return '<div class="card"><span class="card-title">UTM campaigns</span><div style="margin-top:14px">' +
       renderUtmContent(rows) + '</div></div>';
   }
 
@@ -1195,29 +1195,29 @@
 
     if (!totalVisits) {
       return '<div class="card" style="margin-bottom:14px">' +
-        '<span class="card-title" style="font-size:16px">Botar & crawlers</span>' +
-        '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen botaktivitet ännu</p></div>';
+        '<span class="card-title" style="font-size:16px">Bots & crawlers</span>' +
+        '<p style="color:var(--muted);font-size:13px;margin-top:12px">No bot activity yet</p></div>';
     }
 
     var badges = '';
     cats.forEach(function(c) {
-      var color = botCatColors[c.category] || botCatColors['Övrigt'];
+      var color = botCatColors[c.category] || botCatColors['Other'];
       badges += '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;background:' + color + '15;color:' + color + '">' +
         esc(c.category) + ' <span style="opacity:0.7">' + num(c.visits) + '</span></span> ';
     });
 
     var html = '<div style="margin-top:28px;margin-bottom:14px;padding-top:20px;border-top:2px solid var(--border)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
-        '<span style="font-size:16px;font-weight:700">Botar & crawlers</span>' +
-        '<span style="font-size:13px;color:var(--muted)">' + num(totalVisits) + ' besök totalt</span>' +
+        '<span style="font-size:16px;font-weight:700">Bots & crawlers</span>' +
+        '<span style="font-size:13px;color:var(--muted)">' + num(totalVisits) + ' total visits</span>' +
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' + badges + '</div>' +
       '<div class="grid-2">';
 
     html += renderBotTable(bots, d.botsTotal);
-    html += '<div class="card"><span class="card-title">Mest crawlade sidor</span><div style="margin-top:14px">' +
+    html += '<div class="card"><span class="card-title">Most crawled pages</span><div style="margin-top:14px">' +
       renderTableContent(pages, 'path', 'visits', '#2563eb') + '</div>' +
-      showAllBtn(d.botPagesTotal, 'botPages', 'Mest crawlade sidor') +
+      showAllBtn(d.botPagesTotal, 'botPages', 'Most crawled pages') +
     '</div>';
 
     html += '</div>';
@@ -1225,11 +1225,11 @@
     // Bot activity timeline
     var activity = d.botActivity || [];
     if (activity.length) {
-      html += '<div class="card" style="margin-top:14px"><span class="card-title">Senaste bot-aktivitet</span>' +
+      html += '<div class="card" style="margin-top:14px"><span class="card-title">Latest bot activity</span>' +
         '<div style="margin-top:12px">' +
         renderBotActivityContent(activity) +
         '</div>' +
-        showAllBtn(activity.length >= 10 ? 11 : 0, 'botActivity', 'Bot-aktivitet') +
+        showAllBtn(activity.length >= 10 ? 11 : 0, 'botActivity', 'Bot activity') +
       '</div>';
     }
 
@@ -1237,17 +1237,17 @@
     return html;
   }
 
-  var botCatColors = { 'AI': '#dc2626', 'Sökmotor': '#2563eb', 'Social': '#7c3aed', 'SEO': '#d97706', 'Monitor': '#059669', 'Övrigt': '#94a3b8' };
+  var botCatColors = { 'AI': '#dc2626', 'Search engine': '#2563eb', 'Social': '#7c3aed', 'SEO': '#d97706', 'Monitor': '#059669', 'Other': '#94a3b8' };
 
   function renderBotTableContent(bots) {
     if (!bots || !bots.length) {
-      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">Ingen data ännu</p>';
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
     }
     var max = Math.max.apply(null, bots.map(function(b) { return +b.visits; }));
     var html = '';
     bots.forEach(function(b) {
       var pct = (+b.visits / max) * 100;
-      var color = botCatColors[b.category] || botCatColors['Övrigt'];
+      var color = botCatColors[b.category] || botCatColors['Other'];
       html += '<div class="trow">' +
         '<span class="trow-label" title="' + esc(b.name) + ' (' + esc(b.category) + ')">' +
           '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:6px;flex-shrink:0"></span>' +
@@ -1261,19 +1261,19 @@
   }
 
   function renderBotTable(bots, botsTotal) {
-    return '<div class="card"><span class="card-title">Aktiva botar</span><div style="margin-top:14px">' +
+    return '<div class="card"><span class="card-title">Active bots</span><div style="margin-top:14px">' +
       renderBotTableContent(bots) + '</div>' +
-      showAllBtn(botsTotal, 'bots', 'Aktiva botar') +
+      showAllBtn(botsTotal, 'bots', 'Active bots') +
     '</div>';
   }
 
   function renderBotActivityContent(activity) {
     if (!activity || !activity.length) {
-      return '<p style="color:var(--muted);font-size:13px">Ingen data ännu</p>';
+      return '<p style="color:var(--muted);font-size:13px">No data yet</p>';
     }
     var html = '';
     activity.forEach(function(a) {
-      var color = botCatColors[a.category] || botCatColors['Övrigt'];
+      var color = botCatColors[a.category] || botCatColors['Other'];
       var time = formatTime(a.created_at);
       html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">' +
         '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
@@ -1297,7 +1297,7 @@
           (l.site ? '<span style="color:var(--light);font-size:11px;min-width:80px">' + esc(l.site) + '</span>' : '') +
           '<span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(l.path) + '">' + esc(l.path) + '</span>' +
           (showStatus ? '<span style="font-size:11px;color:' + color + ';font-weight:600">' + l.status + '</span>' : '') +
-          '<span style="color:var(--muted);white-space:nowrap;font-size:12px">' + num(l.hits) + ' tr\u00e4ffar</span>' +
+          '<span style="color:var(--muted);white-space:nowrap;font-size:12px">' + num(l.hits) + ' hits</span>' +
           '<span style="color:var(--light);white-space:nowrap;font-size:12px">' + time + '</span>' +
         '</div>';
       if (refs.length) {
@@ -1318,8 +1318,8 @@
 
     var html = '<div style="margin-top:28px;margin-bottom:14px;padding-top:20px;border-top:2px solid var(--border)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
-        '<span style="font-size:16px;font-weight:700">Sidor att \u00e5tg\u00e4rda</span>' +
-        '<span style="font-size:13px;color:var(--muted)">Senaste 30 dagarna</span>' +
+        '<span style="font-size:16px;font-weight:700">Pages to fix</span>' +
+        '<span style="font-size:13px;color:var(--muted)">Last 30 days</span>' +
       '</div>';
 
     var BROKEN_SHOW = 10;
@@ -1329,20 +1329,20 @@
       var visible = items.slice(0, BROKEN_SHOW);
       var g = '<div class="card" style="margin-bottom:14px">' +
         '<span class="card-title" style="display:flex;align-items:center;gap:8px">' + title +
-        ' <span style="font-size:12px;font-weight:400;color:var(--muted)">' + items.length + ' sidor</span></span>' +
+        ' <span style="font-size:12px;font-weight:400;color:var(--muted)">' + items.length + ' pages</span></span>' +
         '<div style="margin-top:12px">' +
         renderBrokenGroup(visible, color, showStatus) +
         '</div>';
       if (items.length > BROKEN_SHOW) {
-        g += '<button class="show-all" onclick="showBrokenAll(\'' + esc(title) + '\',\'' + color + '\',' + !!showStatus + ')">Visa alla (' + items.length + ')</button>';
+        g += '<button class="show-all" onclick="showBrokenAll(\'' + esc(title) + '\',\'' + color + '\',' + !!showStatus + ')">Show all (' + items.length + ')</button>';
       }
       g += '</div>';
       return g;
     }
 
-    html += renderGroup('404 Saknas', '#dc2626', links404);
+    html += renderGroup('404 Not found', '#dc2626', links404);
     html += renderGroup('301 Redirects', '#d97706', links301);
-    html += renderGroup('\u00d6vriga felkoder', '#94a3b8', linksOther, true);
+    html += renderGroup('Other errors', '#94a3b8', linksOther, true);
     html += '</div>';
     return html;
   }
@@ -1351,7 +1351,7 @@
     var isOpen = localStorage.getItem('puls-tools-open') === '1';
     var chevron = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>';
     return '<div class="tools-toggle' + (isOpen ? ' open' : '') + '" onclick="toggleTools(this)">' +
-      chevron + '<span>' + (isOpen ? 'Dölj verktyg' : 'Visa verktyg') + '</span>' +
+      chevron + '<span>' + (isOpen ? 'Hide tools' : 'Show tools') + '</span>' +
     '</div>' +
     '<div class="tools-content' + (isOpen ? ' open' : '') + '">' +
       renderSnippet(site) +
@@ -1361,11 +1361,11 @@
 
   function renderSnippet(site) {
     var host = location.origin;
-    var siteVal = currentSite || 'min-sajt';
+    var siteVal = currentSite || 'my-site';
 
     return '<div class="snippet">' +
-      '<h3>Tracking-snippet</h3>' +
-      '<p>Klistra in före &lt;/body&gt; på din sajt. Pixeln fångar botar som inte kör JS.</p>' +
+      '<h3>Tracking snippet</h3>' +
+      '<p>Paste before &lt;/body&gt; on your site. The pixel catches bots that don\'t run JS.</p>' +
       '<pre id="snippet-code" onclick="copySnippet(this)">' +
         '&lt;script src="' + host + '/?js" data-site="' + esc(siteVal) + '" defer&gt;&lt;/script&gt;\n' +
         '&lt;noscript&gt;&lt;img src="' + host + '/?pixel&amp;s=' + esc(siteVal) + '&amp;p=/" alt="" width="1" height="1" style="position:absolute;opacity:0"&gt;&lt;/noscript&gt;' +
@@ -1373,61 +1373,61 @@
     '</div>' +
 
     '<div class="snippet">' +
-      '<h3>Sp\u00e5rbar l\u00e4nk</h3>' +
-      '<p>Skapa en l\u00e4nk som visar var bes\u00f6karna kom ifr\u00e5n i dashboarden.</p>' +
+      '<h3>Trackable link</h3>' +
+      '<p>Create a link that shows where visitors came from in the dashboard.</p>' +
 
       '<div class="utm-step">' +
-        '<div class="utm-step-label"><span class="utm-step-num active">1</span> Vilken sida ska l\u00e4nken g\u00e5 till?</div>' +
+        '<div class="utm-step-label"><span class="utm-step-num active">1</span> Which page should the link go to?</div>' +
         '<div style="display:flex;gap:8px;align-items:center">' +
-          '<input type="text" id="utm-domain" value="' + esc(utmDomain()) + '" placeholder="https://din-sajt.se" oninput="updateUtm()" style="width:45%">' +
-          '<input type="text" id="utm-path" placeholder="/ (startsidan)" oninput="updateUtm()" style="flex:1">' +
+          '<input type="text" id="utm-domain" value="' + esc(utmDomain()) + '" placeholder="https://your-site.com" oninput="updateUtm()" style="width:45%">' +
+          '<input type="text" id="utm-path" placeholder="/ (homepage)" oninput="updateUtm()" style="flex:1">' +
         '</div>' +
       '</div>' +
 
       '<div class="utm-step">' +
-        '<div class="utm-step-label"><span class="utm-step-num" id="utm-step2-num">2</span> Var ska du dela l\u00e4nken?</div>' +
+        '<div class="utm-step-label"><span class="utm-step-num" id="utm-step2-num">2</span> Where will you share the link?</div>' +
         '<div class="utm-channels" id="utm-channels">' +
           '<div class="utm-ch-btn" data-source="facebook" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">f</span>Facebook</div>' +
           '<div class="utm-ch-btn" data-source="instagram" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">ig</span>Instagram</div>' +
           '<div class="utm-ch-btn" data-source="linkedin" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">in</span>LinkedIn</div>' +
           '<div class="utm-ch-btn" data-source="twitter" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">X</span>Twitter/X</div>' +
-          '<div class="utm-ch-btn" data-source="newsletter" data-medium="email" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">\u2709</span>Nyhetsbrev</div>' +
-          '<div class="utm-ch-btn" data-source="website" data-medium="referral" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">www</span>Hemsida</div>' +
+          '<div class="utm-ch-btn" data-source="newsletter" data-medium="email" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">\u2709</span>Newsletter</div>' +
+          '<div class="utm-ch-btn" data-source="website" data-medium="referral" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">www</span>Website</div>' +
         '</div>' +
         '<div id="utm-custom-wrap" style="display:none;margin-top:8px">' +
           '<div class="snippet-grid">' +
-            '<div><label>K\u00e4lla</label><input type="text" id="utm-source-custom" placeholder="t.ex. podcast" oninput="updateUtm()"></div>' +
+            '<div><label>Source</label><input type="text" id="utm-source-custom" placeholder="e.g. podcast" oninput="updateUtm()"></div>' +
             '<div><label>Medium</label>' +
               '<select id="utm-medium-custom" onchange="updateUtm()">' +
                 '<option value="social">Social</option>' +
-                '<option value="email">E-post</option>' +
+                '<option value="email">Email</option>' +
                 '<option value="referral">Referral</option>' +
-                '<option value="cpc">Annons (CPC)</option>' +
+                '<option value="cpc">Ad (CPC)</option>' +
               '</select>' +
             '</div>' +
           '</div>' +
         '</div>' +
         '<div style="margin-top:8px;text-align:center">' +
-          '<span class="utm-ch-btn" style="display:inline-block;width:auto;padding:6px 16px;font-size:11px" id="utm-other-btn" onclick="toggleUtmCustom()">Annan k\u00e4lla...</span>' +
+          '<span class="utm-ch-btn" style="display:inline-block;width:auto;padding:6px 16px;font-size:11px" id="utm-other-btn" onclick="toggleUtmCustom()">Other source...</span>' +
         '</div>' +
       '</div>' +
 
       '<div class="utm-step">' +
-        '<div class="utm-step-label"><span class="utm-step-num" id="utm-step3-num">3</span> Kampanjnamn <span style="color:#64748b;font-weight:400">(valfritt)</span></div>' +
-        '<input type="text" id="utm-campaign" placeholder="t.ex. varkampanj-mars, black-friday" oninput="updateUtm()">' +
+        '<div class="utm-step-label"><span class="utm-step-num" id="utm-step3-num">3</span> Campaign name <span style="color:#64748b;font-weight:400">(optional)</span></div>' +
+        '<input type="text" id="utm-campaign" placeholder="e.g. spring-campaign, black-friday" oninput="updateUtm()">' +
       '</div>' +
 
       '<div id="utm-result-wrap" style="display:none">' +
         '<div class="utm-result-box">' +
           '<div class="utm-result-url" id="utm-result-url"></div>' +
-          '<button class="utm-copy-btn" id="utm-copy-btn" onclick="copyUtmLink()">Kopiera l\u00e4nk</button>' +
+          '<button class="utm-copy-btn" id="utm-copy-btn" onclick="copyUtmLink()">Copy link</button>' +
         '</div>' +
       '</div>' +
-      '<div id="utm-placeholder" class="utm-placeholder">V\u00e4lj var du ska dela l\u00e4nken</div>' +
+      '<div id="utm-placeholder" class="utm-placeholder">Choose where to share the link</div>' +
 
       '<span class="utm-advanced-toggle" onclick="toggleUtmAdvanced()">' +
         '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>' +
-        'Avancerat' +
+        'Advanced' +
       '</span>' +
       '<div class="utm-advanced" id="utm-advanced">' +
         '<div class="snippet-grid">' +
@@ -1438,23 +1438,23 @@
     '</div>' +
 
     '<div class="snippet">' +
-      '<h3>Server-side bot-tracking (Nginx)</h3>' +
-      '<p>Fånga botar som inte laddar bilder eller kör JavaScript. Lägg till i Nginx-konfigurationen per sajt.</p>' +
+      '<h3>Server-side bot tracking (Nginx)</h3>' +
+      '<p>Catch bots that don\'t load images or run JavaScript. Add to Nginx config per site.</p>' +
       '<pre id="nginx-snippet" onclick="copySnippet(this)">' +
-        '# Utanför server-blocket\n' +
+        '# Outside the server block\n' +
         'map $http_user_agent $is_bot {\n' +
         '    default 0;\n' +
         '    ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|Meta-ExternalAgent|Applebot|Ahrefs|Semrush|facebookexternalhit) 1;\n' +
         '    ~*(axios|python-requests|Go-http-client|curl/|wget/|httpie|node-fetch|undici|ruby|perl|java/|scrapy|puppeteer|playwright|HeadlessChrome|PhantomJS|Pingdom) 1;\n' +
         '}\n' +
         '\n' +
-        '# Inuti server-blocket\n' +
+        '# Inside the server block\n' +
         'location / {\n' +
         '    mirror /puls_log;\n' +
-        '    # ...befintlig config (try_files etc.)\n' +
+        '    # ...existing config (try_files etc.)\n' +
         '}\n' +
         '\n' +
-        '# Bot-tracking (200-svar)\n' +
+        '# Bot tracking (200 responses)\n' +
         'location = /puls_log {\n' +
         '    internal;\n' +
         '    if ($is_bot = "0") { return 204; }\n' +
@@ -1466,15 +1466,15 @@
         '}\n' +
         '\n' +
         '# Broken link tracking (404/301)\n' +
-        '# PHP-sajt: l\u00e4gg post_action i location ~ \\.php$\n' +
-        '# Statisk sajt: l\u00e4gg post_action i error_page-location\n' +
+        '# PHP site: add post_action in location ~ \\.php$\n' +
+        '# Static site: add post_action in error_page location\n' +
         'error_page 404 /404.html;\n' +
         'location = /404.html {\n' +
         '    internal;\n' +
-        '    post_action @puls_status_log;  # statisk sajt\n' +
+        '    post_action @puls_status_log;  # static site\n' +
         '}\n' +
         '# location ~ \\.php$ {\n' +
-        '#     post_action @puls_status_log;  # PHP-sajt\n' +
+        '#     post_action @puls_status_log;  # PHP site\n' +
         '# }\n' +
         '\n' +
         'location @puls_status_log {\n' +
@@ -1490,9 +1490,9 @@
         '    proxy_set_header X-Original-Referer $http_referer;\n' +
         '}' +
       '</pre>' +
-      '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#e0e7ff">Hur funkar det?</strong> Nginx skickar en kopia av bot-requests till Puls i bakgrunden (mirror). ' +
-        'Broken links (404) f\u00e5ngas via post_action efter att svaret skickats. ' +
-        'PHP-sajt: l\u00e4gg post_action i PHP-blocket. Statisk sajt: i error_page-locationen. Noll p\u00e5verkan p\u00e5 svarstid.</p>' +
+      '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#e0e7ff">How does it work?</strong> Nginx sends a copy of bot requests to Puls in the background (mirror). ' +
+        'Broken links (404) are caught via post_action after the response is sent. ' +
+        'PHP site: add post_action in the PHP block. Static site: in the error_page location. Zero impact on response time.</p>' +
     '</div>';
   }
 
@@ -1502,8 +1502,8 @@
   function utmDomain() {
     var site = currentSite || '';
     if (site && site.indexOf('.') !== -1) return 'https://' + site;
-    if (site) return 'https://' + site + '.se';
-    return 'https://din-sajt.se';
+    if (site) return 'https://' + site + '.com';
+    return 'https://your-site.com';
   }
 
   window.selectUtmChannel = function(el) {
@@ -1620,7 +1620,7 @@
 
     // Reset copy button
     var btn = document.getElementById('utm-copy-btn');
-    btn.textContent = 'Kopiera l\u00e4nk';
+    btn.textContent = 'Copy link';
     btn.classList.remove('copied');
     btn.dataset.url = fullUrl;
   }
@@ -1630,10 +1630,10 @@
     var url = btn.dataset.url;
     if (!url) return;
     navigator.clipboard.writeText(url).then(function() {
-      btn.textContent = 'Kopierad!';
+      btn.textContent = 'Copied!';
       btn.classList.add('copied');
       setTimeout(function() {
-        btn.textContent = 'Kopiera l\u00e4nk';
+        btn.textContent = 'Copy link';
         btn.classList.remove('copied');
       }, 2000);
     });
@@ -1661,7 +1661,7 @@
     var overlayTitle = document.getElementById('overlay-title');
     var overlayContent = document.getElementById('overlay-content');
     overlayTitle.textContent = title;
-    overlayContent.innerHTML = '<p style="color:var(--muted);font-size:13px">Laddar...</p>';
+    overlayContent.innerHTML = '<p style="color:var(--muted);font-size:13px">Loading...</p>';
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
 
@@ -1702,7 +1702,7 @@
     var content = btn.nextElementSibling;
     var isOpen = content.classList.toggle('open');
     btn.classList.toggle('open', isOpen);
-    btn.querySelector('span').textContent = isOpen ? 'Dölj verktyg' : 'Visa verktyg';
+    btn.querySelector('span').textContent = isOpen ? 'Hide tools' : 'Show tools';
     localStorage.setItem('puls-tools-open', isOpen ? '1' : '0');
   };
 
@@ -1711,7 +1711,7 @@
     var rows = document.querySelectorAll('[data-bl-group="' + id + '"]');
     var showing = rows[0] && rows[0].style.display !== 'none';
     rows.forEach(function(r) { r.style.display = showing ? 'none' : ''; });
-    btn.textContent = showing ? 'Visa alla ' + (rows.length + 5) : 'Visa f\u00e4rre';
+    btn.textContent = showing ? 'Show all ' + (rows.length + 5) : 'Show less';
   };
 
   // --- Menu ---
@@ -1828,13 +1828,13 @@
           if (!data || data.query !== cmdInput.value.trim()) return;
           renderCmdResults(data.results);
         })
-        .catch(function() { cmdResults.innerHTML = '<div class="cmd-empty">Kunde inte söka</div>'; });
+        .catch(function() { cmdResults.innerHTML = '<div class="cmd-empty">Could not search</div>'; });
     }, 200);
   });
 
   function renderCmdResults(results) {
     if (!results || !results.length) {
-      cmdResults.innerHTML = '<div class="cmd-empty">Inga sidor hittades</div>';
+      cmdResults.innerHTML = '<div class="cmd-empty">No pages found</div>';
       return;
     }
     var html = '';
@@ -1842,8 +1842,8 @@
       html += '<div class="cmd-item" data-path="' + esc(r.path) + '">' +
         '<span class="cmd-item-path" title="' + esc(r.path) + '">' + esc(decode(r.path)) + '</span>' +
         '<span class="cmd-item-stats">' +
-          '<span>' + num(r.views) + ' visn.</span>' +
-          '<span>' + num(r.visitors) + ' bes.</span>' +
+          '<span>' + num(r.views) + ' views</span>' +
+          '<span>' + num(r.visitors) + ' vis.</span>' +
         '</span>' +
       '</div>';
     });
@@ -1901,7 +1901,7 @@
       ptr.style.height = h + 'px';
       ptrSpinner.style.transform = 'rotate(' + (progress * 360) + 'deg)';
       ptrSpinner.style.opacity = Math.min(progress * 1.5, 1);
-      ptrText.textContent = ptrDist >= PTR_THRESHOLD ? 'Släpp för att uppdatera' : 'Dra ner för att uppdatera';
+      ptrText.textContent = ptrDist >= PTR_THRESHOLD ? 'Release to refresh' : 'Pull down to refresh';
     }, { passive: true });
 
     document.addEventListener('touchend', function() {
@@ -1913,7 +1913,7 @@
         ptr.classList.remove('pulling');
         ptr.classList.add('releasing', 'refreshing');
         ptr.style.height = '44px';
-        ptrText.textContent = 'Laddar...';
+        ptrText.textContent = 'Loading...';
 
         var url = API + '?api&days=' + currentDays;
         if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
