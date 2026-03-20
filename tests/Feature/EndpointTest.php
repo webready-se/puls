@@ -112,7 +112,7 @@ test('log endpoint tracks bot visits', function () {
     expect($r['status'])->toBe(204);
 });
 
-test('log endpoint tracks unknown user agents as Okänd klient', function () {
+test('log endpoint tracks unknown user agents as Unknown client', function () {
     $r = http('GET', '/?log&s=test&p=/unknown-ua', [
         'header' => 'User-Agent: Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/120.0',
     ]);
@@ -153,7 +153,7 @@ test('api sites endpoint requires auth', function () {
 test('login page renders', function () {
     $r = http('GET', '/?login');
     expect($r['status'])->toBe(200)
-        ->and($r['body'])->toContain('Logga in')
+        ->and($r['body'])->toContain('Log in')
         ->and($r['body'])->toContain('_token')
         ->and($r['body'])->toContain('_login');
 });
@@ -161,7 +161,7 @@ test('login page renders', function () {
 test('root without auth shows login', function () {
     $r = http('GET', '/');
     expect($r['status'])->toBe(200)
-        ->and($r['body'])->toContain('Logga in');
+        ->and($r['body'])->toContain('Log in');
 });
 
 test('manifest endpoint returns valid JSON', function () {

@@ -1,5 +1,8 @@
 # Puls
 
+[![Tests](https://github.com/webready-se/puls/actions/workflows/tests.yml/badge.svg)](https://github.com/webready-se/puls/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **One file. No cookies. Full picture.**
 
 See your traffic. Respect their privacy.
@@ -14,7 +17,7 @@ Puls is a cookieless, lightweight analytics tool built with a single PHP file an
 - **Bot detection** — Separates real visitors from bots (AI crawlers, search engines, social, SEO tools)
 - **Privacy-first** — Daily-rotating visitor hashes, no PII stored
 - **Multi-user** — Bcrypt auth with per-user site access control
-- **Zero dependencies** — PHP 8.1+ and SQLite, nothing else
+- **Zero dependencies** — PHP 8.2+ and SQLite, nothing else
 
 ## Quick Start
 
@@ -39,6 +42,8 @@ php -S localhost:8080 -t public
 ```html
 <script src="https://your-puls-domain/?js" data-site="my-site" defer></script>
 ```
+
+Works with Next.js, Astro, Laravel, Statamic, React, static HTML, and anything else that serves HTML. See [docs/integrations.md](docs/integrations.md) for framework-specific examples and reverse proxy setup.
 
 ### Bot Tracking (optional)
 
@@ -93,8 +98,11 @@ All management goes through `php puls`:
 php puls key:generate                    # Generate APP_KEY + create .env
 php puls user:add <name>                 # Add user with full access
 php puls user:add <name> --sites=a,b     # Add user restricted to specific sites
+php puls user:edit <name>                # Edit user (sites, password)
 php puls user:remove <name>              # Remove a user
 php puls user:list                       # List all users
+php puls sites:list                      # List all tracked sites
+php puls sites:rename <old> <new>        # Rename a tracked site
 ```
 
 Users with no `--sites` flag can see all sites. Restricted users only see their assigned sites.
@@ -117,14 +125,14 @@ LOCKOUT_MINUTES=15
 If tracking scripts are loaded cross-origin, add the origins to `ALLOWED_ORIGINS` in `.env` (comma-separated):
 
 ```env
-ALLOWED_ORIGINS=https://lillabosgarden.se,https://odlingsguiden.se
+ALLOWED_ORIGINS=https://example.com,https://another-site.com
 ```
 
 ## Deployment
 
 ### Requirements
 
-- PHP 8.1+
+- PHP 8.2+
 - `pdo_sqlite` extension (included in most PHP installations)
 - Write access to `data/` directory
 

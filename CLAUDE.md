@@ -29,7 +29,7 @@ Static file requests (anything with `.` in path) return 404 early to prevent rou
 
 ### Files
 
-```
+```text
 public/index.php        — All backend logic (routing, tracking, API, auth, bot detection)
 public/dashboard.html   — Self-contained dashboard (CSS + JS, no build step)
 config.php              — Configuration (loads .env, auto-detects Forge paths)
@@ -47,7 +47,7 @@ scripts/normalize-paths.php — One-time migration to clean old tracking params 
 
 ### Key Design Decisions
 
-- **No framework** — pure PHP 8.1+, only requires `pdo_sqlite`
+- **No framework** — pure PHP 8.2+, only requires `pdo_sqlite`
 - **SQLite with WAL mode** — good concurrent read performance, single-file database
 - **Session-based auth** — CSRF-protected, brute-force lockout, bcrypt passwords
 - **Per-user site access** — users can be restricted to specific sites
@@ -80,19 +80,13 @@ php puls user:add client --sites=their-site
 
 Tests run automatically before every `git push`. The hook is configured via `composer post-install-cmd` — any contributor gets it after `composer install`. No manual setup needed.
 
-## Production
-
-Live on puls.wrlabs.se via Laravel Forge (zero-deploy). Auto-deploys on push to main.
-
-Tracked sites: lillabosgarden, odlingsguiden, snittränta.se, jarnesjo.com
-
 ## Multi-site Hub
 
 Puls is designed as a central hub for multiple sites. Add `data-site="name"` on the tracking script to separate data. Users with empty `sites` array see all sites; restricted users only see their assigned sites.
 
 ## Conventions
 
-- Swedish UI, English code/comments
+- English UI, code, and comments
 - No external dependencies at runtime — keep it deployable as a file drop
 - 4-space indentation in PHP, 2-space in HTML/CSS/JS
 - All user input is truncated/sanitized before storage

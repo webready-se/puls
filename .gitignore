@@ -4,4 +4,5 @@ users.json
 .DS_Store
 /vendor/
 docs/deploy-guide.md
+docs/roadmap.md
 .claude/

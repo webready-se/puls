@@ -7,7 +7,7 @@ if (file_exists($envFile)) {
         if ($line[0] === '#') continue;
         if (!str_contains($line, '=')) continue;
         [$key, $value] = explode('=', $line, 2);
-        $_ENV[trim($key)] = trim($value);
+        $_ENV[trim($key)] ??= trim($value);
     }
 }
 
