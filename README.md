@@ -54,54 +54,7 @@ php -S localhost:8080 -t public
 <script src="https://your-puls-domain/?js" data-site="my-site" defer></script>
 ```
 
-Works with Next.js, Astro, Laravel, Statamic, React, static HTML, and anything else that serves HTML. See [docs/integrations.md](docs/integrations.md) for framework-specific examples and reverse proxy setup.
-
-### Bot Tracking (optional)
-
-Add a tracking pixel to catch bots that don't execute JavaScript:
-
-```html
-<noscript>
-  <img
-    src="https://your-puls-domain/?pixel&s=my-site&p=/current-path"
-    alt=""
-    width="1"
-    height="1"
-    style="position:absolute;opacity:0"
-  />
-</noscript>
-```
-
-### Server-side Bot Tracking (Nginx)
-
-Catch bots that don't load images or execute JavaScript (e.g. `curl`, AI tool agents). Add to your Nginx config:
-
-```nginx
-# Outside server block
-map $http_user_agent $is_bot {
-    default 0;
-    ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|Meta-ExternalAgent|Applebot|Ahrefs|Semrush|facebookexternalhit) 1;
-    ~*(axios|python-requests|Go-http-client|curl/|wget/|httpie|node-fetch|undici|ruby|perl|java/|scrapy|puppeteer|playwright|HeadlessChrome|PhantomJS|Pingdom) 1;
-}
-
-# Inside server block
-location / {
-    mirror /puls_log;
-    # ...existing config
-}
-
-location = /puls_log {
-    internal;
-    if ($is_bot = "0") { return 204; }
-    resolver 8.8.8.8;
-    proxy_ssl_verify off;
-    proxy_ssl_server_name on;
-    proxy_pass https://your-puls-domain/?log&s=$host&p=$request_uri;
-    proxy_set_header User-Agent $http_user_agent;
-}
-```
-
-Zero latency impact — Nginx sends the request in the background. Deduplication is built in.
+Works with Next.js, Astro, Laravel, Statamic, React, static HTML, and anything else that serves HTML. See [docs/integrations.md](docs/integrations.md) for framework examples, bot tracking pixel, server-side Nginx mirror, and reverse proxy setup.
 
 ## CLI
 
@@ -169,6 +122,26 @@ server {
     }
 }
 ```
+
+### Apache
+
+Add a `.htaccess` file in the `public/` directory:
+
+```apache
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ index.php [L,QSA]
+```
+
+Make sure `mod_rewrite` is enabled (`a2enmod rewrite`) and that your virtual host allows overrides:
+
+```apache
+<Directory /var/www/puls/public>
+    AllowOverride All
+</Directory>
+```
+
+> **Note:** Server-side bot tracking (Nginx mirror) is not available on Apache. Use the `<noscript>` tracking pixel instead — see [docs/integrations.md](docs/integrations.md).
 
 ### Laravel Forge (zero-downtime deploys)
 

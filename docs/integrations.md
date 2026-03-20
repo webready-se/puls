@@ -143,6 +143,24 @@ Puls hooks into `pushState` and `popstate` automatically — no React Router int
 
 That's it. Works on any HTML page.
 
+## Bot Tracking Pixel (optional)
+
+Add a `<noscript>` pixel to catch bots and visitors that don't execute JavaScript:
+
+```html
+<noscript>
+  <img
+    src="https://your-puls-domain/?pixel&s=my-site&p=/current-path"
+    alt=""
+    width="1"
+    height="1"
+    style="position:absolute;opacity:0"
+  />
+</noscript>
+```
+
+For server-rendered frameworks (Astro, Laravel, Statamic), you can inject the current path dynamically — see the framework examples above.
+
 ## Behind a Reverse Proxy (Docker, Nginx, etc.)
 
 If your app runs behind a reverse proxy (common with Docker, Node.js apps, or load balancers), make sure the proxy forwards the visitor's real IP. Without this, Puls sees the proxy's internal IP and counts all visitors as one.
