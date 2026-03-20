@@ -293,6 +293,56 @@
   @media (max-width: 600px) { .snippet-grid { grid-template-columns: 1fr; } }
   .snippet label { display: block; font-size: 11px; color: #a5b4fc; margin-bottom: 4px; font-weight: 500; }
 
+  /* UTM wizard */
+  .utm-step { margin-bottom: 16px; }
+  .utm-step-label {
+    font-size: 12px; font-weight: 600; color: #e0e7ff; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .utm-step-num {
+    width: 20px; height: 20px; border-radius: 50%; font-size: 11px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(165,180,252,0.2); color: #a5b4fc; font-weight: 700; flex-shrink: 0;
+  }
+  .utm-step-num.active { background: #6366f1; color: #fff; }
+  .utm-channels {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  @media (max-width: 500px) { .utm-channels { grid-template-columns: repeat(2, 1fr); } }
+  .utm-ch-btn {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px; padding: 10px 8px; cursor: pointer; text-align: center;
+    font-size: 12px; color: #c7d2fe; transition: all 0.15s;
+  }
+  .utm-ch-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(165,180,252,0.3); }
+  .utm-ch-btn.selected { background: rgba(99,102,241,0.3); border-color: #6366f1; color: #e0e7ff; }
+  .utm-ch-btn .utm-ch-icon { font-size: 18px; display: block; margin-bottom: 4px; }
+  .utm-result-box {
+    background: rgba(0,0,0,0.3); border-radius: 10px; padding: 16px;
+    margin-top: 12px; position: relative;
+  }
+  .utm-result-url {
+    font-size: 12px; line-height: 1.7; color: #c7d2fe; word-break: break-all;
+    font-family: monospace;
+  }
+  .utm-result-url .utm-highlight { color: #a5f3fc; }
+  .utm-copy-btn {
+    display: block; width: 100%; margin-top: 10px; padding: 10px;
+    background: #6366f1; border: none; border-radius: 8px;
+    color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .utm-copy-btn:hover { opacity: 0.85; }
+  .utm-copy-btn.copied { background: #059669; }
+  .utm-advanced-toggle {
+    font-size: 11px; color: #818cf8; cursor: pointer; margin-top: 12px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .utm-advanced-toggle:hover { color: #a5b4fc; }
+  .utm-advanced { display: none; margin-top: 12px; }
+  .utm-advanced.open { display: block; }
+  .utm-placeholder { color: #64748b; font-size: 13px; text-align: center; padding: 12px; }
+
   /* Pull to refresh (PWA only) */
   .ptr-indicator {
     display: none; align-items: center; justify-content: center;
@@ -659,8 +709,15 @@
     })
     .catch(function() { load(7); });
 
-  // Auto-refresh every 60 seconds
-  setInterval(function() { load(currentDays); }, 60000);
+  // Auto-refresh every 60 seconds (paused when UTM wizard is in use)
+  function utmWizardActive() {
+    var path = document.getElementById('utm-path');
+    var campaign = document.getElementById('utm-campaign');
+    var domain = document.getElementById('utm-domain');
+    var domainEdited = domain && domain.value !== utmDomain();
+    return (utmState && utmState.source) || (path && path.value) || (campaign && campaign.value) || domainEdited;
+  }
+  setInterval(function() { if (!utmWizardActive()) load(currentDays); }, 60000);
 
   // --- Render ---
   var lastData = null;
@@ -1316,40 +1373,68 @@
     '</div>' +
 
     '<div class="snippet">' +
-      '<h3>UTM-länkgenerator</h3>' +
-      '<p>Lägg till UTM-parametrar på länkar du delar för att spåra var trafiken kommer från.</p>' +
+      '<h3>Sp\u00e5rbar l\u00e4nk</h3>' +
+      '<p>Skapa en l\u00e4nk som visar var bes\u00f6karna kom ifr\u00e5n i dashboarden.</p>' +
 
-      '<div class="snippet-grid">' +
-        '<div><label>URL</label><input type="text" id="utm-url" placeholder="https://din-sajt.se/sida" oninput="updateUtm()"></div>' +
-        '<div><label>Källa (source) *</label>' +
-          '<select id="utm-source" onchange="updateUtm()">' +
-            '<option value="">Välj...</option>' +
-            '<option value="facebook">Facebook</option>' +
-            '<option value="instagram">Instagram</option>' +
-            '<option value="twitter">Twitter/X</option>' +
-            '<option value="linkedin">LinkedIn</option>' +
-            '<option value="newsletter">Nyhetsbrev</option>' +
-            '<option value="custom">Annan...</option>' +
-          '</select>' +
+      '<div class="utm-step">' +
+        '<div class="utm-step-label"><span class="utm-step-num active">1</span> Vilken sida ska l\u00e4nken g\u00e5 till?</div>' +
+        '<div style="display:flex;gap:8px;align-items:center">' +
+          '<input type="text" id="utm-domain" value="' + esc(utmDomain()) + '" placeholder="https://din-sajt.se" oninput="updateUtm()" style="width:45%">' +
+          '<input type="text" id="utm-path" placeholder="/ (startsidan)" oninput="updateUtm()" style="flex:1">' +
         '</div>' +
-        '<div><label>Medium</label>' +
-          '<select id="utm-medium" onchange="updateUtm()">' +
-            '<option value="">Automatiskt</option>' +
-            '<option value="social">Social</option>' +
-            '<option value="email">E-post</option>' +
-            '<option value="website">Webbsida</option>' +
-            '<option value="cpc">Annons (CPC)</option>' +
-          '</select>' +
-        '</div>' +
-        '<div><label>Kampanj</label><input type="text" id="utm-campaign" placeholder="t.ex. varkampanj-2026" oninput="updateUtm()"></div>' +
       '</div>' +
-      '<div id="utm-custom-row" style="display:none;margin-bottom:12px"><label>Egen källa</label><input type="text" id="utm-source-custom" placeholder="t.ex. podcast" oninput="updateUtm()"></div>' +
-      '<pre id="utm-result" onclick="copySnippet(this)" style="min-height:44px;color:#94a3b8">Fyll i URL och källa ovan</pre>' +
 
-      '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#e0e7ff">Vad är UTM?</strong> Parametrar som läggs på en URL för att spåra varifrån besökaren kom. ' +
-        '<strong>source</strong> = varifrån (facebook, nyhetsbrev), ' +
-        '<strong>medium</strong> = hur (social, email), ' +
-        '<strong>campaign</strong> = varför (varkampanj). Bara source behövs.</p>' +
+      '<div class="utm-step">' +
+        '<div class="utm-step-label"><span class="utm-step-num" id="utm-step2-num">2</span> Var ska du dela l\u00e4nken?</div>' +
+        '<div class="utm-channels" id="utm-channels">' +
+          '<div class="utm-ch-btn" data-source="facebook" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">f</span>Facebook</div>' +
+          '<div class="utm-ch-btn" data-source="instagram" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">ig</span>Instagram</div>' +
+          '<div class="utm-ch-btn" data-source="linkedin" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">in</span>LinkedIn</div>' +
+          '<div class="utm-ch-btn" data-source="twitter" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">X</span>Twitter/X</div>' +
+          '<div class="utm-ch-btn" data-source="newsletter" data-medium="email" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">\u2709</span>Nyhetsbrev</div>' +
+          '<div class="utm-ch-btn" data-source="website" data-medium="referral" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">www</span>Hemsida</div>' +
+        '</div>' +
+        '<div id="utm-custom-wrap" style="display:none;margin-top:8px">' +
+          '<div class="snippet-grid">' +
+            '<div><label>K\u00e4lla</label><input type="text" id="utm-source-custom" placeholder="t.ex. podcast" oninput="updateUtm()"></div>' +
+            '<div><label>Medium</label>' +
+              '<select id="utm-medium-custom" onchange="updateUtm()">' +
+                '<option value="social">Social</option>' +
+                '<option value="email">E-post</option>' +
+                '<option value="referral">Referral</option>' +
+                '<option value="cpc">Annons (CPC)</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="margin-top:8px;text-align:center">' +
+          '<span class="utm-ch-btn" style="display:inline-block;width:auto;padding:6px 16px;font-size:11px" id="utm-other-btn" onclick="toggleUtmCustom()">Annan k\u00e4lla...</span>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="utm-step">' +
+        '<div class="utm-step-label"><span class="utm-step-num" id="utm-step3-num">3</span> Kampanjnamn <span style="color:#64748b;font-weight:400">(valfritt)</span></div>' +
+        '<input type="text" id="utm-campaign" placeholder="t.ex. varkampanj-mars, black-friday" oninput="updateUtm()">' +
+      '</div>' +
+
+      '<div id="utm-result-wrap" style="display:none">' +
+        '<div class="utm-result-box">' +
+          '<div class="utm-result-url" id="utm-result-url"></div>' +
+          '<button class="utm-copy-btn" id="utm-copy-btn" onclick="copyUtmLink()">Kopiera l\u00e4nk</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="utm-placeholder" class="utm-placeholder">V\u00e4lj var du ska dela l\u00e4nken</div>' +
+
+      '<span class="utm-advanced-toggle" onclick="toggleUtmAdvanced()">' +
+        '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>' +
+        'Avancerat' +
+      '</span>' +
+      '<div class="utm-advanced" id="utm-advanced">' +
+        '<div class="snippet-grid">' +
+          '<div><label>source</label><input type="text" id="utm-adv-source" oninput="updateUtmFromAdvanced()"></div>' +
+          '<div><label>medium</label><input type="text" id="utm-adv-medium" oninput="updateUtmFromAdvanced()"></div>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
 
     '<div class="snippet">' +
@@ -1411,45 +1496,152 @@
     '</div>';
   }
 
+  // UTM wizard state
+  var utmState = { source: '', medium: '', custom: false };
+
+  function utmDomain() {
+    var site = currentSite || '';
+    if (site && site.indexOf('.') !== -1) return 'https://' + site;
+    if (site) return 'https://' + site + '.se';
+    return 'https://din-sajt.se';
+  }
+
+  window.selectUtmChannel = function(el) {
+    // Deselect all
+    var btns = document.getElementById('utm-channels').querySelectorAll('.utm-ch-btn');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove('selected');
+    el.classList.add('selected');
+
+    utmState.source = el.dataset.source;
+    utmState.medium = el.dataset.medium;
+    utmState.custom = false;
+    document.getElementById('utm-custom-wrap').style.display = 'none';
+    document.getElementById('utm-other-btn').classList.remove('selected');
+
+    // Sync advanced fields
+    var advSrc = document.getElementById('utm-adv-source');
+    var advMed = document.getElementById('utm-adv-medium');
+    if (advSrc) advSrc.value = utmState.source;
+    if (advMed) advMed.value = utmState.medium;
+
+    document.getElementById('utm-step2-num').classList.add('active');
+    updateUtm();
+  };
+
+  window.toggleUtmCustom = function() {
+    var wrap = document.getElementById('utm-custom-wrap');
+    var btn = document.getElementById('utm-other-btn');
+    var isOpen = wrap.style.display !== 'none';
+    wrap.style.display = isOpen ? 'none' : 'block';
+    btn.classList.toggle('selected', !isOpen);
+
+    if (!isOpen) {
+      // Deselect preset channels
+      var btns = document.getElementById('utm-channels').querySelectorAll('.utm-ch-btn');
+      for (var i = 0; i < btns.length; i++) btns[i].classList.remove('selected');
+      utmState.custom = true;
+      utmState.source = '';
+      utmState.medium = '';
+      document.getElementById('utm-source-custom').focus();
+    }
+    updateUtm();
+  };
+
+  window.toggleUtmAdvanced = function() {
+    var el = document.getElementById('utm-advanced');
+    el.classList.toggle('open');
+  };
+
+  window.updateUtmFromAdvanced = function() {
+    utmState.source = document.getElementById('utm-adv-source').value.trim();
+    utmState.medium = document.getElementById('utm-adv-medium').value.trim();
+
+    // Deselect visual buttons to avoid confusion
+    var btns = document.getElementById('utm-channels');
+    if (btns) {
+      var all = btns.querySelectorAll('.utm-ch-btn');
+      for (var i = 0; i < all.length; i++) all[i].classList.remove('selected');
+    }
+    document.getElementById('utm-step2-num').classList.add('active');
+    updateUtm();
+  };
+
   function updateUtm() {
-    var url = document.getElementById('utm-url').value.trim();
-    var source = document.getElementById('utm-source').value;
-    var medium = document.getElementById('utm-medium').value;
+    var source = utmState.custom
+      ? document.getElementById('utm-source-custom').value.trim()
+      : utmState.source;
+    var medium = utmState.custom
+      ? document.getElementById('utm-medium-custom').value
+      : utmState.medium;
     var campaign = document.getElementById('utm-campaign').value.trim();
-    var customRow = document.getElementById('utm-custom-row');
-    var result = document.getElementById('utm-result');
+    var pathInput = document.getElementById('utm-path');
+    var path = pathInput ? pathInput.value.trim() : '';
+    var domainInput = document.getElementById('utm-domain');
+    var domain = domainInput ? domainInput.value.trim() : utmDomain();
 
-    if (source === 'custom') {
-      customRow.style.display = 'block';
-      source = document.getElementById('utm-source-custom').value.trim();
-    } else {
-      customRow.style.display = 'none';
-    }
+    var resultWrap = document.getElementById('utm-result-wrap');
+    var placeholder = document.getElementById('utm-placeholder');
+    var resultUrl = document.getElementById('utm-result-url');
+    var step3 = document.getElementById('utm-step3-num');
 
-    // Auto-set medium if not chosen
-    if (!medium && source) {
-      var autoMedium = { facebook: 'social', instagram: 'social', twitter: 'social', linkedin: 'social', newsletter: 'email' };
-      medium = autoMedium[source] || '';
-    }
+    // Sync advanced fields (if not typing there)
+    var advSrc = document.getElementById('utm-adv-source');
+    var advMed = document.getElementById('utm-adv-medium');
+    if (advSrc && document.activeElement !== advSrc) advSrc.value = source;
+    if (advMed && document.activeElement !== advMed) advMed.value = medium;
 
-    if (!url || !source) {
-      result.textContent = 'Fyll i URL och källa ovan';
-      result.style.color = '#94a3b8';
+    if (campaign) step3.classList.add('active');
+    else step3.classList.remove('active');
+
+    if (!source) {
+      resultWrap.style.display = 'none';
+      placeholder.style.display = 'block';
       return;
     }
 
-    var sep = url.indexOf('?') === -1 ? '?' : '&';
-    var out = url + sep + 'utm_source=' + encodeURIComponent(source);
-    if (medium) out += '&utm_medium=' + encodeURIComponent(medium);
-    if (campaign) out += '&utm_campaign=' + encodeURIComponent(campaign);
+    if (!domain) domain = utmDomain();
+    if (domain.indexOf('http') !== 0) domain = 'https://' + domain;
+    var base = domain + (path.indexOf('/') === 0 ? path : '/' + path);
+    if (base.slice(-1) === '/' && base.length > domain.length + 1) {
+      base = base.slice(0, -1);
+    }
 
-    result.textContent = out;
-    result.style.color = '#c7d2fe';
+    var params = 'utm_source=' + encodeURIComponent(source);
+    if (medium) params += '&utm_medium=' + encodeURIComponent(medium);
+    if (campaign) params += '&utm_campaign=' + encodeURIComponent(campaign);
+
+    var sep = base.indexOf('?') === -1 ? '?' : '&';
+    var fullUrl = base + sep + params;
+
+    // Show with highlighted params
+    resultUrl.innerHTML = esc(base) + '<span class="utm-highlight">' + esc(sep + params) + '</span>';
+    resultWrap.style.display = 'block';
+    placeholder.style.display = 'none';
+
+    // Reset copy button
+    var btn = document.getElementById('utm-copy-btn');
+    btn.textContent = 'Kopiera l\u00e4nk';
+    btn.classList.remove('copied');
+    btn.dataset.url = fullUrl;
   }
+
+  window.copyUtmLink = function() {
+    var btn = document.getElementById('utm-copy-btn');
+    var url = btn.dataset.url;
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(function() {
+      btn.textContent = 'Kopierad!';
+      btn.classList.add('copied');
+      setTimeout(function() {
+        btn.textContent = 'Kopiera l\u00e4nk';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  };
 
   window.copySnippet = function(el) {
     var text = el.textContent;
-    if (text === 'Fyll i URL och källa ovan') return;
+    if (!text || !text.trim()) return;
     navigator.clipboard.writeText(text).then(function() {
       el.classList.add('copied');
       setTimeout(function() { el.classList.remove('copied'); }, 1500);
