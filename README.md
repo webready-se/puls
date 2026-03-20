@@ -50,13 +50,15 @@ Works with Next.js, Astro, Laravel, Statamic, React, static HTML, and anything e
 Add a tracking pixel to catch bots that don't execute JavaScript:
 
 ```html
-<img
-  src="https://your-puls-domain/?pixel&s=my-site&p=/current-path"
-  alt=""
-  width="1"
-  height="1"
-  style="position:absolute;opacity:0"
-/>
+<noscript>
+  <img
+    src="https://your-puls-domain/?pixel&s=my-site&p=/current-path"
+    alt=""
+    width="1"
+    height="1"
+    style="position:absolute;opacity:0"
+  />
+</noscript>
 ```
 
 ### Server-side Bot Tracking (Nginx)

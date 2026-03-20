@@ -130,6 +130,7 @@
 
 Things to explore later — not committed to.
 
+- **Apache/.htaccess documentation** — deployment guide for Apache users (rewrite rules, limitations vs Nginx)
 - **API keys** — alternative to session auth for headless API access
 - **Slack/Discord notifications** — daily summary
 - **Aggregation tables** — daily rollups for faster queries at scale
