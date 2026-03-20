@@ -168,10 +168,21 @@ $ACTIVATE_RELEASE()
 
 ### Shared Hosting
 
+**With SSH access:**
+
 1. Upload all files via FTP/SSH
 2. Point the domain to the `public/` directory
-3. Run `php puls key:generate && php puls user:add admin` via SSH
+3. Run `php puls key:generate && php puls user:add admin`
 4. Done
+
+**Without SSH access:**
+
+1. Run `php puls key:generate && php puls user:add admin` locally
+2. Upload all files including `.env` and `users.json` via FTP
+3. Point the domain to the `public/` directory
+4. Done
+
+> **Important:** Keep `.env` and `users.json` in the project root — never place them inside `public/`. They contain your secret key and password hashes.
 
 ## Data Collected
 
