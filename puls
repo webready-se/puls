@@ -6,8 +6,10 @@
  * Usage:
  *   php puls key:generate                        Generate a new APP_KEY
  *   php puls user:add <name> [--sites=a,b]       Add a user
+ *   php puls user:edit <name>                    Edit user (sites, password)
  *   php puls user:remove <name>                  Remove a user
  *   php puls user:list                           List all users
+ *   php puls sites:list                          List all tracked sites
  */
 
 $config = require __DIR__ . '/config.php';
@@ -15,9 +17,11 @@ $command = $argv[1] ?? 'help';
 
 match ($command) {
     'key:generate' => generateKey(),
-    'user:add'     => userAdd($config['users_file'], $argv[2] ?? null, $argv),
+    'user:add'     => userAdd($config, $argv[2] ?? null, $argv),
+    'user:edit'    => userEdit($config, $argv[2] ?? null),
     'user:remove'  => userRemove($config['users_file'], $argv[2] ?? null),
     'user:list'    => userList($config['users_file']),
+    'sites:list'   => sitesList($config['db_path']),
     default        => printHelp(),
 };
 
@@ -55,14 +59,19 @@ function generateKey(): void
 // user:add
 // =====================================================================
 
-function userAdd(string $file, ?string $username, array $argv): void
+function userAdd(array $config, ?string $username, array $argv): void
 {
     if (!$username) {
-        echo "Usage: php puls user:add <username> [--sites=site1,site2]\n";
+        echo "Usage: php puls user:add <username> [--sites=a,b]\n";
         exit(1);
     }
 
-    $users = loadUsers($file);
+    $users = loadUsers($config['users_file']);
+
+    if (isset($users[$username])) {
+        echo "User '{$username}' already exists. Use user:edit to modify.\n";
+        exit(1);
+    }
 
     echo "Password for {$username}: ";
     system('stty -echo');
@@ -76,11 +85,16 @@ function userAdd(string $file, ?string $username, array $argv): void
     }
 
     // Parse --sites flag
-    $sites = [];
+    $sites = null;
     foreach ($argv as $arg) {
         if (str_starts_with($arg, '--sites=')) {
-            $sites = array_filter(explode(',', substr($arg, 8)));
+            $sites = array_values(array_filter(explode(',', substr($arg, 8))));
         }
+    }
+
+    // Interactive site selection if --sites not provided
+    if ($sites === null) {
+        $sites = interactiveSiteSelect($config['db_path'], []);
     }
 
     $users[$username] = [
@@ -88,9 +102,63 @@ function userAdd(string $file, ?string $username, array $argv): void
         'sites' => $sites,
     ];
 
-    saveUsers($file, $users);
+    saveUsers($config['users_file'], $users);
     $scope = $sites ? implode(', ', $sites) : 'alla sajter';
     echo "User '{$username}' added (access: {$scope}).\n";
+}
+
+// =====================================================================
+// user:edit
+// =====================================================================
+
+function userEdit(array $config, ?string $username): void
+{
+    if (!$username) {
+        echo "Usage: php puls user:edit <username>\n";
+        exit(1);
+    }
+
+    $users = loadUsers($config['users_file']);
+
+    if (!isset($users[$username])) {
+        echo "User '{$username}' not found.\n";
+        exit(1);
+    }
+
+    $user = $users[$username];
+    $currentSites = $user['sites'] ?? [];
+    $scope = $currentSites ? implode(', ', $currentSites) : 'alla sajter';
+    echo "Editing user '{$username}' (current access: {$scope})\n\n";
+
+    // Site selection
+    $sites = interactiveSiteSelect($config['db_path'], $currentSites);
+
+    // Password change
+    echo "Change password? (y/N): ";
+    $answer = strtolower(trim(fgets(STDIN)));
+
+    if ($answer === 'y' || $answer === 'j') {
+        echo "New password: ";
+        system('stty -echo');
+        $password = trim(fgets(STDIN));
+        system('stty echo');
+        echo "\n";
+
+        if (strlen($password) < 8) {
+            echo "Password must be at least 8 characters.\n";
+            exit(1);
+        }
+
+        $user['password'] = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+        echo "Password updated.\n";
+    }
+
+    $user['sites'] = $sites;
+    $users[$username] = $user;
+
+    saveUsers($config['users_file'], $users);
+    $scope = $sites ? implode(', ', $sites) : 'alla sajter';
+    echo "User '{$username}' updated (access: {$scope}).\n";
 }
 
 // =====================================================================
@@ -138,6 +206,63 @@ function userList(string $file): void
 }
 
 // =====================================================================
+// sites:list
+// =====================================================================
+
+function sitesList(string $dbPath): void
+{
+    if (!file_exists($dbPath)) {
+        echo "No database found. Start tracking to create it.\n";
+        exit(1);
+    }
+
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    $stmt = $db->query("
+        SELECT
+            p.site,
+            MIN(p.created_at) as first_seen,
+            MAX(p.created_at) as last_seen,
+            COUNT(*) as pageviews,
+            COUNT(DISTINCT p.visitor_hash) as visitors,
+            COALESCE(bl.broken_links, 0) as broken_links
+        FROM pageviews p
+        LEFT JOIN (
+            SELECT site, COUNT(*) as broken_links
+            FROM broken_links
+            GROUP BY site
+        ) bl ON bl.site = p.site
+        GROUP BY p.site
+        ORDER BY p.site
+    ");
+
+    $sites = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($sites)) {
+        echo "No sites tracked yet.\n";
+        return;
+    }
+
+    $col = 22;
+    echo mbPad('SITE', $col) . sprintf("%-12s %-12s %10s %10s %8s\n",
+        'SINCE', 'LAST SEEN', 'PAGEVIEWS', 'VISITORS', 'BROKEN');
+    echo str_repeat('─', 78) . "\n";
+
+    foreach ($sites as $s) {
+        echo mbPad($s['site'], $col) . sprintf("%-12s %-12s %10s %10s %8s\n",
+            substr($s['first_seen'], 0, 10),
+            substr($s['last_seen'], 0, 10),
+            number_format($s['pageviews']),
+            number_format($s['visitors']),
+            $s['broken_links'] ?: '-'
+        );
+    }
+
+    echo "\n" . count($sites) . " site(s) tracked.\n";
+}
+
+// =====================================================================
 // Helpers
 // =====================================================================
 
@@ -149,8 +274,10 @@ function printHelp(): void
     Usage:
       php puls key:generate                    Generate a new APP_KEY
       php puls user:add <name> [--sites=a,b]   Add a user
+      php puls user:edit <name>                Edit user (sites, password)
       php puls user:remove <name>              Remove a user
       php puls user:list                       List all users
+      php puls sites:list                      List all tracked sites
 
     Options:
       --sites    Comma-separated list of sites the user can access.
@@ -158,6 +285,12 @@ function printHelp(): void
 
     HELP;
     echo "\n";
+}
+
+function mbPad(string $str, int $width): string
+{
+    $pad = $width - mb_strlen($str);
+    return $str . ($pad > 0 ? str_repeat(' ', $pad) : '');
 }
 
 function loadUsers(string $file): array
@@ -169,4 +302,60 @@ function loadUsers(string $file): array
 function saveUsers(string $file, array $users): void
 {
     file_put_contents($file, json_encode($users, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+}
+
+function getTrackedSites(string $dbPath): array
+{
+    if (!file_exists($dbPath)) return [];
+
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $stmt = $db->query('SELECT DISTINCT site FROM pageviews ORDER BY site');
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+function interactiveSiteSelect(string $dbPath, array $currentSites): array
+{
+    $availableSites = getTrackedSites($dbPath);
+
+    if (empty($availableSites)) {
+        echo "No sites in database yet. Use --sites=name to assign manually.\n";
+        echo "Grant access to all sites? (Y/n): ";
+        $answer = strtolower(trim(fgets(STDIN)));
+        return ($answer === 'n') ? [] : [];
+    }
+
+    echo "Available sites:\n";
+    echo "  0) All sites (admin)\n";
+    foreach ($availableSites as $i => $site) {
+        $marker = in_array($site, $currentSites) ? ' *' : '';
+        echo sprintf("  %d) %s%s\n", $i + 1, $site, $marker);
+    }
+
+    if ($currentSites) {
+        echo "\n  * = current access\n";
+    }
+
+    echo "\nSelect sites (comma-separated numbers, 0 for all): ";
+    $input = trim(fgets(STDIN));
+
+    if ($input === '' || $input === '0') {
+        return [];
+    }
+
+    $selected = [];
+    $numbers = array_map('trim', explode(',', $input));
+    foreach ($numbers as $num) {
+        $idx = (int) $num - 1;
+        if ($idx >= 0 && $idx < count($availableSites)) {
+            $selected[] = $availableSites[$idx];
+        }
+    }
+
+    if (empty($selected)) {
+        echo "No valid selection. Granting access to all sites.\n";
+        return [];
+    }
+
+    return $selected;
 }

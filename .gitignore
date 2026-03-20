@@ -3,3 +3,5 @@ users.json
 .env
 .DS_Store
 /vendor/
+docs/deploy-guide.md
+.claude/
