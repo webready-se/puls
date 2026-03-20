@@ -23,11 +23,23 @@
 - [x] .env-baserad konfiguration
 - [x] Hälsokontroll-endpoint (`/?health`)
 - [x] Auto-detect Forge zero-deploy paths (ingen symlink behövs)
-- [x] Pest-testsvit (65 tester: unit + integration)
+- [x] Pest-testsvit (90 tester, 166 assertions)
 - [x] Favicon (inline SVG)
-- [x] Live på puls.wrlabs.se med data från lillabosgarden.se
-- [x] Fullständig UTM-spårning (alla 5 parametrar: source, medium, campaign, term, content)
-- [x] Pre-push hook — tester körs automatiskt före varje push (aktiveras via `composer install`)
+- [x] Live på puls.wrlabs.se med data från 4 sajter
+- [x] Fullständig UTM-spårning (alla 5 parametrar)
+- [x] Pre-push hook — tester körs automatiskt före varje push
+- [x] Server-side bot-tracking via Nginx mirror + `/?log` endpoint
+- [x] Broken link tracking (404/301/övriga) via Nginx post_action + `/?status_log`
+- [x] Data retention — auto-rensning av gamla pageviews, bot_visits, broken_links
+- [x] Lazy migrations med versionsflagga (inga PRAGMA-anrop per request)
+- [x] PWA — installerbar, pull-to-refresh
+- [x] Content-Security-Policy + security headers
+- [x] Trendpilar på stat-kort (jämförelse mot föregående period)
+- [x] Bounce rate + median sessionslängd
+- [x] Entry/exit pages (window functions)
+- [x] CMD+K command palette med sök + sidfiltrering
+- [x] Dark mode (System/Dark/Light) med hamburger-meny
+- [x] Broken links: per-status limit, expand/collapse, statuskod-badge
 
 ---
 
@@ -43,79 +55,72 @@
 - [x] **Strippa tracking query params** — fbclid, gclid, utm_* m.fl. strippas i normalize_path
 - [x] **Referrer-gruppering** — Facebook, Instagram, Twitter/X, Google etc.
 - [x] **Auto-detect Forge zero-deploy** — resolve_path() hittar sajtroten automatiskt
-- [x] **Pest-testsvit** — 65 tester (unit + integration)
+- [x] **Pest-testsvit** — 90 tester (166 assertions)
 - [x] **UTM-länkgenerator** — Inbyggd i dashboarden
 - [x] **.env-baserad konfiguration** — php puls key:generate
 
-## Epic 2: Stabilitet & datahygien
+## Epic 2: Stabilitet & datahygien ✅
 
-Bör på plats nu när det kör live.
+- [x] **Data retention** — Auto-rensa pageviews/bot_visits/broken_links äldre än N dagar
+- [x] **Lazy migration-check** — Versionsflagga, inga PRAGMA-anrop per request
 
-- [ ] **Data retention** — Auto-rensa pageviews/bot_visits äldre än N dagar (konfigurerbart, default 365). Enklast via cron: `DELETE FROM pageviews WHERE created_at < date('now', '-365 days')`
-- [ ] **Lazy migration-check** — Undvik `PRAGMA table_info` på varje request. En version-tabell eller enkel flagga räcker
+## Epic 3: Säkerhet & härdning (pågår)
 
-## Epic 3: Säkerhet & härdning
-
-- [ ] **Content-Security-Policy** — Strikt CSP på dashboard
+- [x] **Content-Security-Policy** — Strikt CSP på dashboard + security headers
 - [ ] **Rate limiting (Nginx)** — `limit_req_zone` på collect-endpoint
-- [ ] **Session-rotation** — Förnya session-ID periodiskt, inte bara vid login
-- [ ] **Audit log** — Logga login-försök (lyckade + misslyckade) i SQLite
+- [ ] **Session-rotation** — Förnya session-ID periodiskt
+- [ ] **Audit log** — Logga login-försök i SQLite
 
-## Epic 4: Dashboard-förbättringar
+## Epic 4: Dashboard-förbättringar ✅
 
-Vänta tills Puls kört live ett tag och man ser vad som faktiskt saknas.
+- [x] **Trendpilar** — Jämförelse mot föregående period (▲12%)
+- [x] **Dark mode** — System/Dark/Light via CSS variables + hamburger-meny
+- [x] **CMD+K command palette** — Sök + sidfiltrering med drill-down
+- [x] **PWA** — Installerbar, pull-to-refresh
+- [x] **Collapsible tools** — Dölj/visa verktyg-sektionen
 
+## Epic 5: Server-side bot-tracking ✅
+
+- [x] **`/?log` endpoint** — Tar emot site, path och User-Agent, loggar i bot_visits
+- [x] **Nginx mirror** — Zero latency bot-fångare, konfigureras per sajt i Forge
+- [x] **Deduplicering** — Samma bot + path + site inom 10s skippas
+- [x] **Separat visning** — Bot-aktivitetstidslinje i dashboarden
+
+## Epic 6: Smartare data ✅
+
+- [x] **Bounce rate** — Med inverterad trend (lägre = grönt)
+- [x] **Median sessionslängd** — Undviker outlier-distortion från idle tabs
+- [x] **Entry/exit pages** — Window functions (ROW_NUMBER per visitor_hash)
+- [x] **Broken link tracking** — 404/301/övriga via Nginx post_action, per-status limit, expand/collapse, statuskod-badge
+
+## Epic 7: Kundpilot 🎯
+
+Nästa stora steg — validera Puls med riktig kund.
+
+- [x] **Deploya hos kund** — Första kundpiloten live, två sajter kopplade
+- [ ] **Delbara dashboards** — Token-baserade read-only-länkar (dela statistik utan login)
+- [ ] **Data-export** — CSV/JSON-export från dashboarden
+
+> Delbara dashboards ger mest kundvärde snabbast — kunder vill kunna titta utan att behöva login. En enkel `/?share=<token>` som visar read-only dashboard.
+
+## Epic: Automatisering
+
+- [ ] **Veckorapport via email** — CLI-kommando + cron som skickar sammanfattning
 - [ ] **Realtidsuppdatering** — Auto-refresh var 30:e sekund (polling)
-- [ ] **Jämförelse** — Visa trend vs föregående period (▲12%)
-- [ ] **Datumväljare** — Anpassat datumintervall utöver 24h/7d/30d/90d
-- [ ] **Export** — CSV-export av data
-- [ ] **Dark mode** — Automatiskt via prefers-color-scheme
 
-## Epic 5: Server-side bot-tracking
+## Epic: Säkerhet & härdning
 
-Pixeln fångar botar som laddar bilder (GPTBot, Meta AI, Ahrefs etc.), men inte verktyg som bara hämtar HTML utan att ladda resurser (t.ex. `curl`, Claude Code `WebFetch`). En server-side lösning täcker alla bot-besök.
+- [ ] **Rate limiting (Nginx)** — `limit_req_zone` på collect-endpoint
+- [ ] **Session-rotation** — Förnya session-ID periodiskt
+- [ ] **Audit log** — Logga login-försök i SQLite
 
-- [x] **`/?log` endpoint** — Tar emot site, path och User-Agent. Kör detect_bot() och loggar i bot_visits precis som `/?pixel`
-- [ ] **Nginx mirror** — Snyggaste lösningen. Zero latency, ingen kod på sajterna. `map` filtrerar bort non-bot trafik direkt i Nginx. Konfigureras per sajt i Forge:
-  ```nginx
-  map $http_user_agent $is_bot {
-      default 0;
-      ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|Meta-ExternalAgent|Applebot|Ahrefs|Semrush|facebookexternalhit) 1;
-  }
-
-  server {
-      location / {
-          mirror /puls_log;
-      }
-      location = /puls_log {
-          internal;
-          if ($is_bot = "0") { return 204; }
-          resolver 8.8.8.8;
-          proxy_ssl_verify off;
-          proxy_ssl_server_name on;
-          proxy_pass https://puls.wrlabs.se/?log&s=$host&p=$request_uri;
-          proxy_set_header User-Agent $http_user_agent;
-      }
-  }
-  ```
-  OBS: bot-listan dupliceras (Nginx + PHP). Nginx är grov förfiltrering, PHP `detect_bot()` gör riktig klassificering.
-- [x] **Deduplicering** — Samma bot + path + site inom 10s skippas. Förhindrar dubbelräkning mellan `/?pixel` och `/?log`
-- [x] **Separat visning** — Bot-aktivitetstidslinje i dashboarden med relativa tider, separerad från aggregerad statistik
-
-## Epic 6: Smartare data
-
-- [ ] **Bounce rate** — Besökare som bara ser en sida (data finns, ~41% i nuläget)
-- [ ] **Session-längd** — Ungefärlig tid på sajten (baserat på flera pageviews)
-- [ ] **Entry/exit pages** — Vilka sidor folk landar på och lämnar från
-- [ ] **Filtrering** — Filtrera dashboard per browser, device, referrer
-
-## Epic 7: Skalning & underhåll
+## Epic: Skalning & underhåll
 
 Inte relevant förrän det finns riktig volym. Avvakta.
 
-- [ ] **Aggregeringstabeller** — Daglig sammanställning för snabbare queries på stor data
+- [ ] **Aggregeringstabeller** — Daglig sammanställning för snabbare queries
 - [ ] **Backup-script** — Automatisk SQLite-backup (cron)
-- [ ] **Migration CLI** — `php puls migrate` för framtida schema-ändringar
+- [ ] **Datumväljare** — Anpassat datumintervall utöver 24h/7d/30d/90d
 
 ---
 
