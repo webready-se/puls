@@ -1,6 +1,7 @@
 {
     "name": "webready/puls",
     "description": "Cookieless analytics",
+    "license": "MIT",
     "type": "project",
     "authors": [
         {
