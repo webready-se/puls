@@ -1089,10 +1089,13 @@ function run_migrations(PDO $db): void
         foreach ($rows as $row) {
             $update->execute([normalize_path($row['path']), $row['id']]);
         }
-        $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%utm_id=%'")->fetchAll(PDO::FETCH_ASSOC);
-        $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
-        foreach ($rows as $row) {
-            $update->execute([normalize_path($row['path']), $row['id']]);
+        $hasBL = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='broken_links'")->fetch();
+        if ($hasBL) {
+            $rows = $db->query("SELECT id, path FROM broken_links WHERE path LIKE '%utm_id=%'")->fetchAll(PDO::FETCH_ASSOC);
+            $update = $db->prepare("UPDATE broken_links SET path = ? WHERE id = ?");
+            foreach ($rows as $row) {
+                $update->execute([normalize_path($row['path']), $row['id']]);
+            }
         }
     }
 
