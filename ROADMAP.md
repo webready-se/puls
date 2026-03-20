@@ -7,7 +7,7 @@
 - [x] Bot detection (25+ botar: AI, sökmotorer, social, SEO, monitor)
 - [x] Dashboard med grafer, tabeller, donuts
 - [x] Multi-site hub med site-selector
-- [x] UTM-kampanjspårning + UTM-länkgenerator i dashboarden
+- [x] UTM-kampanjspårning + guidad UTM-länkwizard i dashboarden
 - [x] Språk- och enhetsstatistik
 - [x] Session-baserad auth med CSRF-skydd
 - [x] Fleranvändarstöd med per-sajt åtkomstkontroll
@@ -23,7 +23,7 @@
 - [x] .env-baserad konfiguration
 - [x] Hälsokontroll-endpoint (`/?health`)
 - [x] Auto-detect Forge zero-deploy paths (ingen symlink behövs)
-- [x] Pest-testsvit (90 tester, 166 assertions)
+- [x] Pest-testsvit (99 tester, 175 assertions)
 - [x] Favicon (inline SVG)
 - [x] Live på puls.wrlabs.se med data från 4 sajter
 - [x] Fullständig UTM-spårning (alla 5 parametrar)
@@ -40,6 +40,14 @@
 - [x] CMD+K command palette med sök + sidfiltrering
 - [x] Dark mode (System/Dark/Light) med hamburger-meny
 - [x] Broken links: per-status limit, expand/collapse, statuskod-badge
+- [x] Trafikkanaler (Betald/Kampanj/Organisk/Social/Referral/Direkt) med klickbar filtrering
+- [x] Tabbade kort (Chart, Sidor, Trafik, Besökare) — reducerar scroll ~50%
+- [x] Overlay drill-down med "Visa alla" på alla listor (limit 10 + expand)
+- [x] Google Ads-detektering (gad_source/gad_campaignid → utm auto-fill, JS + server-side)
+- [x] Strippning av gad_*, gbraid, wbraid, _gl, ved från paths
+- [x] CLI: sites:list, user:edit, interaktiv sajt-väljare
+- [x] Kundpilot live (bilkompani.se) med webhook-deploy
+- [x] Guidad UTM-länkwizard (3-stegs wizard, redigerbar domän, auto-refresh paus)
 
 ---
 
@@ -55,8 +63,8 @@
 - [x] **Strippa tracking query params** — fbclid, gclid, utm_* m.fl. strippas i normalize_path
 - [x] **Referrer-gruppering** — Facebook, Instagram, Twitter/X, Google etc.
 - [x] **Auto-detect Forge zero-deploy** — resolve_path() hittar sajtroten automatiskt
-- [x] **Pest-testsvit** — 90 tester (166 assertions)
-- [x] **UTM-länkgenerator** — Inbyggd i dashboarden
+- [x] **Pest-testsvit** — 99 tester (175 assertions)
+- [x] **UTM-länkgenerator** — Guidad 3-stegs wizard i dashboarden
 - [x] **.env-baserad konfiguration** — php puls key:generate
 
 ## Epic 2: Stabilitet & datahygien ✅
@@ -93,20 +101,30 @@
 - [x] **Entry/exit pages** — Window functions (ROW_NUMBER per visitor_hash)
 - [x] **Broken link tracking** — 404/301/övriga via Nginx post_action, per-status limit, expand/collapse, statuskod-badge
 
-## Epic 7: Kundpilot 🎯
+## Epic 7: Kundpilot ✅
 
-Nästa stora steg — validera Puls med riktig kund.
+Första kunden live — bilkompani.se.
 
-- [x] **Deploya hos kund** — Första kundpiloten live, två sajter kopplade
+- [x] **Deploya hos kund** — puls.bilkompani.se live med webhook-deploy
+- [x] **Google Ads-detektering** — gad_source/gad_campaignid → utm auto-fill (JS + server-side fallback)
+- [x] **Trafikkanaler** — Betald/Kampanj/Organisk sök/Social/Referral/Direkt med klickbar filtrering
+- [x] **Tabbade kort** — Chart, Sidor, Trafik, Besökare — reducerar scroll ~50%
+- [x] **Overlay drill-down** — "Visa alla" på alla listor (limit 10 + expand)
+- [x] **CLI-förbättringar** — sites:list, user:edit, interaktiv sajt-väljare
+- [x] **Guidad UTM-wizard** — 3-stegs wizard, redigerbar domän, auto-refresh paus
+
+## Epic 8: Kundvärde 🎯
+
 - [ ] **Delbara dashboards** — Token-baserade read-only-länkar (dela statistik utan login)
 - [ ] **Data-export** — CSV/JSON-export från dashboarden
+- [ ] **Flerspråkig dashboard** — sv/en med språkväljare (parkerat tills vi går publikt)
 
 > Delbara dashboards ger mest kundvärde snabbast — kunder vill kunna titta utan att behöva login. En enkel `/?share=<token>` som visar read-only dashboard.
 
 ## Epic: Automatisering
 
 - [ ] **Veckorapport via email** — CLI-kommando + cron som skickar sammanfattning
-- [ ] **Realtidsuppdatering** — Auto-refresh var 30:e sekund (polling)
+- [x] **Auto-refresh** — Dashboard uppdateras var 60:e sekund (pausas vid UTM-wizard)
 
 ## Epic: Säkerhet & härdning
 
