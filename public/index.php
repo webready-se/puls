@@ -354,11 +354,7 @@ function handle_collect(array $config): void
 {
     if (!empty($config['allowed_origins'])) {
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-        $allowed = false;
-        foreach ($config['allowed_origins'] as $ao) {
-            if (strcasecmp($origin, $ao) === 0) { $allowed = true; break; }
-        }
-        if (!$allowed) return;
+        if (!is_origin_allowed($origin, $config['allowed_origins'])) return;
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
@@ -893,19 +889,29 @@ function handle_pixel(array $config): void
     ]);
 }
 
+function is_origin_allowed(string $origin, array $allowedOrigins): bool
+{
+    if (empty($allowedOrigins)) return true;
+
+    $host = parse_url($origin, PHP_URL_HOST);
+    if (!$host) return false;
+
+    foreach ($allowedOrigins as $allowed) {
+        $allowed = strtolower(trim($allowed));
+        $host = strtolower($host);
+        if ($host === $allowed || str_ends_with($host, '.' . $allowed)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function cors_headers(array $allowedOrigins): ?array
 {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     if (!$origin) return null;
-    if (empty($allowedOrigins)) {
-        return ['Access-Control-Allow-Origin' => $origin];
-    }
-    foreach ($allowedOrigins as $allowed) {
-        if (strcasecmp($origin, $allowed) === 0) {
-            return ['Access-Control-Allow-Origin' => $origin];
-        }
-    }
-    return null;
+    if (!is_origin_allowed($origin, $allowedOrigins)) return null;
+    return ['Access-Control-Allow-Origin' => $origin];
 }
 
 function normalize_referrer(string $host): string

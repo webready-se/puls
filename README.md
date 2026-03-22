@@ -79,20 +79,22 @@ All configuration lives in `.env` (created by `php puls key:generate` from `.env
 
 ```env
 APP_KEY=base64:...          # Auto-generated, used for visitor hashing
-ALLOWED_ORIGINS=            # CORS: comma-separated origins
+ALLOWED_ORIGINS=            # Allowed domains (comma-separated, includes subdomains)
 DB_PATH=data/puls.sqlite    # Database path (relative to project root)
 SESSION_LIFETIME=2592000    # 30 days
 MAX_LOGIN_ATTEMPTS=5
 LOCKOUT_MINUTES=15
 ```
 
-### CORS
+### Allowed Origins
 
-If tracking scripts are loaded cross-origin, add the origins to `ALLOWED_ORIGINS` in `.env` (comma-separated):
+To restrict which sites can send tracking data, add their domains to `ALLOWED_ORIGINS` in `.env`. Subdomains are included automatically:
 
 ```env
-ALLOWED_ORIGINS=https://example.com,https://another-site.com
+ALLOWED_ORIGINS=example.com,another-site.com
 ```
+
+This allows tracking from `example.com`, `www.example.com`, `app.example.com`, etc. Leave empty to allow all origins.
 
 ## Deployment
 

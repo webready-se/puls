@@ -292,17 +292,26 @@ test('login page has security headers', function () {
 // =====================================================================
 
 test('collect rejects unknown origin when ALLOWED_ORIGINS is set', function () {
-    $pid = startServer(8090, ['ALLOWED_ORIGINS' => 'https://allowed.com']);
+    $pid = startServer(8090, ['ALLOWED_ORIGINS' => 'allowed.com']);
     try {
+        // Unknown domain — should be rejected
         $r = http('POST', '/?collect', [
             'header' => "Content-Type: application/json\r\nOrigin: https://evil.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
             'content' => json_encode(['u' => '/should-not-store', 'site' => 'origin-test']),
         ], 8090);
         expect($r['status'])->toBe(204);
 
+        // Exact domain — should be allowed
         $r = http('POST', '/?collect', [
             'header' => "Content-Type: application/json\r\nOrigin: https://allowed.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
             'content' => json_encode(['u' => '/should-store', 'site' => 'origin-test']),
+        ], 8090);
+        expect($r['status'])->toBe(204);
+
+        // Subdomain — should be allowed
+        $r = http('POST', '/?collect', [
+            'header' => "Content-Type: application/json\r\nOrigin: https://www.allowed.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'content' => json_encode(['u' => '/subdomain-ok', 'site' => 'origin-test']),
         ], 8090);
         expect($r['status'])->toBe(204);
     } finally {
