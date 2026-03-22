@@ -352,6 +352,15 @@ function get_tracking_script(): string
 
 function handle_collect(array $config): void
 {
+    if (!empty($config['allowed_origins'])) {
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+        $allowed = false;
+        foreach ($config['allowed_origins'] as $ao) {
+            if (strcasecmp($origin, $ao) === 0) { $allowed = true; break; }
+        }
+        if (!$allowed) return;
+    }
+
     $input = json_decode(file_get_contents('php://input'), true);
     if (!$input || empty($input['u'])) return;
 

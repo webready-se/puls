@@ -287,6 +287,37 @@ test('login page has security headers', function () {
         ->and($headers)->toContain('Permissions-Policy:');
 });
 
+// =====================================================================
+// Origin validation
+// =====================================================================
+
+test('collect rejects unknown origin when ALLOWED_ORIGINS is set', function () {
+    $pid = startServer(8090, ['ALLOWED_ORIGINS' => 'https://allowed.com']);
+    try {
+        $r = http('POST', '/?collect', [
+            'header' => "Content-Type: application/json\r\nOrigin: https://evil.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'content' => json_encode(['u' => '/should-not-store', 'site' => 'origin-test']),
+        ], 8090);
+        expect($r['status'])->toBe(204);
+
+        $r = http('POST', '/?collect', [
+            'header' => "Content-Type: application/json\r\nOrigin: https://allowed.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'content' => json_encode(['u' => '/should-store', 'site' => 'origin-test']),
+        ], 8090);
+        expect($r['status'])->toBe(204);
+    } finally {
+        stopServer($pid);
+    }
+});
+
+test('collect accepts any origin when ALLOWED_ORIGINS is empty', function () {
+    $r = http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nOrigin: https://random-site.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode(['u' => '/any-origin', 'site' => 'test']),
+    ]);
+    expect($r['status'])->toBe(204);
+});
+
 /**
  * Helper to make collection-like operations work without Laravel.
  */

@@ -4,17 +4,18 @@
  * Helper to run HTTP requests against the built-in PHP server for integration tests.
  */
 
-function startServer(): mixed
+function startServer(int $port = 8089, array $env = []): mixed
 {
-    $port = 8089;
     $docRoot = escapeshellarg(__DIR__ . '/../../public');
     $cmd = "exec php -S localhost:{$port} -t {$docRoot}";
+
+    $envVars = array_merge($_ENV, $env);
 
     $process = proc_open($cmd, [
         0 => ['file', '/dev/null', 'r'],
         1 => ['file', '/dev/null', 'w'],
         2 => ['file', '/dev/null', 'w'],
-    ], $pipes);
+    ], $pipes, null, $envVars);
 
     // Wait for server to be ready
     for ($i = 0; $i < 50; $i++) {
@@ -37,9 +38,9 @@ function stopServer(mixed $process): void
     }
 }
 
-function http(string $method, string $path, array $options = []): array
+function http(string $method, string $path, array $options = [], int $port = 8089): array
 {
-    $url = 'http://localhost:8089' . $path;
+    $url = "http://localhost:{$port}" . $path;
 
     $ctx = stream_context_create(['http' => array_merge([
         'method' => $method,
