@@ -1450,12 +1450,12 @@
         '\n' +
         '# Inside the server block\n' +
         'location / {\n' +
-        '    mirror /puls_log;\n' +
+        '    mirror /_puls_log;\n' +
         '    # ...existing config (try_files etc.)\n' +
         '}\n' +
         '\n' +
         '# Bot tracking (200 responses)\n' +
-        'location = /puls_log {\n' +
+        'location = /_puls_log {\n' +
         '    internal;\n' +
         '    if ($is_bot = "0") { return 204; }\n' +
         '    resolver 8.8.8.8;\n' +
@@ -1471,13 +1471,13 @@
         'error_page 404 /404.html;\n' +
         'location = /404.html {\n' +
         '    internal;\n' +
-        '    post_action @puls_status_log;  # static site\n' +
+        '    post_action @_puls_status_log;  # static site\n' +
         '}\n' +
         '# location ~ \\.php$ {\n' +
-        '#     post_action @puls_status_log;  # PHP site\n' +
+        '#     post_action @_puls_status_log;  # PHP site\n' +
         '# }\n' +
         '\n' +
-        'location @puls_status_log {\n' +
+        'location @_puls_status_log {\n' +
         '    internal;\n' +
         '    if ($status = 200) { return 204; }\n' +
         '    if ($status = 204) { return 204; }\n' +
