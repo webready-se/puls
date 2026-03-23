@@ -66,8 +66,8 @@
 
 - [x] Content-Security-Policy — strict CSP on dashboard + security headers
 - [x] Rate limiting (Nginx) — `limit_req_zone` on collect endpoint (documented in integrations.md)
-- [ ] Session rotation — renew session ID periodically
-- [ ] Audit log — log login attempts in SQLite
+- [x] Session rotation — hourly session ID regeneration for authenticated users
+- [x] Audit log — login attempts (success/failed) logged in SQLite with username, IP, timestamp
 
 ## Epic 4: Dashboard Improvements
 

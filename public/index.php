@@ -139,6 +139,15 @@ function start_session(array $config): void
         'samesite' => 'Strict',
     ]);
     session_start();
+
+    // Rotate session ID every hour to prevent session fixation
+    if (!empty($_SESSION['authenticated'])) {
+        $lastRotated = $_SESSION['last_rotated'] ?? 0;
+        if (time() - $lastRotated > 3600) {
+            session_regenerate_id(true);
+            $_SESSION['last_rotated'] = time();
+        }
+    }
 }
 
 function handle_login(array $config): void
@@ -167,6 +176,8 @@ function handle_login(array $config): void
             $_SESSION['authenticated'] = true;
             $_SESSION['username'] = $username;
             $_SESSION['login_attempts'] = 0;
+            $_SESSION['last_rotated'] = time();
+            audit_log($config, $username, 'login_success');
 
             // Redirect to dashboard
             respond('', 302, null, ['Location' => '/']);
@@ -175,7 +186,7 @@ function handle_login(array $config): void
         // Failed login
         $_SESSION['login_attempts'] = ($_SESSION['login_attempts'] ?? 0) + 1;
         $_SESSION['last_attempt'] = time();
-        show_login('Incorrect username or password.');
+        audit_log($config, $username, 'login_failed');
         return;
     }
 
@@ -191,6 +202,15 @@ function handle_logout(): void
     }
     session_destroy();
     respond('', 302, null, ['Location' => '/?login']);
+}
+
+function audit_log(array $config, string $username, string $action): void
+{
+    $db = get_db($config['db_path']);
+    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+    if (str_contains($ip, ',')) $ip = trim(explode(',', $ip)[0]);
+    $stmt = $db->prepare('INSERT INTO audit_log (username, action, ip, created_at) VALUES (?, ?, ?, ?)');
+    $stmt->execute([$username, $action, $ip, date('Y-m-d H:i:s')]);
 }
 
 function is_authenticated(): bool
@@ -994,7 +1014,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 9; // Bump this when adding new migrations
+    $currentVersion = 10; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -1187,6 +1207,18 @@ function run_migrations(PDO $db): void
                 ELSE bot_name END
                 WHERE bot_name IN ('Okänd klient', 'Okänd bot', 'Okänd crawler', 'Okänd spider')");
         }
+    }
+
+    // v10: audit_log table
+    if ($version < 10) {
+        $db->exec('CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            action TEXT NOT NULL,
+            ip TEXT,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_audit_date ON audit_log (created_at)');
     }
 
     file_put_contents($marker, (string) $currentVersion);
