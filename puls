@@ -11,6 +11,7 @@
  *   php puls user:list                           List all users
  *   php puls sites:list                          List all tracked sites
  *   php puls sites:rename <old> <new>              Rename a site
+ *   php puls nginx:config                          Generate Nginx config for a site
  */
 
 $config = require __DIR__ . '/config.php';
@@ -24,6 +25,7 @@ match ($command) {
     'user:list'    => userList($config['users_file']),
     'sites:list'   => sitesList($config['db_path']),
     'sites:rename' => sitesRename($config, $argv[2] ?? null, $argv[3] ?? null),
+    'nginx:config' => nginxConfig(),
     default        => printHelp(),
 };
 
@@ -347,6 +349,127 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
 }
 
 // =====================================================================
+// nginx:config
+// =====================================================================
+
+function nginxConfig(): void
+{
+    echo "Puls Nginx Config Generator\n";
+    echo str_repeat('─', 40) . "\n\n";
+
+    // 1. Puls URL
+    echo "Puls URL (e.g. https://puls.wrlabs.se): ";
+    $pulsUrl = trim(fgets(STDIN));
+    if (empty($pulsUrl)) {
+        echo "Puls URL is required.\n";
+        exit(1);
+    }
+    $pulsUrl = rtrim($pulsUrl, '/');
+    $pulsHost = parse_url($pulsUrl, PHP_URL_HOST);
+
+    // 2. Site name
+    echo "Site name (data-site value, e.g. webready): ";
+    $site = trim(fgets(STDIN));
+    if (empty($site)) {
+        echo "Site name is required.\n";
+        exit(1);
+    }
+
+    // 3. PHP or static?
+    echo "Is this a PHP site? (y/N): ";
+    $isPhp = in_array(strtolower(trim(fgets(STDIN))), ['y', 'j']);
+
+    // 4. Broken link tracking?
+    echo "Enable broken link tracking (404s)? (Y/n): ";
+    $brokenLinks = strtolower(trim(fgets(STDIN))) !== 'n';
+
+    // 5. Custom 404 page?
+    $errorPage = '';
+    if ($brokenLinks && !$isPhp) {
+        echo "Path to 404 page (default: /404.html): ";
+        $errorPage = trim(fgets(STDIN));
+        if (empty($errorPage)) $errorPage = '/404.html';
+    }
+
+    // Generate map block (outside server block)
+    $map = <<<'NGINX'
+# Outside the server block
+map $http_user_agent $is_bot {
+    default 0;
+    ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|Meta-ExternalAgent|Applebot|Ahrefs|Semrush|facebookexternalhit) 1;
+    ~*(axios|python-requests|Go-http-client|curl/|wget/|httpie|node-fetch|undici|ruby|perl|java/|scrapy|puppeteer|playwright|HeadlessChrome|PhantomJS|Pingdom) 1;
+}
+NGINX;
+
+    // Generate server block additions
+    $server = "# Inside the server block\n";
+    $server .= "location / {\n";
+    $server .= "    mirror /_puls_log;\n";
+    if ($isPhp) {
+        $server .= "    try_files \$uri \$uri/ /index.php?\$query_string;\n";
+    } else {
+        $server .= "    try_files \$uri \$uri/ =404;\n";
+    }
+    $server .= "}\n";
+
+    // Bot tracking location
+    $server .= "\n# Bot tracking\n";
+    $server .= "location = /_puls_log {\n";
+    $server .= "    internal;\n";
+    $server .= "    if (\$is_bot = \"0\") { return 204; }\n";
+    $server .= "    resolver 8.8.8.8;\n";
+    $server .= "    proxy_ssl_verify off;\n";
+    $server .= "    proxy_ssl_server_name on;\n";
+    $server .= "    proxy_pass {$pulsUrl}/?log&s={$site}&p=\$request_uri;\n";
+    $server .= "    proxy_set_header User-Agent \$http_user_agent;\n";
+    $server .= "}\n";
+
+    // Broken link tracking
+    if ($brokenLinks) {
+        $server .= "\n# Broken link tracking (404)\n";
+
+        if ($isPhp) {
+            $server .= "# Add post_action to your existing PHP location block:\n";
+            $server .= "# location ~ \\.php\$ {\n";
+            $server .= "#     post_action @_puls_status_log;\n";
+            $server .= "#     ...existing fastcgi config\n";
+            $server .= "# }\n";
+        } else {
+            $server .= "error_page 404 {$errorPage};\n";
+            $server .= "location = {$errorPage} {\n";
+            $server .= "    internal;\n";
+            $server .= "    post_action @_puls_status_log;\n";
+            $server .= "}\n";
+        }
+
+        $server .= "\nlocation @_puls_status_log {\n";
+        $server .= "    internal;\n";
+        $server .= "    if (\$status = 200) { return 204; }\n";
+        $server .= "    if (\$status = 204) { return 204; }\n";
+        $server .= "    if (\$status = 304) { return 204; }\n";
+        $server .= "    resolver 8.8.8.8;\n";
+        $server .= "    proxy_ssl_verify off;\n";
+        $server .= "    proxy_ssl_server_name on;\n";
+        $server .= "    proxy_pass {$pulsUrl}/?status_log&s={$site}&p=\$request_uri&status=\$status;\n";
+        $server .= "    proxy_set_header User-Agent \$http_user_agent;\n";
+        $server .= "    proxy_set_header X-Original-Referer \$http_referer;\n";
+        $server .= "}\n";
+    }
+
+    // Output
+    echo "\n" . str_repeat('═', 60) . "\n";
+    echo "NGINX CONFIG FOR {$site}\n";
+    echo str_repeat('═', 60) . "\n\n";
+    echo $map . "\n\n";
+    echo $server;
+    echo "\n" . str_repeat('═', 60) . "\n";
+    echo "Tracking script (add to HTML):\n";
+    echo str_repeat('─', 60) . "\n";
+    echo "<script src=\"{$pulsUrl}/?js\" data-site=\"{$site}\" defer></script>\n";
+    echo "<noscript><img src=\"{$pulsUrl}/?pixel&s={$site}&p=/\" alt=\"\" width=\"1\" height=\"1\" style=\"position:absolute;pointer-events:none;opacity:0\"></noscript>\n";
+}
+
+// =====================================================================
 // Helpers
 // =====================================================================
 
@@ -363,6 +486,7 @@ function printHelp(): void
       php puls user:list                       List all users
       php puls sites:list                      List all tracked sites
       php puls sites:rename <old> <new>        Rename a site
+      php puls nginx:config                    Generate Nginx config for a site
 
     Options:
       --sites    Comma-separated list of sites the user can access.
