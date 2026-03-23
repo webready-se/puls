@@ -25,8 +25,8 @@ function resolve_path(string $path): string
 }
 
 $appKey = $_ENV['APP_KEY'] ?? '';
-if (empty($appKey) && PHP_SAPI !== 'cli') {
-    http_response_code(500);
+if (empty($appKey) && file_exists($envFile)) {
+    if (PHP_SAPI !== 'cli') http_response_code(500);
     exit('APP_KEY is not set. Run: php puls key:generate');
 }
 
