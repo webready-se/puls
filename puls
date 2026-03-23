@@ -11,6 +11,7 @@
  *   php puls user:list                           List all users
  *   php puls sites:list                          List all tracked sites
  *   php puls sites:rename <old> <new>              Rename a site
+ *   php puls sites:remove <name>                   Delete all data for a site
  *   php puls nginx:config                          Generate Nginx config for a site
  */
 
@@ -25,6 +26,7 @@ match ($command) {
     'user:list'    => userList($config['users_file']),
     'sites:list'   => sitesList($config['db_path']),
     'sites:rename' => sitesRename($config, $argv[2] ?? null, $argv[3] ?? null),
+    'sites:remove' => sitesRemove($config, $argv[2] ?? null),
     'nginx:config' => nginxConfig(),
     default        => printHelp(),
 };
@@ -349,6 +351,83 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
 }
 
 // =====================================================================
+// sites:remove
+// =====================================================================
+
+function sitesRemove(array $config, ?string $siteName): void
+{
+    if (!$siteName) {
+        echo "Usage: php puls sites:remove <site-name>\n";
+        exit(1);
+    }
+
+    $dbPath = $config['db_path'];
+    if (!file_exists($dbPath)) {
+        echo "No database found.\n";
+        exit(1);
+    }
+
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Check that site exists
+    $stmt = $db->prepare('SELECT COUNT(*) FROM pageviews WHERE site = ?');
+    $stmt->execute([$siteName]);
+    $pvCount = (int) $stmt->fetchColumn();
+
+    $stmt = $db->prepare('SELECT COUNT(*) FROM bot_visits WHERE site = ?');
+    $stmt->execute([$siteName]);
+    $botCount = (int) $stmt->fetchColumn();
+
+    $stmt = $db->prepare('SELECT COUNT(*) FROM broken_links WHERE site = ?');
+    $stmt->execute([$siteName]);
+    $blCount = (int) $stmt->fetchColumn();
+
+    $total = $pvCount + $botCount + $blCount;
+
+    if ($total === 0) {
+        echo "Site '{$siteName}' not found in database.\n";
+        exit(1);
+    }
+
+    echo "This will permanently delete ALL data for '{$siteName}':\n";
+    echo "  Pageviews:    {$pvCount}\n";
+    echo "  Bot visits:   {$botCount}\n";
+    echo "  Broken links: {$blCount}\n";
+    echo "\nType the site name to confirm: ";
+    $confirm = trim(fgets(STDIN));
+
+    if ($confirm !== $siteName) {
+        echo "Aborted.\n";
+        exit(1);
+    }
+
+    $db->beginTransaction();
+    $tables = ['pageviews', 'bot_visits', 'broken_links'];
+    foreach ($tables as $table) {
+        $stmt = $db->prepare("DELETE FROM {$table} WHERE site = ?");
+        $stmt->execute([$siteName]);
+        $affected = $stmt->rowCount();
+        if ($affected > 0) {
+            echo "  {$table}: {$affected} rows deleted\n";
+        }
+    }
+    $db->commit();
+
+    // Clean up user site restrictions
+    $users = loadUsers($config['users_file']);
+    foreach ($users as &$user) {
+        if (!empty($user['sites']) && in_array($siteName, $user['sites'])) {
+            $user['sites'] = array_values(array_filter($user['sites'], fn($s) => $s !== $siteName));
+        }
+    }
+    unset($user);
+    saveUsers($config['users_file'], $users);
+
+    echo "\nSite '{$siteName}' removed.\n";
+}
+
+// =====================================================================
 // nginx:config
 // =====================================================================
 
@@ -486,6 +565,7 @@ function printHelp(): void
       php puls user:list                       List all users
       php puls sites:list                      List all tracked sites
       php puls sites:rename <old> <new>        Rename a site
+      php puls sites:remove <name>             Delete all data for a site
       php puls nginx:config                    Generate Nginx config for a site
 
     Options:
