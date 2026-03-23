@@ -24,8 +24,14 @@ function resolve_path(string $path): string
     return $dir . '/' . $path;
 }
 
+$appKey = $_ENV['APP_KEY'] ?? '';
+if (empty($appKey) && PHP_SAPI !== 'cli') {
+    http_response_code(500);
+    exit('APP_KEY is not set. Run: php puls key:generate');
+}
+
 return [
-    'app_key' => $_ENV['APP_KEY'] ?? '',
+    'app_key' => $appKey,
 
     'db_path' => resolve_path($_ENV['DB_PATH'] ?? 'data/puls.sqlite'),
 
