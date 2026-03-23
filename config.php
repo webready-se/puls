@@ -1,6 +1,9 @@
 <?php
 
-// Load .env file
+// Ensure OS environment variables are in $_ENV (needed when variables_order lacks 'E')
+foreach (getenv() as $k => $v) $_ENV[$k] ??= $v;
+
+// Load .env file (does not override existing values)
 $envFile = __DIR__ . '/.env';
 if (file_exists($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
