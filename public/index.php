@@ -87,6 +87,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS' && isset($_GET['collect'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['collect'])) {
+    if (!empty($config['allowed_origins'])) {
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+        if (!is_origin_allowed($origin, $config['allowed_origins'])) {
+            respond('', 403);
+        }
+    }
     handle_collect($config);
     $cors = cors_headers($config['allowed_origins']);
     respond('', 204, null, $cors ?: []);
@@ -171,8 +177,9 @@ function handle_login(array $config): void
         $users = load_users($config['users_file']);
 
         if (isset($users[$username]) && password_verify($password, $users[$username]['password'])) {
-            // Success — regenerate session
+            // Success — regenerate session, invalidate CSRF token
             session_regenerate_id(true);
+            unset($_SESSION['csrf_token']);
             $_SESSION['authenticated'] = true;
             $_SESSION['username'] = $username;
             $_SESSION['login_attempts'] = 0;
@@ -372,12 +379,10 @@ function get_tracking_script(): string
 
 function handle_collect(array $config): void
 {
-    if (!empty($config['allowed_origins'])) {
-        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-        if (!is_origin_allowed($origin, $config['allowed_origins'])) return;
-    }
+    $raw = file_get_contents('php://input');
+    if (strlen($raw) > 10000) return; // 10 KB max
 
-    $input = json_decode(file_get_contents('php://input'), true);
+    $input = json_decode($raw, true);
     if (!$input || empty($input['u'])) return;
 
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
@@ -1271,7 +1276,8 @@ function cleanup_broken_links(PDO $db): void
     $marker = dirname($db->query("PRAGMA database_list")->fetch()['file'] ?? __DIR__) . '/.broken_cleanup';
     if (file_exists($marker) && file_get_contents($marker) === date('Y-m-d')) return;
 
-    $db->exec("DELETE FROM broken_links WHERE last_seen < '" . date('Y-m-d H:i:s', strtotime('-30 days')) . "'");
+    $stmt = $db->prepare('DELETE FROM broken_links WHERE last_seen < ?');
+    $stmt->execute([date('Y-m-d H:i:s', strtotime('-30 days'))]);
     file_put_contents($marker, date('Y-m-d'));
 }
 
@@ -1280,7 +1286,8 @@ function cleanup_bot_visits(PDO $db): void
     $marker = dirname($db->query("PRAGMA database_list")->fetch()['file'] ?? __DIR__) . '/.bot_cleanup';
     if (file_exists($marker) && file_get_contents($marker) === date('Y-m-d')) return;
 
-    $db->exec("DELETE FROM bot_visits WHERE created_at < '" . date('Y-m-d H:i:s', strtotime('-90 days')) . "'");
+    $stmt = $db->prepare('DELETE FROM bot_visits WHERE created_at < ?');
+    $stmt->execute([date('Y-m-d H:i:s', strtotime('-90 days'))]);
     file_put_contents($marker, date('Y-m-d'));
 }
 

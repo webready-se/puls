@@ -299,7 +299,7 @@ test('collect rejects unknown origin when ALLOWED_ORIGINS is set', function () {
             'header' => "Content-Type: application/json\r\nOrigin: https://evil.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
             'content' => json_encode(['u' => '/should-not-store', 'site' => 'origin-test']),
         ], 8090);
-        expect($r['status'])->toBe(204);
+        expect($r['status'])->toBe(403);
 
         // Exact domain — should be allowed
         $r = http('POST', '/?collect', [
