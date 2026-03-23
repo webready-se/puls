@@ -65,7 +65,7 @@
 ## Epic 3: Security & Hardening
 
 - [x] Content-Security-Policy — strict CSP on dashboard + security headers
-- [ ] Rate limiting (Nginx) — `limit_req_zone` on collect endpoint
+- [x] Rate limiting (Nginx) — `limit_req_zone` on collect endpoint (documented in integrations.md)
 - [ ] Session rotation — renew session ID periodically
 - [ ] Audit log — log login attempts in SQLite
 

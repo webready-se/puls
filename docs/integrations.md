@@ -218,6 +218,29 @@ php puls key:generate
 php puls user:add admin
 ```
 
+## Rate Limiting (Nginx)
+
+If you set `ALLOWED_ORIGINS` in `.env`, Puls already rejects tracking data from unknown domains server-side. But as good practice, you can add Nginx rate limiting to protect against brute-force attempts on the login and excessive requests to the collect endpoint:
+
+```nginx
+# Outside server block
+limit_req_zone $binary_remote_addr zone=puls_collect:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=puls_login:10m rate=5r/m;
+
+# Inside server block
+location / {
+    # ...existing config
+}
+
+# Rate limit the collect endpoint
+location = /index.php {
+    limit_req zone=puls_collect burst=20 nodelay;
+    # ...existing fastcgi config
+}
+```
+
+For login protection, Puls already has built-in brute-force lockout (configurable via `MAX_LOGIN_ATTEMPTS` and `LOCKOUT_MINUTES` in `.env`).
+
 ## Content Security Policy (CSP)
 
 If your site uses CSP headers, allow the Puls domain:
