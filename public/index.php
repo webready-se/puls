@@ -275,51 +275,80 @@ function show_login(?string $error = null): void
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Puls">
-    <meta name="theme-color" content="#6366f1">
+    <meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <link rel="manifest" href="/?manifest">
     <link rel="apple-touch-icon" href="/icon-180.png">
     <title>Puls — Log in</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='%236366f1'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
+    <script>
+      (function() {
+        var s = localStorage.getItem('puls-theme') || 'system';
+        if (s === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        else if (s === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      })();
+    </script>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --bg: #f8fafc; --card: #fff; --border: #e2e8f0;
+        --text: #1e293b; --muted: #94a3b8; --label: #475569;
+        --accent: #6366f1; --accent2: #8b5cf6;
+        --error-bg: #fef2f2; --error-text: #dc2626; --error-border: #fecaca;
+      }
+      [data-theme="dark"] {
+        --bg: #0f172a; --card: #1e293b; --border: #334155;
+        --text: #f1f5f9; --muted: #64748b; --label: #94a3b8;
+        --accent: #818cf8; --accent2: #a78bfa;
+        --error-bg: rgba(248,113,113,0.1); --error-text: #f87171; --error-border: rgba(248,113,113,0.2);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #0f172a; --card: #1e293b; --border: #334155;
+          --text: #f1f5f9; --muted: #64748b; --label: #94a3b8;
+          --accent: #818cf8; --accent2: #a78bfa;
+          --error-bg: rgba(248,113,113,0.1); --error-text: #f87171; --error-border: rgba(248,113,113,0.2);
+        }
+      }
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-        background: #f8fafc; color: #1e293b; min-height: 100vh;
+        background: var(--bg); color: var(--text); min-height: 100vh;
         display: flex; align-items: center; justify-content: center;
       }
       .login-card {
-        background: #fff; border-radius: 16px; padding: 40px;
-        border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        background: var(--card); border-radius: 16px; padding: 40px;
+        border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         width: 100%; max-width: 380px;
       }
       .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; justify-content: center; }
       .logo-icon {
         width: 40px; height: 40px; border-radius: 12px;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
         display: flex; align-items: center; justify-content: center;
         box-shadow: 0 2px 8px rgba(99,102,241,0.3);
       }
       .logo-icon svg { width: 20px; height: 20px; }
       .logo-text { font-weight: 700; font-size: 22px; }
-      .tagline { text-align: center; font-size: 13px; color: #94a3b8; margin-top: -20px; margin-bottom: 28px; }
-      label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; }
+      .tagline { text-align: center; font-size: 13px; color: var(--muted); margin-top: -20px; margin-bottom: 28px; }
+      label { display: block; font-size: 13px; font-weight: 600; color: var(--label); margin-bottom: 6px; }
       input[type="text"], input[type="password"] {
         width: 100%; padding: 10px 14px; border-radius: 10px;
-        border: 1px solid #e2e8f0; font-size: 14px; outline: none;
+        border: 1px solid var(--border); background: var(--bg); color: var(--text);
+        font-size: 14px; outline: none;
         margin-bottom: 16px; transition: border-color 0.15s;
       }
-      input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+      input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
       button {
         width: 100%; padding: 12px; border-radius: 10px; border: none;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
         color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
         transition: opacity 0.15s;
       }
       button:hover { opacity: 0.9; }
       .error {
-        background: #fef2f2; color: #dc2626; padding: 10px 14px;
+        background: var(--error-bg); color: var(--error-text); padding: 10px 14px;
         border-radius: 10px; font-size: 13px; margin-bottom: 16px;
-        border: 1px solid #fecaca;
+        border: 1px solid var(--error-border);
       }
     </style>
     </head>
