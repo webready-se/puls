@@ -430,6 +430,87 @@ test('share endpoint does not start a session', function () {
     expect($setCookie)->toBeNull();
 });
 
+// =====================================================================
+// Event endpoint tests
+// =====================================================================
+
+test('event endpoint accepts POST', function () {
+    $r = http('POST', '/?event', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode([
+            'event_name' => 'signup',
+            'site' => 'test',
+            'page_path' => '/pricing',
+            'event_data' => ['plan' => 'pro'],
+        ]),
+    ]);
+    expect($r['status'])->toBe(204);
+});
+
+test('event endpoint rejects empty event_name', function () {
+    $r = http('POST', '/?event', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode([
+            'site' => 'test',
+            'page_path' => '/',
+        ]),
+    ]);
+    expect($r['status'])->toBe(204);
+});
+
+test('event endpoint filters bots', function () {
+    $r = http('POST', '/?event', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 (compatible; GPTBot/1.0)",
+        'content' => json_encode([
+            'event_name' => 'bot_event',
+            'site' => 'test',
+        ]),
+    ]);
+    expect($r['status'])->toBe(204);
+});
+
+test('event endpoint deduplicates within 10 seconds', function () {
+    $payload = json_encode([
+        'event_name' => 'dedup_test_' . uniqid(),
+        'site' => 'test',
+        'page_path' => '/dedup',
+    ]);
+    $opts = [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => $payload,
+    ];
+    $r1 = http('POST', '/?event', $opts);
+    expect($r1['status'])->toBe(204);
+    $r2 = http('POST', '/?event', $opts);
+    expect($r2['status'])->toBe(204);
+});
+
+test('api includes events data', function () {
+    // Send an event
+    http('POST', '/?event', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode([
+            'event_name' => 'api_test_event',
+            'site' => 'test',
+            'page_path' => '/',
+        ]),
+    ]);
+
+    // Check via share API (no auth needed)
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&days=1&share=' . $token);
+    expect($r['status'])->toBe(200);
+    $data = json_decode($r['body'], true);
+    expect($data)->toHaveKeys(['events', 'eventsTotal', 'outbound', 'outboundTotal']);
+});
+
+test('js snippet includes puls.track API', function () {
+    $r = http('GET', '/?js');
+    expect($r['body'])->toContain('puls')
+        ->and($r['body'])->toContain('event_name')
+        ->and($r['body'])->toContain('outbound_click');
+});
+
 /**
  * Helper to make collection-like operations work without Laravel.
  */
