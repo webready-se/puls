@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] — 2026-03-27
+
+### Added
+
+- Custom events tracking — `puls.track('event', {data})` JS API
+- Outbound link tracking — `data-outbound` attribute for external link clicks
+- Events and Outbound tabs in dashboard Traffic card
+- Shareable dashboards — token-based read-only links (`/?share=<token>`)
+- CMD+K search in shared dashboards
+- Interactive CLI — all commands work without arguments (pickers + prompts)
+- `share:create` / `share:list` / `share:revoke` CLI commands
+- Share API with site-scoped access
+- CSRF token auto-refresh on idle login page
+- Release validation smoke test in CI
+- Testing strategy documented in CLAUDE.md
+
+### Fixed
+
+- Events API path filter uses correct column (`page_path` instead of `path`)
+- Session persistence — dedicated session directory prevents premature GC
+- Share page rendering with full URL display
+
+### Changed
+
+- Schema version 10 → 12 (share_tokens, events tables)
+- Test suite expanded to 138 tests (266 assertions)
+- CLI help text shows optional arguments with `[brackets]`
+
 ## [1.0.0] — 2026-03-26
 
 First public release.
@@ -81,4 +109,5 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.1.0]: https://github.com/webready-se/puls/releases/tag/v1.1.0
 [1.0.0]: https://github.com/webready-se/puls/releases/tag/v1.0.0
