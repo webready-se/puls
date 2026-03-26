@@ -509,6 +509,36 @@ test('api includes events data', function () {
     expect($data)->toHaveKeys(['events', 'eventsTotal', 'outbound', 'outboundTotal']);
 });
 
+test('share API with path filter does not crash on events table', function () {
+    // Regression: events table has page_path, not path — using $pathFilter caused SQL error
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&days=30&path=' . urlencode('/test-page') . '&share=' . $token);
+    expect($r['status'])->toBe(200);
+    $data = json_decode($r['body'], true);
+    expect($data)->toHaveKey('totals')
+        ->and($data['path'])->toBe('/test-page');
+});
+
+test('share API search returns results', function () {
+    // Ensure we have a pageview to search for
+    http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode([
+            'u' => '/searchable-test-page',
+            'r' => '',
+            'w' => 1920,
+            'site' => 'test',
+        ]),
+    ]);
+
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&search=searchable-test&days=7&share=' . $token);
+    expect($r['status'])->toBe(200);
+    $data = json_decode($r['body'], true);
+    expect($data)->toHaveKey('results')
+        ->and($data['query'])->toBe('searchable-test');
+});
+
 test('js snippet includes puls.track API', function () {
     $r = http('GET', '/?js');
     expect($r['body'])->toContain('puls')
