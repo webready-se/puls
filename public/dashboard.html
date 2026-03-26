@@ -705,7 +705,6 @@
   if (isShared) {
     siteSelect.style.display = 'none';
     document.getElementById('menu-btn').style.display = 'none';
-    document.getElementById('search-btn').style.display = 'none';
     document.title = shareSite + ' — Puls';
   }
 
@@ -1874,6 +1873,7 @@
     cmdTimer = setTimeout(function() {
       var url = API + '?api&search=' + encodeURIComponent(q) + '&days=' + currentDays;
       if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+      if (shareToken) url += '&share=' + encodeURIComponent(shareToken);
       fetch(url)
         .then(function(r) {
           if (r.status === 401) { location.href = '/?login'; return; }
