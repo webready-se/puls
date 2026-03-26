@@ -902,7 +902,8 @@ function get_api_data(array $config, array $user): string
 
     // Custom events
     $eventsLimit = $expand === 'events' ? 1000 : 10;
-    $stmt = $db->prepare("SELECT event_name, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE created_at >= ? {$siteFilter} {$pathFilter} GROUP BY event_name ORDER BY count DESC LIMIT {$eventsLimit}");
+    $eventsPathFilter = $path ? 'AND page_path = ?' : '';
+    $stmt = $db->prepare("SELECT event_name, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE created_at >= ? {$siteFilter} {$eventsPathFilter} GROUP BY event_name ORDER BY count DESC LIMIT {$eventsLimit}");
     $stmt->execute(array_merge([$since], $siteParams, $pathParams));
     $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
