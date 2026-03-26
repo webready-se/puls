@@ -32,19 +32,26 @@ Puls is a cookieless, lightweight analytics tool built with a single PHP file an
 
 ## Quick Start
 
-```bash
-# 1. Clone
-git clone git@github.com:webready-se/puls.git
-cd puls
+### Download
 
-# 2. Setup
+Grab the [latest release](https://github.com/webready-se/puls/releases/latest) and extract:
+
+```bash
+unzip puls-*.zip
+cd puls-*
 php puls key:generate
 php puls user:add admin
+php -S localhost:8080 -t public
+```
 
-# 3. Install dev dependencies (also activates pre-push test hook)
-composer install
+### Clone (for development)
 
-# 4. Run locally
+```bash
+git clone git@github.com:webready-se/puls.git
+cd puls
+php puls key:generate
+php puls user:add admin
+composer install        # dev dependencies + pre-push test hook
 php -S localhost:8080 -t public
 ```
 

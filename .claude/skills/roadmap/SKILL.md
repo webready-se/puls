@@ -5,7 +5,6 @@ description: >
   to read progress and suggest next steps. Also use when completing work
   to check off items, or when the user mentions 'roadmap', 'what's next',
   'vad ar nasta', 'vad ska vi gora'.
-allowed-tools: Read, Edit, Glob
 ---
 
 # Roadmap Management

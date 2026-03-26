@@ -7,3 +7,4 @@ docs/deploy-guide.md
 docs/roadmap.md
 .claude/settings.local.json
 .claude/handoffs/
+/build/
