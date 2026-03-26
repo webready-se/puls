@@ -444,15 +444,34 @@ function sitesRemove(array $config, ?string $siteName): void
 
 function shareCreate(array $config, ?string $site, array $argv): void
 {
-    if (!$site) {
-        echo "Usage: php puls share:create <site> [--label=...] [--expires=YYYY-MM-DD]\n";
-        exit(1);
-    }
-
     $dbPath = $config['db_path'];
     if (!file_exists($dbPath)) {
         echo "No database found. Start tracking to create it.\n";
         exit(1);
+    }
+
+    // Interactive site selection if no site argument
+    if (!$site || str_starts_with($site, '--')) {
+        $availableSites = getTrackedSites($dbPath);
+        if (empty($availableSites)) {
+            echo "No sites in database yet.\n";
+            exit(1);
+        }
+        if (count($availableSites) === 1) {
+            $site = $availableSites[0];
+        } else {
+            echo "Select site for share link:\n";
+            foreach ($availableSites as $i => $s) {
+                echo sprintf("  %d) %s\n", $i + 1, $s);
+            }
+            echo "\nSelect (number): ";
+            $idx = (int) trim(fgets(STDIN)) - 1;
+            if ($idx < 0 || $idx >= count($availableSites)) {
+                echo "Invalid selection.\n";
+                exit(1);
+            }
+            $site = $availableSites[$idx];
+        }
     }
 
     // Verify site exists
@@ -465,7 +484,7 @@ function shareCreate(array $config, ?string $site, array $argv): void
         exit(1);
     }
 
-    // Parse flags
+    // Parse flags (allow both --flag and interactive)
     $label = null;
     $expiresAt = null;
     foreach ($argv as $arg) {
@@ -479,6 +498,24 @@ function shareCreate(array $config, ?string $site, array $argv): void
                 exit(1);
             }
             $expiresAt = $date . ' 23:59:59';
+        }
+    }
+
+    // Interactive prompts for missing options
+    if ($label === null) {
+        echo "Label (optional, enter to skip): ";
+        $input = trim(fgets(STDIN));
+        if ($input !== '') $label = $input;
+    }
+    if ($expiresAt === null) {
+        echo "Expires (YYYY-MM-DD, enter to skip): ";
+        $input = trim(fgets(STDIN));
+        if ($input !== '') {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $input)) {
+                echo "Invalid date format. Skipping expiry.\n";
+            } else {
+                $expiresAt = $input . ' 23:59:59';
+            }
         }
     }
 
