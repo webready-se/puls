@@ -63,6 +63,16 @@ function generateKey(): void
         $contents = "APP_KEY={$key}\n" . $contents;
     }
 
+    // Ask for APP_URL if not already set
+    if (!preg_match('/^APP_URL=.+$/m', $contents)) {
+        echo "APP_URL (e.g. https://puls.example.com, enter to skip): ";
+        $url = trim(fgets(STDIN));
+        if ($url !== '') {
+            $url = rtrim($url, '/');
+            $contents = preg_replace('/^APP_URL=.*$/m', "APP_URL={$url}", $contents);
+        }
+    }
+
     file_put_contents($envFile, $contents);
     echo "APP_KEY set: {$key}\n";
 }
