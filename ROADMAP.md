@@ -99,6 +99,7 @@
 - [x] Tabbed cards — Chart, Pages, Traffic, Visitors — reduces scroll ~50%
 - [x] Overlay drill-down — "Show all" on all lists (limit 10 + expand)
 - [x] CLI improvements — sites:list, user:edit, interactive site selector
+- [x] Interactive CLI — all commands work without arguments (pickers, prompts, confirmations)
 - [x] Guided UTM wizard — 3-step wizard, editable domain, auto-refresh pause
 
 ## Epic 8: Customer Value
