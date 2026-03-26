@@ -79,7 +79,7 @@ if (isset($_GET['status_log'])) {
     respond('', 204, null, ['Cache-Control' => 'no-store']);
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS' && isset($_GET['collect'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS' && (isset($_GET['collect']) || isset($_GET['event']))) {
     $cors = cors_headers($config['allowed_origins']);
     $cors
         ? respond('', 204, null, $cors + ['Access-Control-Allow-Methods' => 'POST', 'Access-Control-Allow-Headers' => 'Content-Type', 'Access-Control-Max-Age' => '86400'])
@@ -94,6 +94,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['collect'])) {
         }
     }
     handle_collect($config);
+    $cors = cors_headers($config['allowed_origins']);
+    respond('', 204, null, $cors ?: []);
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['event'])) {
+    if (!empty($config['allowed_origins'])) {
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+        if (!is_origin_allowed($origin, $config['allowed_origins'])) {
+            respond('', 403);
+        }
+    }
+    handle_event($config);
     $cors = cors_headers($config['allowed_origins']);
     respond('', 204, null, $cors ?: []);
 }
@@ -440,7 +452,9 @@ function get_tracking_script(): string
     (function(){
       if(navigator.webdriver||document.visibilityState==='prerender')return;
       var sc=document.currentScript||{src:'/stats.php',dataset:{}};
-      var ep=sc.src.split('?')[0]+'?collect';
+      var base=sc.src.split('?')[0];
+      var ep=base+'?collect';
+      var evEp=base+'?event';
       var site=sc.dataset.site||location.hostname;
       function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});if(!o.source&&p.get('gad_source')){o.source='google';o.medium='cpc';var c=p.get('gad_campaignid');if(c)o.campaign=c}return Object.keys(o).length?o:null}
       function s(){
@@ -449,6 +463,8 @@ function get_tracking_script(): string
       }
       s();
       if(history.pushState){var o=history.pushState;history.pushState=function(){o.apply(this,arguments);s()};addEventListener('popstate',s)}
+      window.puls={track:function(name,data){if(!name)return;var p={event_name:name,site:site,page_path:location.pathname};if(data&&typeof data==='object')p.event_data=data;navigator.sendBeacon?navigator.sendBeacon(evEp,JSON.stringify(p)):0}};
+      if(sc.dataset.outbound!==undefined){document.addEventListener('click',function(e){var a=e.target.closest('a[href]');if(!a)return;try{var u=new URL(a.href,location.origin);if(u.hostname===location.hostname||u.protocol!=='http:'&&u.protocol!=='https:')return;puls.track('outbound_click',{url:u.href,text:(a.textContent||'').trim().substring(0,200)})}catch(ex){}},true)}
     })();
     JS;
 }
@@ -538,6 +554,63 @@ function handle_collect(array $config): void
         $lang,
         date('Y-m-d H:i:s'),
     ]);
+}
+
+// =====================================================================
+// EVENT ENDPOINT
+// =====================================================================
+
+function handle_event(array $config): void
+{
+    $raw = file_get_contents('php://input');
+    if (strlen($raw) > 10000) return;
+
+    $input = json_decode($raw, true);
+    if (!$input || empty($input['event_name'])) return;
+
+    $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    if (detect_bot($ua)) return;
+
+    $db = get_db($config['db_path']);
+
+    $site = normalize_site(!empty($input['site']) ? $input['site'] : ($_SERVER['HTTP_HOST'] ?? 'unknown'));
+    $eventName = substr(trim($input['event_name']), 0, 100);
+    $pagePath = !empty($input['page_path']) ? normalize_path(urldecode(substr($input['page_path'], 0, 500))) : null;
+
+    $eventData = null;
+    if (!empty($input['event_data']) && is_array($input['event_data'])) {
+        $eventData = substr(json_encode($input['event_data']), 0, 1000);
+    }
+
+    $salt = date('Y-m-d') . 'puls-' . $config['app_key'];
+    $hash = hash('sha256', ($_SERVER['REMOTE_ADDR'] ?? '') . ($_SERVER['HTTP_USER_AGENT'] ?? '') . $salt);
+
+    // Dedup: skip same event from same visitor within 10 seconds
+    $stmt = $db->prepare('SELECT id FROM events WHERE site = ? AND event_name = ? AND visitor_hash = ? AND created_at > ? LIMIT 1');
+    $stmt->execute([$site, $eventName, $hash, date('Y-m-d H:i:s', time() - 10)]);
+    if ($stmt->fetch()) return;
+
+    $stmt = $db->prepare('INSERT INTO events (site, event_name, event_data, page_path, visitor_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->execute([
+        $site,
+        $eventName,
+        $eventData,
+        $pagePath,
+        $hash,
+        date('Y-m-d H:i:s'),
+    ]);
+
+    cleanup_events($db);
+}
+
+function cleanup_events(PDO $db): void
+{
+    $marker = dirname($db->query("PRAGMA database_list")->fetch()['file'] ?? __DIR__) . '/.events_cleanup';
+    if (file_exists($marker) && file_get_contents($marker) === date('Y-m-d')) return;
+
+    $stmt = $db->prepare('DELETE FROM events WHERE created_at < ?');
+    $stmt->execute([date('Y-m-d H:i:s', strtotime('-90 days'))]);
+    file_put_contents($marker, date('Y-m-d'));
 }
 
 // =====================================================================
@@ -827,6 +900,26 @@ function get_api_data(array $config, array $user): string
         unset($bl);
     }
 
+    // Custom events
+    $eventsLimit = $expand === 'events' ? 1000 : 10;
+    $stmt = $db->prepare("SELECT event_name, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE created_at >= ? {$siteFilter} {$pathFilter} GROUP BY event_name ORDER BY count DESC LIMIT {$eventsLimit}");
+    $stmt->execute(array_merge([$since], $siteParams, $pathParams));
+    $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt = $db->prepare("SELECT COUNT(DISTINCT event_name) FROM events WHERE created_at >= ? {$siteFilter}");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $eventsTotal = (int) $stmt->fetchColumn();
+
+    // Outbound link clicks
+    $outboundLimit = $expand === 'outbound' ? 1000 : 10;
+    $stmt = $db->prepare("SELECT json_extract(event_data, '\$.url') as url, COUNT(*) as clicks, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = 'outbound_click' AND created_at >= ? {$siteFilter} AND event_data IS NOT NULL GROUP BY url ORDER BY clicks DESC LIMIT {$outboundLimit}");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $outbound = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt = $db->prepare("SELECT COUNT(DISTINCT json_extract(event_data, '\$.url')) FROM events WHERE event_name = 'outbound_click' AND created_at >= ? {$siteFilter} AND event_data IS NOT NULL");
+    $stmt->execute(array_merge([$since], $siteParams));
+    $outboundTotal = (int) $stmt->fetchColumn();
+
     return json_encode([
         'site'      => $site ?: 'All sites',
         'path'      => $path ?: null,
@@ -859,6 +952,10 @@ function get_api_data(array $config, array $user): string
         'botPagesTotal' => $botPagesTotal,
         'botActivity' => $botActivity,
         'brokenLinks' => $brokenLinks,
+        'events'    => $events,
+        'eventsTotal' => $eventsTotal,
+        'outbound'  => $outbound,
+        'outboundTotal' => $outboundTotal,
     ], JSON_PRETTY_PRINT);
 }
 
@@ -946,6 +1043,17 @@ function get_db(string $path): PDO
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE UNIQUE INDEX idx_share_token ON share_tokens (token)');
+        $db->exec('CREATE TABLE events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            event_name TEXT NOT NULL,
+            event_data TEXT,
+            page_path TEXT,
+            visitor_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE INDEX idx_events_site_date ON events (site, created_at)');
+        $db->exec('CREATE INDEX idx_events_name ON events (event_name, site, created_at)');
     } else {
         run_migrations($db);
     }
@@ -1108,7 +1216,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 11; // Bump this when adding new migrations
+    $currentVersion = 12; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -1326,6 +1434,21 @@ function run_migrations(PDO $db): void
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_share_token ON share_tokens (token)');
+    }
+
+    // v12: events table
+    if ($version < 12) {
+        $db->exec('CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            event_name TEXT NOT NULL,
+            event_data TEXT,
+            page_path TEXT,
+            visitor_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_events_site_date ON events (site, created_at)');
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_events_name ON events (event_name, site, created_at)');
     }
 
     file_put_contents($marker, (string) $currentVersion);

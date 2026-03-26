@@ -44,6 +44,16 @@ function createTestDb(string $path): PDO
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )');
 
+    $db->exec('CREATE TABLE events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site TEXT NOT NULL,
+        event_name TEXT NOT NULL,
+        event_data TEXT,
+        page_path TEXT,
+        visitor_hash TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )');
+
     return $db;
 }
 

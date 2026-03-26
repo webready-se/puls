@@ -320,7 +320,7 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
     // Rename in all tables
     $db->beginTransaction();
 
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'share_tokens'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens'];
     foreach ($tables as $table) {
         $stmt = $db->prepare("UPDATE {$table} SET site = ? WHERE site = ?");
         $stmt->execute([$newName, $oldName]);
@@ -389,7 +389,11 @@ function sitesRemove(array $config, ?string $siteName): void
     $stmt->execute([$siteName]);
     $blCount = (int) $stmt->fetchColumn();
 
-    $total = $pvCount + $botCount + $blCount;
+    $stmt = $db->prepare('SELECT COUNT(*) FROM events WHERE site = ?');
+    $stmt->execute([$siteName]);
+    $evCount = (int) $stmt->fetchColumn();
+
+    $total = $pvCount + $botCount + $blCount + $evCount;
 
     if ($total === 0) {
         echo "Site '{$siteName}' not found in database.\n";
@@ -400,6 +404,7 @@ function sitesRemove(array $config, ?string $siteName): void
     echo "  Pageviews:    {$pvCount}\n";
     echo "  Bot visits:   {$botCount}\n";
     echo "  Broken links: {$blCount}\n";
+    echo "  Events:       {$evCount}\n";
     echo "\nType the site name to confirm: ";
     $confirm = trim(fgets(STDIN));
 
@@ -409,7 +414,7 @@ function sitesRemove(array $config, ?string $siteName): void
     }
 
     $db->beginTransaction();
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'share_tokens'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens'];
     foreach ($tables as $table) {
         $stmt = $db->prepare("DELETE FROM {$table} WHERE site = ?");
         $stmt->execute([$siteName]);
