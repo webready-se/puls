@@ -111,13 +111,13 @@
 ## Epic 9: Deeper Insights
 
 - [x] **Realtime view** — "N online now" badge + stat card (last 5 min) — already implemented
+- [ ] **Custom events** — track button clicks, form submissions, downloads via `puls.track('event')` JS API
 - [ ] **Outbound link tracking** — auto-track clicks on external links via JS click listener
 - [ ] **Country/region stats** — based on Accept-Language, visual list or map
 - [ ] **Comparison mode** — "This week vs last" as overlay in chart
 - [ ] **Goals/conversions** — define target page (e.g. /thank-you), show conversion rate
 - [ ] **Custom date range** — date picker beyond 7d/30d/90d
 - [ ] **Summary cards** — "Best day: Tuesday", "Peak traffic: 2–3 PM"
-- [ ] **Notifications** — traffic spike or 404 alerts via webhook/email
 
 ## Epic 10: Release Management
 
@@ -128,9 +128,16 @@
 - [ ] **Release validation in CI** — extract zip, run health check to verify it works
 - [x] **README install instructions** — download badge + zip-based quick start (not just git clone)
 
-## Epic: Automation
+## Epic 11: Adoption
+
+- [ ] **Dockerfile** — Alpine + PHP built-in server (~30MB image), optional alternative to zip/git
+- [ ] **One-click deploy buttons** — DigitalOcean, Railway, Render badges in README
+- [ ] **White-label** — configurable branding (name, logo) via .env for customer installs
+
+## Epic 12: Automation
 
 - [ ] **Weekly report via email** — CLI command + cron for summaries, uses `mail()` — no dependencies
+- [ ] **Webhooks** — HTTP callbacks on traffic spikes, new 404s, or threshold alerts
 - [x] **Auto-refresh** — dashboard refreshes every 60 seconds (paused during UTM wizard)
 
 ---
@@ -140,6 +147,8 @@
 Things to explore later — not committed to.
 
 - **API keys** — alternative to session auth for headless API access
-- **Slack/Discord notifications** — daily summary
+- **Slack/Discord notifications** — daily summary via webhook
 - **Aggregation tables** — daily rollups for faster queries at scale
-- **Backup script** — automated SQLite backup via cron
+- **Backup/restore CLI** — `php puls backup` / `php puls restore` for SQLite snapshots
+- **Funnels** — visualize visitor paths (landing → page → conversion)
+- **MySQL support** — optional driver via PDO adapter, SQLite remains default
