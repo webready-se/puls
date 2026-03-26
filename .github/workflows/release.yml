@@ -42,8 +42,29 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite
+
       - name: Build release zip
         run: bash scripts/build-release.sh "${{ steps.version.outputs.version }}"
+
+      - name: Validate release
+        run: |
+          cd build/puls-${{ steps.version.outputs.version }}
+          cp .env.example .env
+          sed -i 's/APP_KEY=.*/APP_KEY=ci-test-key-32chars-placeholder/' .env
+          php -S 127.0.0.1:8787 -t public &
+          sleep 1
+          status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/?health)
+          kill %1 || true
+          if [ "$status" != "200" ]; then
+            echo "Health check failed with status $status"
+            exit 1
+          fi
+          echo "Release validation passed (health check returned 200)"
 
       - name: Extract changelog for this version
         id: changelog

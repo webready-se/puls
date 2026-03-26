@@ -125,7 +125,7 @@
 - [x] **Release build script** — `scripts/build-release.sh` creates a clean zip with only runtime files
 - [x] **GitHub Action for releases** — triggers on tag push, builds zip, creates GitHub Release with changelog
 - [x] **Claude skill `/release`** — prepare release: gather commits since last tag, suggest version, update CHANGELOG, create tag
-- [ ] **Release validation in CI** — extract zip, run health check to verify it works
+- [x] **Release validation in CI** — extract zip, run health check to verify it works
 - [x] **README install instructions** — download badge + zip-based quick start (not just git clone)
 
 ## Epic 11: Adoption
