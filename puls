@@ -526,7 +526,9 @@ function shareCreate(array $config, ?string $site, array $argv): void
     echo "Share link created for '{$site}'.\n";
     if ($label) echo "  Label: {$label}\n";
     if ($expiresAt) echo "  Expires: {$date}\n";
-    echo "\n  URL: /?share={$token}\n\n";
+
+    $baseUrl = $_ENV['APP_URL'] ?? '';
+    echo "\n  {$baseUrl}/?share={$token}\n\n";
     echo "Share this URL — anyone with the link can view stats for '{$site}'.\n";
 }
 

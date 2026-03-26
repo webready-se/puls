@@ -136,7 +136,7 @@ if (isset($_GET['share'])) {
     if (file_exists($dashboard)) {
         $html = file_get_contents($dashboard);
         $shareJson = json_encode(['token' => $share['token'], 'site' => $share['site']]);
-        $html = str_replace('<head>', '<head><script>window.PULS_SHARE=' . $shareJson . ';</script>', $html);
+        $html = str_replace('</title>', '</title><script>window.PULS_SHARE=' . $shareJson . ';</script>', $html);
         respond($html, 200, 'text/html', security_headers());
     }
     respond('Dashboard file not found.', 404, 'text/plain');
