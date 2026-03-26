@@ -12,6 +12,9 @@
  *   php puls sites:list                          List all tracked sites
  *   php puls sites:rename <old> <new>              Rename a site
  *   php puls sites:remove <name>                   Delete all data for a site
+ *   php puls share:create <site> [--label=...] [--expires=YYYY-MM-DD]  Create shareable link
+ *   php puls share:list [<site>]                  List share tokens
+ *   php puls share:revoke <token>                 Revoke a share token
  *   php puls nginx:config                          Generate Nginx config for a site
  */
 
@@ -19,16 +22,19 @@ $config = require __DIR__ . '/config.php';
 $command = $argv[1] ?? 'help';
 
 match ($command) {
-    'key:generate' => generateKey(),
-    'user:add'     => userAdd($config, $argv[2] ?? null, $argv),
-    'user:edit'    => userEdit($config, $argv[2] ?? null),
-    'user:remove'  => userRemove($config['users_file'], $argv[2] ?? null),
-    'user:list'    => userList($config['users_file']),
-    'sites:list'   => sitesList($config['db_path']),
-    'sites:rename' => sitesRename($config, $argv[2] ?? null, $argv[3] ?? null),
-    'sites:remove' => sitesRemove($config, $argv[2] ?? null),
-    'nginx:config' => nginxConfig(),
-    default        => printHelp(),
+    'key:generate'  => generateKey(),
+    'user:add'      => userAdd($config, $argv[2] ?? null, $argv),
+    'user:edit'     => userEdit($config, $argv[2] ?? null),
+    'user:remove'   => userRemove($config['users_file'], $argv[2] ?? null),
+    'user:list'     => userList($config['users_file']),
+    'sites:list'    => sitesList($config['db_path']),
+    'sites:rename'  => sitesRename($config, $argv[2] ?? null, $argv[3] ?? null),
+    'sites:remove'  => sitesRemove($config, $argv[2] ?? null),
+    'share:create'  => shareCreate($config, $argv[2] ?? null, $argv),
+    'share:list'    => shareList($config, $argv[2] ?? null),
+    'share:revoke'  => shareRevoke($config, $argv[2] ?? null),
+    'nginx:config'  => nginxConfig(),
+    default         => printHelp(),
 };
 
 // =====================================================================
@@ -314,7 +320,7 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
     // Rename in all tables
     $db->beginTransaction();
 
-    $tables = ['pageviews', 'bot_visits', 'broken_links'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'share_tokens'];
     foreach ($tables as $table) {
         $stmt = $db->prepare("UPDATE {$table} SET site = ? WHERE site = ?");
         $stmt->execute([$newName, $oldName]);
@@ -403,7 +409,7 @@ function sitesRemove(array $config, ?string $siteName): void
     }
 
     $db->beginTransaction();
-    $tables = ['pageviews', 'bot_visits', 'broken_links'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'share_tokens'];
     foreach ($tables as $table) {
         $stmt = $db->prepare("DELETE FROM {$table} WHERE site = ?");
         $stmt->execute([$siteName]);
@@ -425,6 +431,174 @@ function sitesRemove(array $config, ?string $siteName): void
     saveUsers($config['users_file'], $users);
 
     echo "\nSite '{$siteName}' removed.\n";
+}
+
+// =====================================================================
+// share:create
+// =====================================================================
+
+function shareCreate(array $config, ?string $site, array $argv): void
+{
+    if (!$site) {
+        echo "Usage: php puls share:create <site> [--label=...] [--expires=YYYY-MM-DD]\n";
+        exit(1);
+    }
+
+    $dbPath = $config['db_path'];
+    if (!file_exists($dbPath)) {
+        echo "No database found. Start tracking to create it.\n";
+        exit(1);
+    }
+
+    // Verify site exists
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $stmt = $db->prepare('SELECT COUNT(*) FROM pageviews WHERE site = ?');
+    $stmt->execute([$site]);
+    if ($stmt->fetchColumn() === 0) {
+        echo "Site '{$site}' not found in database.\n";
+        exit(1);
+    }
+
+    // Parse flags
+    $label = null;
+    $expiresAt = null;
+    foreach ($argv as $arg) {
+        if (str_starts_with($arg, '--label=')) {
+            $label = substr($arg, 8);
+        }
+        if (str_starts_with($arg, '--expires=')) {
+            $date = substr($arg, 10);
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                echo "Invalid date format. Use YYYY-MM-DD.\n";
+                exit(1);
+            }
+            $expiresAt = $date . ' 23:59:59';
+        }
+    }
+
+    $token = bin2hex(random_bytes(32));
+    $stmt = $db->prepare('INSERT INTO share_tokens (token, site, label, expires_at, created_at) VALUES (?, ?, ?, ?, datetime("now"))');
+    $stmt->execute([$token, $site, $label, $expiresAt]);
+
+    echo "Share link created for '{$site}'.\n";
+    if ($label) echo "  Label: {$label}\n";
+    if ($expiresAt) echo "  Expires: {$date}\n";
+    echo "\n  URL: /?share={$token}\n\n";
+    echo "Share this URL — anyone with the link can view stats for '{$site}'.\n";
+}
+
+// =====================================================================
+// share:list
+// =====================================================================
+
+function shareList(array $config, ?string $site): void
+{
+    $dbPath = $config['db_path'];
+    if (!file_exists($dbPath)) {
+        echo "No database found.\n";
+        exit(1);
+    }
+
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Ensure table exists
+    $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='share_tokens'")->fetchAll();
+    if (empty($tables)) {
+        echo "No share tokens found.\n";
+        return;
+    }
+
+    $sql = 'SELECT * FROM share_tokens';
+    $params = [];
+    if ($site) {
+        $sql .= ' WHERE site = ?';
+        $params[] = $site;
+    }
+    $sql .= ' ORDER BY created_at DESC';
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $tokens = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($tokens)) {
+        echo $site ? "No share tokens for '{$site}'.\n" : "No share tokens found.\n";
+        return;
+    }
+
+    $col = 22;
+    echo mbPad('SITE', $col) . sprintf("%-20s %-10s %-12s %s\n", 'LABEL', 'TOKEN', 'EXPIRES', 'CREATED');
+    echo str_repeat('─', 85) . "\n";
+
+    foreach ($tokens as $t) {
+        $expired = $t['expires_at'] && $t['expires_at'] < date('Y-m-d H:i:s');
+        $prefix = substr($t['token'], 0, 8) . '…';
+        $expires = $t['expires_at'] ? substr($t['expires_at'], 0, 10) : 'never';
+        if ($expired) $expires .= ' ✗';
+        $label = $t['label'] ?: '—';
+        if (mb_strlen($label) > 18) $label = mb_substr($label, 0, 17) . '…';
+
+        echo mbPad($t['site'], $col) . sprintf("%-20s %-10s %-12s %s\n",
+            $label, $prefix, $expires, substr($t['created_at'], 0, 10));
+    }
+
+    echo "\n" . count($tokens) . " token(s).\n";
+}
+
+// =====================================================================
+// share:revoke
+// =====================================================================
+
+function shareRevoke(array $config, ?string $tokenPrefix): void
+{
+    if (!$tokenPrefix) {
+        echo "Usage: php puls share:revoke <token-prefix>\n";
+        echo "Use 'php puls share:list' to see tokens.\n";
+        exit(1);
+    }
+
+    $dbPath = $config['db_path'];
+    if (!file_exists($dbPath)) {
+        echo "No database found.\n";
+        exit(1);
+    }
+
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token LIKE ?');
+    $stmt->execute([$tokenPrefix . '%']);
+    $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($matches)) {
+        echo "No token matching '{$tokenPrefix}'.\n";
+        exit(1);
+    }
+
+    if (count($matches) > 1) {
+        echo "Multiple tokens match '{$tokenPrefix}':\n";
+        foreach ($matches as $t) {
+            echo "  " . substr($t['token'], 0, 12) . "…  ({$t['site']}" . ($t['label'] ? ", {$t['label']}" : '') . ")\n";
+        }
+        echo "Provide a longer prefix to uniquely identify the token.\n";
+        exit(1);
+    }
+
+    $token = $matches[0];
+    echo "Revoke share token for '{$token['site']}'";
+    if ($token['label']) echo " ({$token['label']})";
+    echo "? (y/N): ";
+    $confirm = strtolower(trim(fgets(STDIN)));
+
+    if ($confirm !== 'y' && $confirm !== 'j') {
+        echo "Aborted.\n";
+        exit(0);
+    }
+
+    $stmt = $db->prepare('DELETE FROM share_tokens WHERE id = ?');
+    $stmt->execute([$token['id']]);
+    echo "Token revoked.\n";
 }
 
 // =====================================================================
@@ -566,11 +740,15 @@ function printHelp(): void
       php puls sites:list                      List all tracked sites
       php puls sites:rename <old> <new>        Rename a site
       php puls sites:remove <name>             Delete all data for a site
+      php puls share:create <site> [options]   Create a shareable dashboard link
+      php puls share:list [<site>]             List share tokens
+      php puls share:revoke <token>            Revoke a share token
       php puls nginx:config                    Generate Nginx config for a site
 
     Options:
       --sites    Comma-separated list of sites the user can access.
-                 Omit for access to all sites.
+      --label    Label for share token (e.g. "Client report Q1").
+      --expires  Expiry date for share token (YYYY-MM-DD).
 
     HELP;
     echo "\n";

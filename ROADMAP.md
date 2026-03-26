@@ -103,7 +103,7 @@
 
 ## Epic 8: Customer Value
 
-- [ ] **Shareable dashboards** — token-based read-only links (share stats without login)
+- [x] **Shareable dashboards** — token-based read-only links (share stats without login)
 - [ ] **Data export** — CSV/JSON export from dashboard
 
 > Shareable dashboards deliver the most customer value fastest — clients want to view stats without needing a login. A simple `/?share=<token>` showing a read-only dashboard.

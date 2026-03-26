@@ -19,6 +19,8 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `GET /?log&s={site}&p={path}` | No | Server-side bot logging (Nginx mirror) |
 | `GET /?status_log&s={site}&p={path}&status={code}` | No | Broken link/redirect tracking (Nginx post_action) |
 | `GET /?health` | No | Health check (200/503) |
+| `GET /?share=<token>` | No | Shared read-only dashboard |
+| `GET /?api&share=<token>` | No | Shared JSON API (scoped to token's site) |
 | `GET /?api&days=7[&site=x]` | Yes | JSON API |
 | `GET /?api&sites` | Yes | List tracked sites |
 | `GET /` | Yes | Dashboard |

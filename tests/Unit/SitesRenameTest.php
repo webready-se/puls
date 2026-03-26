@@ -35,6 +35,15 @@ function createTestDb(string $path): PDO
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )');
 
+    $db->exec('CREATE TABLE share_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        site TEXT NOT NULL,
+        label TEXT,
+        expires_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )');
+
     return $db;
 }
 

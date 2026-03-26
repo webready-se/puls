@@ -76,6 +76,10 @@ php puls user:remove <name>              # Remove a user
 php puls user:list                       # List all users
 php puls sites:list                      # List all tracked sites
 php puls sites:rename <old> <new>        # Rename a tracked site
+php puls share:create <site>             # Create a shareable dashboard link
+php puls share:create <site> --label="Client Q1" --expires=2026-06-30
+php puls share:list                      # List all share tokens
+php puls share:revoke <token>            # Revoke a share token
 ```
 
 Users with no `--sites` flag can see all sites. Restricted users only see their assigned sites.
