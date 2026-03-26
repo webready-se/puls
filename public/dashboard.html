@@ -705,7 +705,6 @@
   if (isShared) {
     siteSelect.style.display = 'none';
     document.getElementById('menu-btn').style.display = 'none';
-    document.getElementById('search-btn').style.display = 'none';
     document.title = shareSite + ' — Puls';
   }
 
@@ -831,12 +830,12 @@
         renderChannels(d.channels) +
       '</div>' +
       '<div class="grid-2">' +
-        renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal) +
+        renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal, d.events, d.eventsTotal, d.outbound, d.outboundTotal) +
         renderTabbedVisitors(d.browsers, d.devices, d.languages) +
       '</div>';
     } else {
       html += '<div class="grid-2">' +
-        renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal) +
+        renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal, d.events, d.eventsTotal, d.outbound, d.outboundTotal) +
         renderTabbedVisitors(d.browsers, d.devices, d.languages) +
       '</div>';
     }
@@ -1008,6 +1007,8 @@
     exitPages: function(d) { return renderTableContent(d.exitPages, 'path', 'exits', '#d97706'); },
     referrers: function(d) { return renderTableContent(d.referrers, 'source', 'visitors', '#8b5cf6'); },
     utm: function(d) { return renderUtmContent(d.utm); },
+    events: function(d) { return renderTableContent(d.events, 'event_name', 'count', '#a78bfa'); },
+    outbound: function(d) { return renderOutboundContent(d.outbound); },
     bots: function(d) { return renderBotTableContent(d.bots); },
     botPages: function(d) { return renderTableContent(d.botPages, 'path', 'visits', '#2563eb'); },
     botActivity: function(d) { return renderBotActivityContent(d.botActivity); }
@@ -1105,11 +1106,13 @@
       renderChannelsContent(channels) + '</div></div>';
   }
 
-  function renderTabbedTraffic(referrers, utm, referrersTotal, utmTotal) {
+  function renderTabbedTraffic(referrers, utm, referrersTotal, utmTotal, events, eventsTotal, outbound, outboundTotal) {
     var html = '<div class="card">' +
       '<div class="card-tabs">' +
         '<div class="card-tab active" data-tab="sources" onclick="switchPageTab(this)">Sources</div>' +
         '<div class="card-tab" data-tab="utm" onclick="switchPageTab(this)">UTM</div>' +
+        '<div class="card-tab" data-tab="events" onclick="switchPageTab(this)">Events</div>' +
+        '<div class="card-tab" data-tab="outbound" onclick="switchPageTab(this)">Outbound</div>' +
       '</div>' +
       '<div class="tab-panel" data-panel="sources">' +
         renderTableContent(referrers, 'source', 'visitors', '#8b5cf6') +
@@ -1119,7 +1122,33 @@
         renderUtmContent(utm) +
         showAllBtn(utmTotal, 'utm', 'UTM campaigns') +
       '</div>' +
+      '<div class="tab-panel" data-panel="events" style="display:none">' +
+        renderTableContent(events, 'event_name', 'count', '#a78bfa') +
+        showAllBtn(eventsTotal, 'events', 'Custom events') +
+      '</div>' +
+      '<div class="tab-panel" data-panel="outbound" style="display:none">' +
+        renderOutboundContent(outbound) +
+        showAllBtn(outboundTotal, 'outbound', 'Outbound links') +
+      '</div>' +
     '</div>';
+    return html;
+  }
+
+  function renderOutboundContent(rows) {
+    if (!rows || !rows.length) {
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
+    }
+    var max = Math.max.apply(null, rows.map(function(r) { return +r.clicks; }));
+    var html = '';
+    rows.forEach(function(r) {
+      var pct = (+r.clicks / max) * 100;
+      var display = r.url ? r.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '(unknown)';
+      html += '<div class="trow">' +
+        '<span class="trow-label" title="' + esc(r.url || '') + '">' + esc(display) + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#06b6d4"></div></div>' +
+        '<span class="trow-val">' + num(r.clicks) + '</span>' +
+      '</div>';
+    });
     return html;
   }
 
@@ -1844,6 +1873,7 @@
     cmdTimer = setTimeout(function() {
       var url = API + '?api&search=' + encodeURIComponent(q) + '&days=' + currentDays;
       if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+      if (shareToken) url += '&share=' + encodeURIComponent(shareToken);
       fetch(url)
         .then(function(r) {
           if (r.status === 401) { location.href = '/?login'; return; }

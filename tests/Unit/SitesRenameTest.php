@@ -44,6 +44,16 @@ function createTestDb(string $path): PDO
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )');
 
+    $db->exec('CREATE TABLE events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site TEXT NOT NULL,
+        event_name TEXT NOT NULL,
+        event_data TEXT,
+        page_path TEXT,
+        visitor_hash TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )');
+
     return $db;
 }
 
@@ -155,13 +165,13 @@ it('rejects rename of nonexistent site', function () {
     expect($result['output'])->toContain('not found');
 });
 
-it('shows usage when args missing', function () {
+it('shows no sites message when args missing and db empty', function () {
     createTestDb($this->dbPath);
 
     $result = runRename($this->tmpDir);
 
     expect($result['exit'])->toBe(1);
-    expect($result['output'])->toContain('Usage:');
+    expect($result['output'])->toContain('No sites tracked');
 });
 
 it('rejects same old and new name', function () {

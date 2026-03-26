@@ -15,6 +15,7 @@ Single PHP entry point (`public/index.php`) handles all routing:
 |----------|------|---------|
 | `GET /?js` | No | Serves tracking JavaScript |
 | `POST /?collect` | No | Receives pageview data (sendBeacon) |
+| `POST /?event` | No | Receives custom event data (sendBeacon) |
 | `GET /?pixel&s={site}&p={path}` | No | 1x1 GIF for bot detection |
 | `GET /?log&s={site}&p={path}` | No | Server-side bot logging (Nginx mirror) |
 | `GET /?status_log&s={site}&p={path}&status={code}` | No | Broken link/redirect tracking (Nginx post_action) |
@@ -93,6 +94,31 @@ Puls is designed as a central hub for multiple sites. Add `data-site="name"` on 
 - 4-space indentation in PHP, 2-space in HTML/CSS/JS
 - All user input is truncated/sanitized before storage
 - Pest for testing (dev dependency only)
+
+## Testing
+
+Pest for tests. Two levels:
+
+- **Unit** (`tests/Unit/`) — pure functions, CLI as subprocess
+- **Feature** (`tests/Feature/`) — PHP dev server + HTTP requests
+
+### When to write tests
+
+| Change | Test? |
+|--------|-------|
+| New or changed API endpoint | Always |
+| Bug fix | Always — write test first (TDD), verify it fails, then fix |
+| CLI deterministic output (error messages, no-arg fallbacks) | Yes |
+| Pure functions (normalize, detect, etc.) | Yes |
+| Interactive STDIN prompts | No — manual testing |
+| Frontend/dashboard JS | No — Pest can't test it |
+
+### Principles
+
+- Bug fix = test first. No exceptions.
+- API tests are cheap (~5 lines with existing helpers). Write them.
+- Don't test what you can't control (STDIN, browser JS).
+- Pre-push hook enforces all tests pass before push.
 
 ---
 

@@ -6,15 +6,15 @@
  * Usage:
  *   php puls key:generate                        Generate a new APP_KEY
  *   php puls user:add <name> [--sites=a,b]       Add a user
- *   php puls user:edit <name>                    Edit user (sites, password)
- *   php puls user:remove <name>                  Remove a user
+ *   php puls user:edit [<name>]                   Edit user (sites, password)
+ *   php puls user:remove [<name>]                Remove a user
  *   php puls user:list                           List all users
  *   php puls sites:list                          List all tracked sites
- *   php puls sites:rename <old> <new>              Rename a site
- *   php puls sites:remove <name>                   Delete all data for a site
+ *   php puls sites:rename [<old> <new>]             Rename a site
+ *   php puls sites:remove [<name>]                 Delete all data for a site
  *   php puls share:create <site> [--label=...] [--expires=YYYY-MM-DD]  Create shareable link
  *   php puls share:list [<site>]                  List share tokens
- *   php puls share:revoke <token>                 Revoke a share token
+ *   php puls share:revoke [<token>]                Revoke a share token
  *   php puls nginx:config                          Generate Nginx config for a site
  */
 
@@ -125,12 +125,33 @@ function userAdd(array $config, ?string $username, array $argv): void
 
 function userEdit(array $config, ?string $username): void
 {
-    if (!$username) {
-        echo "Usage: php puls user:edit <username>\n";
+    $users = loadUsers($config['users_file']);
+
+    if (empty($users)) {
+        echo "No users configured.\n";
         exit(1);
     }
 
-    $users = loadUsers($config['users_file']);
+    // Interactive user picker if no argument
+    if (!$username) {
+        $names = array_keys($users);
+        if (count($names) === 1) {
+            $username = $names[0];
+        } else {
+            echo "Select user to edit:\n";
+            foreach ($names as $i => $name) {
+                $sites = !empty($users[$name]['sites']) ? implode(', ', $users[$name]['sites']) : 'alla';
+                echo sprintf("  %d) %s (%s)\n", $i + 1, $name, $sites);
+            }
+            echo "\nSelect (number): ";
+            $idx = (int) trim(fgets(STDIN)) - 1;
+            if ($idx < 0 || $idx >= count($names)) {
+                echo "Invalid selection.\n";
+                exit(1);
+            }
+            $username = $names[$idx];
+        }
+    }
 
     if (!isset($users[$username])) {
         echo "User '{$username}' not found.\n";
@@ -179,16 +200,40 @@ function userEdit(array $config, ?string $username): void
 
 function userRemove(string $file, ?string $username): void
 {
-    if (!$username) {
-        echo "Usage: php puls user:remove <username>\n";
+    $users = loadUsers($file);
+
+    if (empty($users)) {
+        echo "No users configured.\n";
         exit(1);
     }
 
-    $users = loadUsers($file);
+    // Interactive user picker if no argument
+    if (!$username) {
+        $names = array_keys($users);
+        echo "Select user to remove:\n";
+        foreach ($names as $i => $name) {
+            $sites = !empty($users[$name]['sites']) ? implode(', ', $users[$name]['sites']) : 'alla';
+            echo sprintf("  %d) %s (%s)\n", $i + 1, $name, $sites);
+        }
+        echo "\nSelect (number): ";
+        $idx = (int) trim(fgets(STDIN)) - 1;
+        if ($idx < 0 || $idx >= count($names)) {
+            echo "Invalid selection.\n";
+            exit(1);
+        }
+        $username = $names[$idx];
+    }
 
     if (!isset($users[$username])) {
         echo "User '{$username}' not found.\n";
         exit(1);
+    }
+
+    echo "Remove user '{$username}'? (y/N): ";
+    $confirm = strtolower(trim(fgets(STDIN)));
+    if ($confirm !== 'y' && $confirm !== 'j') {
+        echo "Aborted.\n";
+        exit(0);
     }
 
     unset($users[$username]);
@@ -280,16 +325,6 @@ function sitesList(string $dbPath): void
 
 function sitesRename(array $config, ?string $oldName, ?string $newName): void
 {
-    if (!$oldName || !$newName) {
-        echo "Usage: php puls sites:rename <old-name> <new-name>\n";
-        exit(1);
-    }
-
-    if ($oldName === $newName) {
-        echo "Old and new name are the same.\n";
-        exit(1);
-    }
-
     $dbPath = $config['db_path'];
     if (!file_exists($dbPath)) {
         echo "No database found.\n";
@@ -298,6 +333,45 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
 
     $db = new PDO('sqlite:' . $dbPath);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Interactive site picker if no old name
+    if (!$oldName) {
+        $availableSites = getTrackedSites($dbPath);
+        if (empty($availableSites)) {
+            echo "No sites tracked yet.\n";
+            exit(1);
+        }
+        if (count($availableSites) === 1) {
+            $oldName = $availableSites[0];
+        } else {
+            echo "Select site to rename:\n";
+            foreach ($availableSites as $i => $s) {
+                echo sprintf("  %d) %s\n", $i + 1, $s);
+            }
+            echo "\nSelect (number): ";
+            $idx = (int) trim(fgets(STDIN)) - 1;
+            if ($idx < 0 || $idx >= count($availableSites)) {
+                echo "Invalid selection.\n";
+                exit(1);
+            }
+            $oldName = $availableSites[$idx];
+        }
+    }
+
+    // Interactive prompt for new name
+    if (!$newName) {
+        echo "New name for '{$oldName}': ";
+        $newName = trim(fgets(STDIN));
+        if ($newName === '') {
+            echo "Name cannot be empty.\n";
+            exit(1);
+        }
+    }
+
+    if ($oldName === $newName) {
+        echo "Old and new name are the same.\n";
+        exit(1);
+    }
 
     // Check that old site exists
     $stmt = $db->prepare('SELECT COUNT(*) FROM pageviews WHERE site = ?');
@@ -320,7 +394,7 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
     // Rename in all tables
     $db->beginTransaction();
 
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'share_tokens'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens'];
     foreach ($tables as $table) {
         $stmt = $db->prepare("UPDATE {$table} SET site = ? WHERE site = ?");
         $stmt->execute([$newName, $oldName]);
@@ -362,11 +436,6 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
 
 function sitesRemove(array $config, ?string $siteName): void
 {
-    if (!$siteName) {
-        echo "Usage: php puls sites:remove <site-name>\n";
-        exit(1);
-    }
-
     $dbPath = $config['db_path'];
     if (!file_exists($dbPath)) {
         echo "No database found.\n";
@@ -375,6 +444,26 @@ function sitesRemove(array $config, ?string $siteName): void
 
     $db = new PDO('sqlite:' . $dbPath);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Interactive site picker if no argument
+    if (!$siteName) {
+        $availableSites = getTrackedSites($dbPath);
+        if (empty($availableSites)) {
+            echo "No sites tracked yet.\n";
+            exit(1);
+        }
+        echo "Select site to remove:\n";
+        foreach ($availableSites as $i => $s) {
+            echo sprintf("  %d) %s\n", $i + 1, $s);
+        }
+        echo "\nSelect (number): ";
+        $idx = (int) trim(fgets(STDIN)) - 1;
+        if ($idx < 0 || $idx >= count($availableSites)) {
+            echo "Invalid selection.\n";
+            exit(1);
+        }
+        $siteName = $availableSites[$idx];
+    }
 
     // Check that site exists
     $stmt = $db->prepare('SELECT COUNT(*) FROM pageviews WHERE site = ?');
@@ -389,7 +478,11 @@ function sitesRemove(array $config, ?string $siteName): void
     $stmt->execute([$siteName]);
     $blCount = (int) $stmt->fetchColumn();
 
-    $total = $pvCount + $botCount + $blCount;
+    $stmt = $db->prepare('SELECT COUNT(*) FROM events WHERE site = ?');
+    $stmt->execute([$siteName]);
+    $evCount = (int) $stmt->fetchColumn();
+
+    $total = $pvCount + $botCount + $blCount + $evCount;
 
     if ($total === 0) {
         echo "Site '{$siteName}' not found in database.\n";
@@ -400,6 +493,7 @@ function sitesRemove(array $config, ?string $siteName): void
     echo "  Pageviews:    {$pvCount}\n";
     echo "  Bot visits:   {$botCount}\n";
     echo "  Broken links: {$blCount}\n";
+    echo "  Events:       {$evCount}\n";
     echo "\nType the site name to confirm: ";
     $confirm = trim(fgets(STDIN));
 
@@ -409,7 +503,7 @@ function sitesRemove(array $config, ?string $siteName): void
     }
 
     $db->beginTransaction();
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'share_tokens'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens'];
     foreach ($tables as $table) {
         $stmt = $db->prepare("DELETE FROM {$table} WHERE site = ?");
         $stmt->execute([$siteName]);
@@ -439,15 +533,34 @@ function sitesRemove(array $config, ?string $siteName): void
 
 function shareCreate(array $config, ?string $site, array $argv): void
 {
-    if (!$site) {
-        echo "Usage: php puls share:create <site> [--label=...] [--expires=YYYY-MM-DD]\n";
-        exit(1);
-    }
-
     $dbPath = $config['db_path'];
     if (!file_exists($dbPath)) {
         echo "No database found. Start tracking to create it.\n";
         exit(1);
+    }
+
+    // Interactive site selection if no site argument
+    if (!$site || str_starts_with($site, '--')) {
+        $availableSites = getTrackedSites($dbPath);
+        if (empty($availableSites)) {
+            echo "No sites in database yet.\n";
+            exit(1);
+        }
+        if (count($availableSites) === 1) {
+            $site = $availableSites[0];
+        } else {
+            echo "Select site for share link:\n";
+            foreach ($availableSites as $i => $s) {
+                echo sprintf("  %d) %s\n", $i + 1, $s);
+            }
+            echo "\nSelect (number): ";
+            $idx = (int) trim(fgets(STDIN)) - 1;
+            if ($idx < 0 || $idx >= count($availableSites)) {
+                echo "Invalid selection.\n";
+                exit(1);
+            }
+            $site = $availableSites[$idx];
+        }
     }
 
     // Verify site exists
@@ -460,7 +573,7 @@ function shareCreate(array $config, ?string $site, array $argv): void
         exit(1);
     }
 
-    // Parse flags
+    // Parse flags (allow both --flag and interactive)
     $label = null;
     $expiresAt = null;
     foreach ($argv as $arg) {
@@ -477,6 +590,24 @@ function shareCreate(array $config, ?string $site, array $argv): void
         }
     }
 
+    // Interactive prompts for missing options
+    if ($label === null) {
+        echo "Label (optional, enter to skip): ";
+        $input = trim(fgets(STDIN));
+        if ($input !== '') $label = $input;
+    }
+    if ($expiresAt === null) {
+        echo "Expires (YYYY-MM-DD, enter to skip): ";
+        $input = trim(fgets(STDIN));
+        if ($input !== '') {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $input)) {
+                echo "Invalid date format. Skipping expiry.\n";
+            } else {
+                $expiresAt = $input . ' 23:59:59';
+            }
+        }
+    }
+
     $token = bin2hex(random_bytes(32));
     $stmt = $db->prepare('INSERT INTO share_tokens (token, site, label, expires_at, created_at) VALUES (?, ?, ?, ?, datetime("now"))');
     $stmt->execute([$token, $site, $label, $expiresAt]);
@@ -484,7 +615,24 @@ function shareCreate(array $config, ?string $site, array $argv): void
     echo "Share link created for '{$site}'.\n";
     if ($label) echo "  Label: {$label}\n";
     if ($expiresAt) echo "  Expires: {$date}\n";
-    echo "\n  URL: /?share={$token}\n\n";
+
+    $baseUrl = $_ENV['APP_URL'] ?? '';
+    if (!$baseUrl) {
+        echo "\nAPP_URL not set. Enter your Puls URL to get shareable links\n";
+        echo "(e.g. https://puls.example.com, enter to skip): ";
+        $url = trim(fgets(STDIN));
+        if ($url !== '') {
+            $baseUrl = rtrim($url, '/');
+            $envFile = __DIR__ . '/.env';
+            if (file_exists($envFile)) {
+                $contents = file_get_contents($envFile);
+                $contents = preg_replace('/^APP_URL=.*$/m', "APP_URL={$baseUrl}", $contents);
+                file_put_contents($envFile, $contents);
+            }
+            $_ENV['APP_URL'] = $baseUrl;
+        }
+    }
+    echo "\n  {$baseUrl}/?share={$token}\n\n";
     echo "Share this URL — anyone with the link can view stats for '{$site}'.\n";
 }
 
@@ -528,10 +676,10 @@ function shareList(array $config, ?string $site): void
     }
 
     $col = 22;
-    echo mbPad('SITE', $col) . sprintf("%-20s %-10s %-12s %s\n", 'LABEL', 'TOKEN', 'EXPIRES', 'CREATED');
-    echo str_repeat('─', 85) . "\n";
+    echo "  #  " . mbPad('SITE', $col) . sprintf("%-20s %-10s %-12s %s\n", 'LABEL', 'TOKEN', 'EXPIRES', 'CREATED');
+    echo str_repeat('─', 90) . "\n";
 
-    foreach ($tokens as $t) {
+    foreach ($tokens as $i => $t) {
         $expired = $t['expires_at'] && $t['expires_at'] < date('Y-m-d H:i:s');
         $prefix = substr($t['token'], 0, 8) . '…';
         $expires = $t['expires_at'] ? substr($t['expires_at'], 0, 10) : 'never';
@@ -539,11 +687,23 @@ function shareList(array $config, ?string $site): void
         $label = $t['label'] ?: '—';
         if (mb_strlen($label) > 18) $label = mb_substr($label, 0, 17) . '…';
 
-        echo mbPad($t['site'], $col) . sprintf("%-20s %-10s %-12s %s\n",
+        echo sprintf("  %d) ", $i + 1) . mbPad($t['site'], $col) . sprintf("%-20s %-10s %-12s %s\n",
             $label, $prefix, $expires, substr($t['created_at'], 0, 10));
     }
 
     echo "\n" . count($tokens) . " token(s).\n";
+
+    echo "\nGet share URL? (number, enter to skip): ";
+    $input = trim(fgets(STDIN));
+    if ($input !== '') {
+        $idx = (int) $input - 1;
+        if ($idx >= 0 && $idx < count($tokens)) {
+            $baseUrl = $_ENV['APP_URL'] ?? '';
+            echo "\n  {$baseUrl}/?share={$tokens[$idx]['token']}\n\n";
+        } else {
+            echo "Invalid selection.\n";
+        }
+    }
 }
 
 // =====================================================================
@@ -552,12 +712,6 @@ function shareList(array $config, ?string $site): void
 
 function shareRevoke(array $config, ?string $tokenPrefix): void
 {
-    if (!$tokenPrefix) {
-        echo "Usage: php puls share:revoke <token-prefix>\n";
-        echo "Use 'php puls share:list' to see tokens.\n";
-        exit(1);
-    }
-
     $dbPath = $config['db_path'];
     if (!file_exists($dbPath)) {
         echo "No database found.\n";
@@ -567,25 +721,69 @@ function shareRevoke(array $config, ?string $tokenPrefix): void
     $db = new PDO('sqlite:' . $dbPath);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token LIKE ?');
-    $stmt->execute([$tokenPrefix . '%']);
-    $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    if (empty($matches)) {
-        echo "No token matching '{$tokenPrefix}'.\n";
+    // Ensure table exists
+    $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='share_tokens'")->fetchAll();
+    if (empty($tables)) {
+        echo "No share tokens found.\n";
         exit(1);
     }
 
-    if (count($matches) > 1) {
-        echo "Multiple tokens match '{$tokenPrefix}':\n";
-        foreach ($matches as $t) {
-            echo "  " . substr($t['token'], 0, 12) . "…  ({$t['site']}" . ($t['label'] ? ", {$t['label']}" : '') . ")\n";
+    // Interactive picker if no argument
+    if (!$tokenPrefix) {
+        $all = $db->query('SELECT * FROM share_tokens ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
+        if (empty($all)) {
+            echo "No share tokens found.\n";
+            exit(1);
         }
-        echo "Provide a longer prefix to uniquely identify the token.\n";
-        exit(1);
+
+        $col = 22;
+        echo "Select token to revoke:\n\n";
+        echo "  #  " . mbPad('SITE', $col) . sprintf("%-20s %-10s %s\n", 'LABEL', 'TOKEN', 'EXPIRES');
+        echo str_repeat('─', 75) . "\n";
+
+        foreach ($all as $i => $t) {
+            $expired = $t['expires_at'] && $t['expires_at'] < date('Y-m-d H:i:s');
+            $prefix = substr($t['token'], 0, 8) . '…';
+            $expires = $t['expires_at'] ? substr($t['expires_at'], 0, 10) : 'never';
+            if ($expired) $expires .= ' ✗';
+            $label = $t['label'] ?: '—';
+            if (mb_strlen($label) > 18) $label = mb_substr($label, 0, 17) . '…';
+
+            echo sprintf("  %d) ", $i + 1) . mbPad($t['site'], $col) . sprintf("%-20s %-10s %s\n",
+                $label, $prefix, $expires);
+        }
+
+        echo "\nSelect (number): ";
+        $idx = (int) trim(fgets(STDIN)) - 1;
+        if ($idx < 0 || $idx >= count($all)) {
+            echo "Invalid selection.\n";
+            exit(1);
+        }
+
+        $token = $all[$idx];
+    } else {
+        // Token prefix lookup (backwards compatible)
+        $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token LIKE ?');
+        $stmt->execute([$tokenPrefix . '%']);
+        $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($matches)) {
+            echo "No token matching '{$tokenPrefix}'.\n";
+            exit(1);
+        }
+
+        if (count($matches) > 1) {
+            echo "Multiple tokens match '{$tokenPrefix}':\n";
+            foreach ($matches as $t) {
+                echo "  " . substr($t['token'], 0, 12) . "…  ({$t['site']}" . ($t['label'] ? ", {$t['label']}" : '') . ")\n";
+            }
+            echo "Provide a longer prefix to uniquely identify the token.\n";
+            exit(1);
+        }
+
+        $token = $matches[0];
     }
 
-    $token = $matches[0];
     echo "Revoke share token for '{$token['site']}'";
     if ($token['label']) echo " ({$token['label']})";
     echo "? (y/N): ";
@@ -734,15 +932,15 @@ function printHelp(): void
     Usage:
       php puls key:generate                    Generate a new APP_KEY
       php puls user:add <name> [--sites=a,b]   Add a user
-      php puls user:edit <name>                Edit user (sites, password)
-      php puls user:remove <name>              Remove a user
+      php puls user:edit [<name>]               Edit user (sites, password)
+      php puls user:remove [<name>]             Remove a user
       php puls user:list                       List all users
       php puls sites:list                      List all tracked sites
-      php puls sites:rename <old> <new>        Rename a site
-      php puls sites:remove <name>             Delete all data for a site
+      php puls sites:rename [<old> <new>]       Rename a site
+      php puls sites:remove [<name>]           Delete all data for a site
       php puls share:create <site> [options]   Create a shareable dashboard link
       php puls share:list [<site>]             List share tokens
-      php puls share:revoke <token>            Revoke a share token
+      php puls share:revoke [<token>]           Revoke a share token
       php puls nginx:config                    Generate Nginx config for a site
 
     Options:
