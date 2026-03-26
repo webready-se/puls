@@ -98,6 +98,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['collect'])) {
     respond('', 204, null, $cors ?: []);
 }
 
+// CSRF token refresh (keeps login form valid for idle tabs)
+
+if (isset($_GET['csrf'])) {
+    start_session($config);
+    $token = bin2hex(random_bytes(32));
+    $_SESSION['csrf_token'] = $token;
+    respond(json_encode(['token' => $token]), 200, 'application/json');
+}
+
 // Share endpoints (token-based, no session needed)
 
 if (isset($_GET['share'])) {
@@ -410,6 +419,7 @@ function show_login(?string $error = null): void
         <button type="submit">Log in</button>
       </form>
     </div>
+    <script>setInterval(function(){fetch('/?csrf').then(function(r){return r.json()}).then(function(d){if(d.token)document.querySelector('[name=_token]').value=d.token}).catch(function(){})},600000)</script>
     </body>
     </html>
     HTML, 200, 'text/html', security_headers());
