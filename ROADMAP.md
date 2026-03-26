@@ -119,6 +119,15 @@
 - [ ] **Summary cards** — "Best day: Tuesday", "Peak traffic: 2–3 PM"
 - [ ] **Notifications** — traffic spike or 404 alerts via webhook/email
 
+## Epic 10: Release Management
+
+- [x] **CHANGELOG.md** — retrospective for v1.0.0 covering all completed work
+- [x] **Release build script** — `scripts/build-release.sh` creates a clean zip with only runtime files
+- [x] **GitHub Action for releases** — triggers on tag push, builds zip, creates GitHub Release with changelog
+- [x] **Claude skill `/release`** — prepare release: gather commits since last tag, suggest version, update CHANGELOG, create tag
+- [ ] **Release validation in CI** — extract zip, run health check to verify it works
+- [x] **README install instructions** — download badge + zip-based quick start (not just git clone)
+
 ## Epic: Automation
 
 - [ ] **Weekly report via email** — CLI command + cron for summaries, uses `mail()` — no dependencies
