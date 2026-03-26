@@ -181,6 +181,11 @@ function start_session(array $config): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) return;
 
+    // Use dedicated session directory to avoid GC conflicts with other PHP apps
+    $sessionPath = dirname($config['db_path']) . '/sessions';
+    if (!is_dir($sessionPath)) mkdir($sessionPath, 0700, true);
+    ini_set('session.save_path', $sessionPath);
+
     ini_set('session.gc_maxlifetime', $config['session_lifetime']);
     session_set_cookie_params([
         'lifetime' => $config['session_lifetime'],
