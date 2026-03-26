@@ -7,6 +7,11 @@ beforeAll(function () {
 
 afterAll(function () {
     stopServer($GLOBALS['server_pid']);
+    // Clean up test share tokens from the real database
+    try {
+        $db = getTestDb();
+        $db->exec("DELETE FROM share_tokens WHERE label = 'test'");
+    } catch (Throwable $e) {}
 });
 
 test('health endpoint returns 200', function () {
