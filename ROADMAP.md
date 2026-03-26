@@ -111,8 +111,8 @@
 ## Epic 9: Deeper Insights
 
 - [x] **Realtime view** — "N online now" badge + stat card (last 5 min) — already implemented
-- [ ] **Custom events** — track button clicks, form submissions, downloads via `puls.track('event')` JS API
-- [ ] **Outbound link tracking** — auto-track clicks on external links via JS click listener
+- [x] **Custom events** — track button clicks, form submissions, downloads via `puls.track('event')` JS API
+- [x] **Outbound link tracking** — auto-track clicks on external links via JS click listener
 - [ ] **Country/region stats** — based on Accept-Language, visual list or map
 - [ ] **Comparison mode** — "This week vs last" as overlay in chart
 - [ ] **Goals/conversions** — define target page (e.g. /thank-you), show conversion rate

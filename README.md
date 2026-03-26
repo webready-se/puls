@@ -63,6 +63,28 @@ php -S localhost:8080 -t public
 
 Works with Next.js, Astro, Laravel, Statamic, React, static HTML, and anything else that serves HTML. See [docs/integrations.md](docs/integrations.md) for framework examples, bot tracking pixel, server-side Nginx mirror, and reverse proxy setup.
 
+### Custom Events
+
+Track button clicks, form submissions, downloads, or any interaction:
+
+```javascript
+// Track a custom event
+puls.track('signup', { plan: 'pro' });
+
+// Track a download
+puls.track('download', { file: 'report.pdf' });
+```
+
+### Outbound Link Tracking
+
+Automatically track clicks on external links by adding `data-outbound`:
+
+```html
+<script src="https://your-puls-domain/?js" data-site="my-site" data-outbound defer></script>
+```
+
+External link clicks appear in the dashboard under Traffic > Outbound.
+
 ## CLI
 
 All management goes through `php puls`:
