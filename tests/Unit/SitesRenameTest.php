@@ -165,13 +165,13 @@ it('rejects rename of nonexistent site', function () {
     expect($result['output'])->toContain('not found');
 });
 
-it('shows usage when args missing', function () {
+it('shows no sites message when args missing and db empty', function () {
     createTestDb($this->dbPath);
 
     $result = runRename($this->tmpDir);
 
     expect($result['exit'])->toBe(1);
-    expect($result['output'])->toContain('Usage:');
+    expect($result['output'])->toContain('No sites tracked');
 });
 
 it('rejects same old and new name', function () {
