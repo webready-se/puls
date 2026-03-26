@@ -98,6 +98,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['collect'])) {
     respond('', 204, null, $cors ?: []);
 }
 
+// CSRF token refresh (keeps login form valid for idle tabs)
+
+if (isset($_GET['csrf'])) {
+    start_session($config);
+    $token = bin2hex(random_bytes(32));
+    $_SESSION['csrf_token'] = $token;
+    respond(json_encode(['token' => $token]), 200, 'application/json');
+}
+
+// Share endpoints (token-based, no session needed)
+
+if (isset($_GET['share'])) {
+    $share = validate_share_token($config, $_GET['share']);
+    if (!$share) {
+        http_response_code(404);
+        exit;
+    }
+    if (isset($_GET['api'])) {
+        $user = ['sites' => [$share['site']]];
+        respond(get_api_data($config, $user), 200, 'application/json');
+    }
+    // Serve dashboard in shared mode
+    $dashboard = __DIR__ . '/dashboard.html';
+    if (file_exists($dashboard)) {
+        $html = file_get_contents($dashboard);
+        $shareJson = json_encode(['token' => $share['token'], 'site' => $share['site']]);
+        $html = str_replace('<head>', '<head><script>window.PULS_SHARE=' . $shareJson . ';</script>', $html);
+        respond($html, 200, 'text/html', security_headers());
+    }
+    respond('Dashboard file not found.', 404, 'text/plain');
+}
+
 // Protected endpoints (auth required)
 
 start_session($config);
@@ -127,6 +159,19 @@ if (file_exists($dashboard)) {
     respond(file_get_contents($dashboard), 200, 'text/html', security_headers());
 }
 respond('Dashboard file not found.', 404, 'text/plain');
+
+// =====================================================================
+// SHARE TOKENS
+// =====================================================================
+
+function validate_share_token(array $config, string $token): ?array
+{
+    if (strlen($token) < 32) return null;
+    $db = get_db($config['db_path']);
+    $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime("now"))');
+    $stmt->execute([$token]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
 
 // =====================================================================
 // AUTH
@@ -374,6 +419,7 @@ function show_login(?string $error = null): void
         <button type="submit">Log in</button>
       </form>
     </div>
+    <script>setInterval(function(){fetch('/?csrf').then(function(r){return r.json()}).then(function(d){if(d.token)document.querySelector('[name=_token]').value=d.token}).catch(function(){})},600000)</script>
     </body>
     </html>
     HTML, 200, 'text/html', security_headers());
@@ -886,6 +932,15 @@ function get_db(string $path): PDO
         )');
         $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status, referrer)');
         $db->exec('CREATE INDEX idx_broken_site_status ON broken_links (site, status, hits DESC)');
+        $db->exec('CREATE TABLE share_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT NOT NULL UNIQUE,
+            site TEXT NOT NULL,
+            label TEXT,
+            expires_at TEXT,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE UNIQUE INDEX idx_share_token ON share_tokens (token)');
     } else {
         run_migrations($db);
     }
@@ -1048,7 +1103,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 10; // Bump this when adding new migrations
+    $currentVersion = 11; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -1253,6 +1308,19 @@ function run_migrations(PDO $db): void
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE INDEX IF NOT EXISTS idx_audit_date ON audit_log (created_at)');
+    }
+
+    // v11: share_tokens table
+    if ($version < 11) {
+        $db->exec('CREATE TABLE IF NOT EXISTS share_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT NOT NULL UNIQUE,
+            site TEXT NOT NULL,
+            label TEXT,
+            expires_at TEXT,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_share_token ON share_tokens (token)');
     }
 
     file_put_contents($marker, (string) $currentVersion);

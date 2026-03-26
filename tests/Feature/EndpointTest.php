@@ -327,6 +327,109 @@ test('collect accepts any origin when ALLOWED_ORIGINS is empty', function () {
     expect($r['status'])->toBe(204);
 });
 
+// =====================================================================
+// Shareable dashboards
+// =====================================================================
+
+function getTestDb(): PDO
+{
+    // Read DB_PATH from .env without requiring config.php (which exits on missing APP_KEY)
+    $dbPath = 'data/puls.sqlite';
+    $envFile = __DIR__ . '/../../.env';
+    if (file_exists($envFile)) {
+        foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            if (str_starts_with($line, 'DB_PATH=')) {
+                $dbPath = trim(substr($line, 8));
+                break;
+            }
+        }
+    }
+    // Resolve relative path from project root
+    if ($dbPath[0] !== '/') {
+        $dbPath = __DIR__ . '/../../' . $dbPath;
+    }
+
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Ensure share_tokens table exists (migration may not have run yet)
+    $db->exec('CREATE TABLE IF NOT EXISTS share_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        site TEXT NOT NULL,
+        label TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL
+    )');
+
+    return $db;
+}
+
+function createTestShareToken(string $site, ?string $expiresAt = null): string
+{
+    $db = getTestDb();
+    $token = bin2hex(random_bytes(32));
+    $stmt = $db->prepare('INSERT INTO share_tokens (token, site, label, expires_at, created_at) VALUES (?, ?, ?, ?, datetime("now"))');
+    $stmt->execute([$token, $site, 'test', $expiresAt]);
+    return $token;
+}
+
+test('share endpoint returns 404 for invalid token', function () {
+    $r = http('GET', '/?share=invalid-token-that-does-not-exist-1234');
+    expect($r['status'])->toBe(404);
+});
+
+test('share endpoint returns 404 for short token', function () {
+    $r = http('GET', '/?share=abc');
+    expect($r['status'])->toBe(404);
+});
+
+test('share endpoint returns dashboard for valid token', function () {
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?share=' . $token);
+    expect($r['status'])->toBe(200)
+        ->and($r['body'])->toContain('PULS_SHARE')
+        ->and($r['body'])->toContain($token);
+});
+
+test('share endpoint sets security headers', function () {
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?share=' . $token);
+    $headers = implode("\n", $r['headers']);
+    expect($headers)->toContain('X-Content-Type-Options: nosniff')
+        ->and($headers)->toContain('X-Frame-Options: DENY');
+});
+
+test('share API returns data scoped to site', function () {
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&days=7&share=' . $token);
+    expect($r['status'])->toBe(200);
+    $data = json_decode($r['body'], true);
+    expect($data)->toBeArray()
+        ->and($data)->toHaveKey('totals');
+});
+
+test('share API returns 404 for expired token', function () {
+    $token = createTestShareToken('test', '2020-01-01 00:00:00');
+    $r = http('GET', '/?api&days=7&share=' . $token);
+    expect($r['status'])->toBe(404);
+});
+
+test('share sites endpoint returns only scoped site', function () {
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&sites&share=' . $token);
+    expect($r['status'])->toBe(200);
+    $sites = json_decode($r['body'], true);
+    expect($sites)->toBe(['test']);
+});
+
+test('share endpoint does not start a session', function () {
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?share=' . $token);
+    $setCookie = collect($r['headers'])->first(fn ($h) => str_contains(strtolower($h), 'set-cookie'));
+    expect($setCookie)->toBeNull();
+});
+
 /**
  * Helper to make collection-like operations work without Laravel.
  */

@@ -601,10 +601,13 @@
   // --- Config ---
   const API = '/';
   const COLORS = ['#6366f1','#8b5cf6','#a78bfa','#c4b5fd','#ddd6fe','#94a3b8'];
+  const isShared = !!window.PULS_SHARE;
+  const shareToken = isShared ? window.PULS_SHARE.token : null;
+  const shareSite = isShared ? window.PULS_SHARE.site : null;
 
   // --- State ---
   let currentDays = 7;
-  let currentSite = '';
+  let currentSite = isShared ? shareSite : '';
   let currentPath = '';
   let currentChannel = '';
   let sites = [];
@@ -671,15 +674,24 @@
   });
 
   // --- Data loading ---
+  function apiUrl(params) {
+    let url = API + params;
+    if (shareToken) url += '&share=' + encodeURIComponent(shareToken);
+    return url;
+  }
+
   function load(days) {
     currentDays = days;
-    let url = API + '?api&days=' + days;
+    let url = apiUrl('?api&days=' + days);
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
     if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
     if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
     fetch(url)
       .then(function(r) {
-        if (r.status === 401) { location.href = '/?login'; return; }
+        if (r.status === 401) {
+          if (isShared) { app.innerHTML = '<div class="empty"><p>This link has expired or is no longer valid.</p></div>'; return; }
+          location.href = '/?login'; return;
+        }
         return r.json();
       })
       .then(function(data) { if (data) render(data); })
@@ -689,25 +701,38 @@
       });
   }
 
+  // Shared mode: hide admin UI
+  if (isShared) {
+    siteSelect.style.display = 'none';
+    document.getElementById('menu-btn').style.display = 'none';
+    document.getElementById('search-btn').style.display = 'none';
+    document.title = shareSite + ' — Puls';
+  }
+
   // Load sites, then data
-  fetch(API + '?api&sites')
-    .then(function(r) {
-      if (r.status === 401) { location.href = '/?login'; return; }
-      return r.json();
-    })
-    .then(function(s) {
-      if (!s) return;
-      sites = s;
-      s.forEach(function(name) {
-        var opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        siteSelect.appendChild(opt);
-      });
-      if (s.length <= 1) siteSelect.style.display = 'none';
-      load(7);
-    })
-    .catch(function() { load(7); });
+  if (isShared) {
+    sites = [shareSite];
+    load(7);
+  } else {
+    fetch(apiUrl('?api&sites'))
+      .then(function(r) {
+        if (r.status === 401) { location.href = '/?login'; return; }
+        return r.json();
+      })
+      .then(function(s) {
+        if (!s) return;
+        sites = s;
+        s.forEach(function(name) {
+          var opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          siteSelect.appendChild(opt);
+        });
+        if (s.length <= 1) siteSelect.style.display = 'none';
+        load(7);
+      })
+      .catch(function() { load(7); });
+  }
 
   // Auto-refresh every 60 seconds (paused when UTM wizard is in use)
   function utmWizardActive() {
@@ -821,7 +846,7 @@
       renderBrokenLinks(d.brokenLinks);
     }
 
-    html += renderTools(d.site);
+    if (!isShared) html += renderTools(d.site);
     app.innerHTML = html;
   }
 
