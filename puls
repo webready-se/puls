@@ -587,10 +587,10 @@ function shareList(array $config, ?string $site): void
     }
 
     $col = 22;
-    echo mbPad('SITE', $col) . sprintf("%-20s %-10s %-12s %s\n", 'LABEL', 'TOKEN', 'EXPIRES', 'CREATED');
-    echo str_repeat('─', 85) . "\n";
+    echo "  #  " . mbPad('SITE', $col) . sprintf("%-20s %-10s %-12s %s\n", 'LABEL', 'TOKEN', 'EXPIRES', 'CREATED');
+    echo str_repeat('─', 90) . "\n";
 
-    foreach ($tokens as $t) {
+    foreach ($tokens as $i => $t) {
         $expired = $t['expires_at'] && $t['expires_at'] < date('Y-m-d H:i:s');
         $prefix = substr($t['token'], 0, 8) . '…';
         $expires = $t['expires_at'] ? substr($t['expires_at'], 0, 10) : 'never';
@@ -598,11 +598,23 @@ function shareList(array $config, ?string $site): void
         $label = $t['label'] ?: '—';
         if (mb_strlen($label) > 18) $label = mb_substr($label, 0, 17) . '…';
 
-        echo mbPad($t['site'], $col) . sprintf("%-20s %-10s %-12s %s\n",
+        echo sprintf("  %d) ", $i + 1) . mbPad($t['site'], $col) . sprintf("%-20s %-10s %-12s %s\n",
             $label, $prefix, $expires, substr($t['created_at'], 0, 10));
     }
 
     echo "\n" . count($tokens) . " token(s).\n";
+
+    echo "\nGet share URL? (number, enter to skip): ";
+    $input = trim(fgets(STDIN));
+    if ($input !== '') {
+        $idx = (int) $input - 1;
+        if ($idx >= 0 && $idx < count($tokens)) {
+            $baseUrl = $_ENV['APP_URL'] ?? '';
+            echo "\n  {$baseUrl}/?share={$tokens[$idx]['token']}\n\n";
+        } else {
+            echo "Invalid selection.\n";
+        }
+    }
 }
 
 // =====================================================================
