@@ -5,4 +5,5 @@ users.json
 /vendor/
 docs/deploy-guide.md
 docs/roadmap.md
-.claude/
+.claude/settings.local.json
+.claude/handoffs/

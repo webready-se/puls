@@ -91,3 +91,29 @@ Puls is designed as a central hub for multiple sites. Add `data-site="name"` on 
 - 4-space indentation in PHP, 2-space in HTML/CSS/JS
 - All user input is truncated/sanitized before storage
 - Pest for testing (dev dependency only)
+
+---
+
+## Roadmap
+
+`ROADMAP.md` is the source of truth for what to build. Completed items stay — it's a historical document.
+
+See `.claude/skills/roadmap/` for how Claude should interact with the roadmap.
+
+---
+
+## Session Continuity
+
+On session start:
+1. Check for uncommitted work: `git status` and `git stash list`
+2. Read `ROADMAP.md` to understand current progress
+
+Write a handoff when the user says "handoff", "bye", "done for today", or similar.
+
+---
+
+## Memory
+
+When you learn something about how the user prefers to work
+(not a project decision, but a personal workflow preference),
+suggest saving it with /memory so it persists across sessions.
