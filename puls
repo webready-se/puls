@@ -63,16 +63,6 @@ function generateKey(): void
         $contents = "APP_KEY={$key}\n" . $contents;
     }
 
-    // Ask for APP_URL if not already set
-    if (!preg_match('/^APP_URL=.+$/m', $contents)) {
-        echo "APP_URL (e.g. https://puls.example.com, enter to skip): ";
-        $url = trim(fgets(STDIN));
-        if ($url !== '') {
-            $url = rtrim($url, '/');
-            $contents = preg_replace('/^APP_URL=.*$/m', "APP_URL={$url}", $contents);
-        }
-    }
-
     file_put_contents($envFile, $contents);
     echo "APP_KEY set: {$key}\n";
 }
@@ -538,6 +528,21 @@ function shareCreate(array $config, ?string $site, array $argv): void
     if ($expiresAt) echo "  Expires: {$date}\n";
 
     $baseUrl = $_ENV['APP_URL'] ?? '';
+    if (!$baseUrl) {
+        echo "\nAPP_URL not set. Enter your Puls URL to get shareable links\n";
+        echo "(e.g. https://puls.example.com, enter to skip): ";
+        $url = trim(fgets(STDIN));
+        if ($url !== '') {
+            $baseUrl = rtrim($url, '/');
+            $envFile = __DIR__ . '/.env';
+            if (file_exists($envFile)) {
+                $contents = file_get_contents($envFile);
+                $contents = preg_replace('/^APP_URL=.*$/m', "APP_URL={$baseUrl}", $contents);
+                file_put_contents($envFile, $contents);
+            }
+            $_ENV['APP_URL'] = $baseUrl;
+        }
+    }
     echo "\n  {$baseUrl}/?share={$token}\n\n";
     echo "Share this URL — anyone with the link can view stats for '{$site}'.\n";
 }
