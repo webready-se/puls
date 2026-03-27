@@ -614,7 +614,7 @@ function shareCreate(array $config, ?string $site, array $argv): void
 
     echo "Share link created for '{$site}'.\n";
     if ($label) echo "  Label: {$label}\n";
-    if ($expiresAt) echo "  Expires: {$date}\n";
+    if ($expiresAt) echo "  Expires: {$expiresAt}\n";
 
     $baseUrl = $_ENV['APP_URL'] ?? '';
     if (!$baseUrl) {
