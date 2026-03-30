@@ -114,10 +114,11 @@
 - [x] **Realtime view** — "N online now" badge + stat card (last 5 min) — already implemented
 - [x] **Custom events** — track button clicks, form submissions, downloads via `puls.track('event')` JS API
 - [x] **Outbound link tracking** — auto-track clicks on external links via JS click listener
+- [x] **Auto event tracking** — `data-auto-events` attribute for zero-config tracking of phone clicks, email clicks, downloads, form submissions
 - [ ] **Country/region stats** — based on Accept-Language, visual list or map
 - [ ] **Comparison mode** — "This week vs last" as overlay in chart
 - [ ] **Goals/conversions** — define target page (e.g. /thank-you), show conversion rate
-- [ ] **Custom date range** — date picker beyond 7d/30d/90d
+- [x] **Custom date range** — date picker beyond 7d/30d/90d
 - [ ] **Summary cards** — "Best day: Tuesday", "Peak traffic: 2–3 PM"
 
 ## Epic 10: Release Management
