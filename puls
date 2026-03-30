@@ -809,8 +809,14 @@ function nginxConfig(): void
     echo str_repeat('─', 40) . "\n\n";
 
     // 1. Puls URL
-    echo "Puls URL (e.g. https://puls.wrlabs.se): ";
+    $defaultUrl = $_ENV['APP_URL'] ?? '';
+    if ($defaultUrl) {
+        echo "Puls URL [{$defaultUrl}]: ";
+    } else {
+        echo "Puls URL (e.g. https://puls.wrlabs.se): ";
+    }
     $pulsUrl = trim(fgets(STDIN));
+    if (empty($pulsUrl)) $pulsUrl = $defaultUrl;
     if (empty($pulsUrl)) {
         echo "Puls URL is required.\n";
         exit(1);
