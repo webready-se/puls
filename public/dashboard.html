@@ -157,6 +157,20 @@
   .tools-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
   .tools-content.open { max-height: 3000px; }
 
+  /* Site overview */
+  .site-overview-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s;
+  }
+  .site-overview-row:last-child { border-bottom: none; }
+  .site-overview-row:hover { background: var(--subtle); margin: 0 -12px; padding-left: 12px; padding-right: 12px; border-radius: 8px; }
+  .site-overview-name { font-weight: 600; font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .site-overview-stat { font-size: 12px; color: var(--light); white-space: nowrap; min-width: 70px; text-align: right; }
+  .site-overview-trend { font-size: 11px; white-space: nowrap; min-width: 45px; text-align: right; }
+  @media (max-width: 600px) {
+    .site-overview-stat { min-width: 55px; }
+  }
+
   /* Chart */
   .card {
     background: var(--card); border-radius: var(--radius); padding: 22px;
@@ -855,6 +869,7 @@
     }
 
     html += renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) +
+      renderSiteOverview(d.siteOverview) +
       renderChart(d);
 
     if (!filtered) {
@@ -880,6 +895,35 @@
 
     if (!isShared) html += renderTools(d.site);
     app.innerHTML = html;
+  }
+
+  function renderSiteOverview(overview) {
+    if (!overview || overview.length < 2) return '';
+    var html = '<div class="card"><span class="card-title">Sites</span><div style="margin-top:12px">';
+    overview.forEach(function(s) {
+      var trendHtml = '';
+      if (s.trend !== null) {
+        var cls = s.trend > 0 ? 'up' : (s.trend < 0 ? 'down' : 'flat');
+        var arrow = s.trend > 0 ? '\u25B2' : (s.trend < 0 ? '\u25BC' : '\u2013');
+        var sign = s.trend > 0 ? '+' : '';
+        trendHtml = '<span class="site-overview-trend stat-trend ' + cls + '">' + arrow + ' ' + sign + s.trend + '%</span>';
+      } else {
+        trendHtml = '<span class="site-overview-trend" style="color:var(--muted)">\u2013</span>';
+      }
+      var sinceHtml = '';
+      if (s.first_seen) {
+        var fd = new Date(s.first_seen + 'T00:00:00');
+        sinceHtml = '<div style="font-size:10px;color:var(--muted);font-weight:400;margin-top:1px;opacity:0.6">since ' + fd.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + '</div>';
+      }
+      html += '<div class="site-overview-row" onclick="selectSite(\'' + esc(s.site) + '\')">' +
+        '<span class="site-overview-name">' + esc(s.site) + sinceHtml + '</span>' +
+        '<span class="site-overview-stat">' + num(s.visitors) + ' visitors</span>' +
+        '<span class="site-overview-stat">' + num(s.views) + ' views</span>' +
+        trendHtml +
+      '</div>';
+    });
+    html += '</div></div>';
+    return html;
   }
 
   function renderStats(d, views, visitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) {
@@ -1804,6 +1848,11 @@
   // --- Menu ---
   var menuOverlay = document.getElementById('menu-overlay');
   var menuPanel = document.getElementById('menu-panel');
+
+  window.selectSite = function(site) {
+    siteSelect.value = site;
+    siteSelect.dispatchEvent(new Event('change'));
+  };
 
   window.openMenu = function() {
     menuOverlay.classList.add('open');

@@ -920,6 +920,40 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$since], $siteParams));
     $outboundTotal = (int) $stmt->fetchColumn();
 
+    // Site overview (only when viewing all sites)
+    $siteOverview = [];
+    if (!$site && !$path && !$channel) {
+        $previousSince = date('Y-m-d', strtotime("-" . ($days * 2) . " days"));
+        $stmt = $db->prepare("SELECT p.site, COUNT(*) as views, COUNT(DISTINCT p.visitor_hash) as visitors, f.first_seen
+            FROM pageviews p
+            LEFT JOIN (SELECT site, MIN(created_at) as first_seen FROM pageviews GROUP BY site) f ON f.site = p.site
+            WHERE p.created_at >= ? {$siteFilter}
+            GROUP BY p.site ORDER BY views DESC");
+        $stmt->execute(array_merge([$since], $siteParams));
+        $currentSites = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmt = $db->prepare("SELECT site, COUNT(*) as views
+            FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter}
+            GROUP BY site");
+        $stmt->execute(array_merge([$previousSince, $since], $siteParams, $siteParams));
+        $prevMap = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $prevMap[$row['site']] = (int) $row['views'];
+        }
+
+        foreach ($currentSites as $s) {
+            $prev = $prevMap[$s['site']] ?? 0;
+            $trend = $prev > 0 ? (int) round((((int)$s['views'] - $prev) / $prev) * 100) : null;
+            $siteOverview[] = [
+                'site' => $s['site'],
+                'views' => (int) $s['views'],
+                'visitors' => (int) $s['visitors'],
+                'trend' => $trend,
+                'first_seen' => $s['first_seen'] ? substr($s['first_seen'], 0, 10) : null,
+            ];
+        }
+    }
+
     return json_encode([
         'site'      => $site ?: 'All sites',
         'path'      => $path ?: null,
@@ -951,6 +985,7 @@ function get_api_data(array $config, array $user): string
         'botPages'  => $botPages,
         'botPagesTotal' => $botPagesTotal,
         'botActivity' => $botActivity,
+        'siteOverview' => $siteOverview ?? [],
         'brokenLinks' => $brokenLinks,
         'events'    => $events,
         'eventsTotal' => $eventsTotal,
