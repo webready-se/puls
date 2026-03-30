@@ -556,7 +556,7 @@
 <body>
 
 <div class="header">
-  <div class="logo">
+  <div class="logo" onclick="selectSite('')" style="cursor:pointer">
     <div class="logo-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
@@ -654,8 +654,8 @@
   const shareSite = isShared ? window.PULS_SHARE.site : null;
 
   // --- State ---
-  let currentDays = 7;
-  let currentSite = isShared ? shareSite : '';
+  let currentDays = isShared ? 7 : (+(localStorage.getItem('puls-days')) || 7);
+  let currentSite = isShared ? shareSite : (localStorage.getItem('puls-site') || '');
   let currentPath = '';
   let currentChannel = '';
   let sites = [];
@@ -709,6 +709,7 @@
     currentSite = this.value;
     currentChannel = '';
     currentPath = '';
+    if (!isShared) localStorage.setItem('puls-site', currentSite);
     load(currentDays);
   });
 
@@ -717,6 +718,7 @@
     if (!btn) return;
     periodGroup.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    if (!isShared) localStorage.setItem('puls-days', btn.dataset.days);
     load(+btn.dataset.days);
   });
 
@@ -775,7 +777,18 @@
           siteSelect.appendChild(opt);
         });
         if (s.length <= 1) siteSelect.style.display = 'none';
-        load(7);
+        // Restore saved site selection
+        if (currentSite && s.indexOf(currentSite) >= 0) {
+          siteSelect.value = currentSite;
+        } else {
+          currentSite = '';
+          localStorage.removeItem('puls-site');
+        }
+        // Restore saved period
+        periodGroup.querySelectorAll('.period-btn').forEach(function(b) {
+          b.classList.toggle('active', +b.dataset.days === currentDays);
+        });
+        load(currentDays);
       })
       .catch(function() { load(7); });
   }
