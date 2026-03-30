@@ -65,8 +65,12 @@ function createCliTestDb(string $path): PDO
         site TEXT NOT NULL,
         path TEXT NOT NULL,
         status INTEGER NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        referrers TEXT,
+        hits INTEGER DEFAULT 1,
+        first_seen TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_seen TEXT DEFAULT CURRENT_TIMESTAMP
     )');
+    $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status)');
     $db->exec('CREATE TABLE share_tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         token TEXT NOT NULL UNIQUE,

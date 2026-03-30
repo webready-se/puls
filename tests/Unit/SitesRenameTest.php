@@ -203,6 +203,8 @@ it('covers all database tables that have a site column', function () {
     foreach ($matches as $m) {
         $tableName = $m[1];
         $columns = $m[2];
+        // Skip temporary migration tables (e.g. broken_links_new)
+        if (str_ends_with($tableName, '_new') || str_ends_with($tableName, '_tmp')) continue;
         if (str_contains($columns, 'site TEXT')) {
             $tablesWithSite[$tableName] = true;
         }

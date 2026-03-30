@@ -51,4 +51,6 @@ return [
     'max_login_attempts' => (int) ($_ENV['MAX_LOGIN_ATTEMPTS'] ?? 5),
 
     'lockout_minutes' => (int) ($_ENV['LOCKOUT_MINUTES'] ?? 15),
+
+    'ignored_bots' => array_filter(array_map('trim', explode(',', $_ENV['IGNORED_BOTS'] ?? ''))),
 ];

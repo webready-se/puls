@@ -455,6 +455,17 @@
   }
   @media (max-width: 600px) { .search-btn kbd { display: none; } }
 
+  .bot-row { display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;overflow:hidden }
+  .bot-row-name { font-weight:600;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+  .bot-row-site { color:var(--light);font-size:11px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+  .bot-row-path { color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+  .bot-row-time { color:var(--light);white-space:nowrap;font-size:12px;margin-left:auto;flex-shrink:0 }
+  @media (max-width: 600px) {
+    .bot-row-name { min-width:0;flex-shrink:1 }
+    .bot-row-site { min-width:0;flex-shrink:1 }
+    .bot-row-path { display:none }
+  }
+
   .cmd-overlay {
     display: none; position: fixed; inset: 0; z-index: 100;
     background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
@@ -646,8 +657,7 @@
     var diff = (now - d) / 1000;
     if (diff < 60) return 'just now';
     if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + ' hr ago';
-    if (diff < 172800) return 'yesterday ' + d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+    if (diff < 172800) return Math.floor(diff / 3600) + ' hr ago';
     return d.toLocaleDateString('en-US', {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
   }
   function decode(s) { try { return decodeURIComponent(s); } catch(e) { return s; } }
@@ -1329,12 +1339,12 @@
     activity.forEach(function(a) {
       var color = botCatColors[a.category] || botCatColors['Other'];
       var time = formatTime(a.created_at);
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">' +
+      html += '<div class="bot-row">' +
         '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
-        '<span style="font-weight:600;min-width:120px">' + esc(a.name) + '</span>' +
-        '<span style="color:var(--light);font-size:11px;min-width:80px">' + esc(a.site) + '</span>' +
-        '<span style="color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(a.path) + '</span>' +
-        '<span style="color:var(--light);white-space:nowrap;font-size:12px">' + time + '</span>' +
+        '<span class="bot-row-name">' + esc(a.name) + '</span>' +
+        '<span class="bot-row-site">' + esc(a.site) + '</span>' +
+        '<span class="bot-row-path">' + esc(a.path) + '</span>' +
+        '<span class="bot-row-time">' + time + '</span>' +
       '</div>';
     });
     return html;
@@ -1346,9 +1356,9 @@
       var time = formatTime(l.last_seen);
       var refs = (l.referrers || []).filter(function(r) { return r; });
       html += '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
-        '<div style="display:flex;align-items:center;gap:10px;font-size:13px">' +
+        '<div style="display:flex;align-items:center;gap:10px;font-size:13px;overflow:hidden">' +
           '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
-          (l.site ? '<span style="color:var(--light);font-size:11px;min-width:80px">' + esc(l.site) + '</span>' : '') +
+          (l.site ? '<span style="color:var(--light);font-size:11px;min-width:0">' + esc(l.site) + '</span>' : '') +
           '<span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(l.path) + '">' + esc(l.path) + '</span>' +
           (showStatus ? '<span style="font-size:11px;color:' + color + ';font-weight:600">' + l.status + '</span>' : '') +
           '<span style="color:var(--muted);white-space:nowrap;font-size:12px">' + num(l.hits) + ' hits</span>' +
