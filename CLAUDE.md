@@ -135,6 +135,13 @@ See `.claude/skills/roadmap/` for how Claude should interact with the roadmap.
 On session start:
 1. Check for uncommitted work: `git status` and `git stash list`
 2. Read `ROADMAP.md` to understand current progress
+3. Check for unreleased work: `git log $(git describe --tags --abbrev=0)..HEAD --oneline`
+   — if significant changes have accumulated, suggest a release
+
+After pushing code, check if a release is warranted:
+- Epic completed → suggest minor release
+- Security or breaking bugfix → suggest patch release immediately
+- 5+ commits since last tag → mention it proactively
 
 Write a handoff when the user says "handoff", "bye", "done for today", or similar.
 
