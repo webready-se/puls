@@ -916,7 +916,7 @@ NGINX;
     echo "\n" . str_repeat('═', 60) . "\n";
     echo "Tracking script (add to HTML):\n";
     echo str_repeat('─', 60) . "\n";
-    echo "<script src=\"{$pulsUrl}/?js\" data-site=\"{$site}\" defer></script>\n";
+    echo "<script src=\"{$pulsUrl}/?js\" data-site=\"{$site}\" data-outbound defer></script>\n";
     echo "<noscript><img src=\"{$pulsUrl}/?pixel&s={$site}&p=/\" alt=\"\" width=\"1\" height=\"1\" style=\"position:absolute;pointer-events:none;opacity:0\"></noscript>\n";
 }
 

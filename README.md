@@ -59,32 +59,53 @@ php -S localhost:8080 -t public
 ## Add Tracking
 
 ```html
-<script src="https://your-puls-domain/?js" data-site="my-site" defer></script>
-```
-
-Works with Next.js, Astro, Laravel, Statamic, React, static HTML, and anything else that serves HTML. See [docs/integrations.md](docs/integrations.md) for framework examples, bot tracking pixel, server-side Nginx mirror, and reverse proxy setup.
-
-### Custom Events
-
-Track button clicks, form submissions, downloads, or any interaction:
-
-```javascript
-// Track a custom event
-puls.track('signup', { plan: 'pro' });
-
-// Track a download
-puls.track('download', { file: 'report.pdf' });
-```
-
-### Outbound Link Tracking
-
-Automatically track clicks on external links by adding `data-outbound`:
-
-```html
 <script src="https://your-puls-domain/?js" data-site="my-site" data-outbound defer></script>
 ```
 
-External link clicks appear in the dashboard under Traffic > Outbound.
+This tracks pageviews and outbound link clicks automatically. Works with Next.js, Astro, Laravel, Statamic, React, static HTML, and anything else that serves HTML.
+
+See [docs/integrations.md](docs/integrations.md) for framework examples, bot tracking pixel, server-side Nginx mirror, and reverse proxy setup.
+
+### Script attributes
+
+| Attribute | Required | Description |
+|-----------|----------|-------------|
+| `data-site` | Yes | Site name used to separate data in multi-site setups |
+| `data-outbound` | No | Auto-track clicks on external links |
+| `defer` | Recommended | Load script without blocking page render |
+
+### Custom Events
+
+Track any interaction with `puls.track(name, data)`. Events appear in the dashboard under Traffic > Events.
+
+```javascript
+// Form submission
+document.querySelector('form').addEventListener('submit', function() {
+  puls.track('form_submit', { form: 'contact' });
+});
+
+// Phone number click
+document.querySelector('a[href^="tel:"]').addEventListener('click', function() {
+  puls.track('phone_click');
+});
+
+// File download
+puls.track('download', { file: 'brochure.pdf' });
+
+// Signup with plan info
+puls.track('signup', { plan: 'pro' });
+
+// CTA button click
+document.getElementById('cta').addEventListener('click', function() {
+  puls.track('cta_click', { location: 'hero' });
+});
+```
+
+The `data` parameter is optional. When provided, it is stored as JSON and visible in the dashboard. Keep event names short and consistent — they are grouped by name.
+
+### Outbound Link Tracking
+
+When `data-outbound` is set on the script tag, clicks on external links are automatically tracked as `outbound_click` events. No extra code needed — results appear under Traffic > Outbound.
 
 ## CLI
 

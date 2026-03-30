@@ -5,7 +5,7 @@ Puls works with any website or framework that serves HTML. The tracking script i
 ## Quick Start (any site)
 
 ```html
-<script defer src="https://your-puls-domain/?js" data-site="my-site"></script>
+<script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
 ```
 
 Puls automatically tracks:
@@ -30,7 +30,7 @@ export default class MyDocument extends Document {
         <body>
           <Main />
           <NextScript />
-          <script defer src="https://your-puls-domain/?js" data-site="my-site" />
+          <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound />
         </body>
       </Html>
     )
@@ -51,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Script
           src="https://your-puls-domain/?js"
           data-site="my-site"
+          data-outbound
           strategy="afterInteractive"
         />
       </body>
@@ -68,7 +69,7 @@ In your base layout (`src/layouts/Layout.astro`):
 ```astro
 <html>
   <head>
-    <script defer src="https://your-puls-domain/?js" data-site="my-site"></script>
+    <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
   </head>
   <body>
     <slot />
@@ -98,7 +99,7 @@ In your base layout (`resources/views/layouts/app.blade.php`):
 <body>
     @yield('content')
 
-    <script defer src="https://your-puls-domain/?js" data-site="my-site"></script>
+    <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
 
     @if(!request()->header('User-Agent') || str_contains(request()->header('User-Agent'), 'bot'))
         {{-- noscript pixel with server-side path --}}
@@ -114,7 +115,7 @@ In your Antlers layout (`resources/views/layout.antlers.html`):
 <body>
     {{ template_content }}
 
-    <script defer src="https://your-puls-domain/?js" data-site="my-site"></script>
+    <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
     <noscript>
         <img src="https://your-puls-domain/?pixel&s=my-site&p={{ url }}"
              alt="" width="1" height="1" style="position:absolute;opacity:0" />
@@ -129,7 +130,7 @@ In `index.html`:
 ```html
 <body>
   <div id="root"></div>
-  <script defer src="https://your-puls-domain/?js" data-site="my-site"></script>
+  <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
 </body>
 ```
 
@@ -138,7 +139,7 @@ Puls hooks into `pushState` and `popstate` automatically — no React Router int
 ### Static HTML
 
 ```html
-<script defer src="https://your-puls-domain/?js" data-site="my-site"></script>
+<script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
 ```
 
 That's it. Works on any HTML page.
