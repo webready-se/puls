@@ -484,6 +484,7 @@ function handle_collect(array $config): void
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
     $bot = detect_bot($ua);
     if ($bot) {
+        if (is_ignored_bot($ua, $config['ignored_bots'] ?? [])) return;
         $db = get_db($config['db_path']);
         $site = normalize_site(!empty($input['site']) ? $input['site'] : ($_SERVER['HTTP_HOST'] ?? 'unknown'));
         $path = normalize_path(urldecode(substr($input['u'], 0, 500)));
@@ -876,13 +877,11 @@ function get_api_data(array $config, array $user): string
     $brokenLinks = [];
     if (!empty($blTables)) {
         $stmt = $db->prepare("SELECT * FROM (
-                SELECT site, path, status, SUM(hits) as hits,
-                    MIN(first_seen) as first_seen, MAX(last_seen) as last_seen,
-                    GROUP_CONCAT(DISTINCT referrer) as referrers,
-                    ROW_NUMBER() OVER (PARTITION BY status ORDER BY SUM(hits) DESC) as rn
+                SELECT site, path, status, hits, referrers,
+                    first_seen, last_seen,
+                    ROW_NUMBER() OVER (PARTITION BY status ORDER BY hits DESC) as rn
                 FROM broken_links
                 WHERE last_seen >= date('now', '-30 days') {$blSiteFilter}
-                GROUP BY site, path, status
             ) WHERE rn <= 25");
         $stmt->execute($blSiteParams);
         $brokenLinks = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -890,7 +889,7 @@ function get_api_data(array $config, array $user): string
             $bl['hits'] = (int) $bl['hits'];
             $bl['status'] = (int) $bl['status'];
             $bl['referrers'] = $bl['referrers']
-                ? array_values(array_filter(array_map(fn($r) => urldecode($r), explode(',', $bl['referrers']))))
+                ? array_values(array_filter(explode(',', $bl['referrers'])))
                 : [];
             if (function_exists('idn_to_utf8')) {
                 $decoded = idn_to_utf8($bl['site'], 0, INTL_IDNA_VARIANT_UTS46);
@@ -1028,12 +1027,12 @@ function get_db(string $path): PDO
             site TEXT NOT NULL,
             path TEXT NOT NULL,
             status INTEGER NOT NULL,
-            referrer TEXT,
+            referrers TEXT,
             hits INTEGER DEFAULT 1,
             first_seen TEXT NOT NULL,
             last_seen TEXT NOT NULL
         )');
-        $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status, referrer)');
+        $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status)');
         $db->exec('CREATE INDEX idx_broken_site_status ON broken_links (site, status, hits DESC)');
         $db->exec('CREATE TABLE share_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1065,6 +1064,9 @@ function get_db(string $path): PDO
 function handle_log(array $config): void
 {
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+    if (is_ignored_bot($ua, $config['ignored_bots'] ?? [])) return;
+
     $bot = detect_bot($ua);
 
     // If Nginx sent it here, something non-human made the request
@@ -1096,6 +1098,7 @@ function handle_pixel(array $config): void
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
     $bot = detect_bot($ua);
     if (!$bot) return;
+    if (is_ignored_bot($ua, $config['ignored_bots'] ?? [])) return;
 
     $db = get_db($config['db_path']);
     $path = normalize_path(urldecode($_GET['p'] ?? '/'));
@@ -1217,7 +1220,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 12; // Bump this when adding new migrations
+    $currentVersion = 13; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -1265,12 +1268,12 @@ function run_migrations(PDO $db): void
             site TEXT NOT NULL,
             path TEXT NOT NULL,
             status INTEGER NOT NULL,
-            referrer TEXT,
+            referrers TEXT,
             hits INTEGER DEFAULT 1,
             first_seen TEXT NOT NULL,
             last_seen TEXT NOT NULL
         )');
-        $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status, referrer)');
+        $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status)');
         $db->exec('CREATE INDEX idx_broken_site_status ON broken_links (site, status, hits DESC)');
     }
 
@@ -1282,24 +1285,27 @@ function run_migrations(PDO $db): void
     // v5: broader noise cleanup + decode referrers
     if ($version < 5) {
         $db->exec("DELETE FROM broken_links WHERE path LIKE '%.php%' OR path LIKE '%/wp-%' OR path LIKE '%/wordpress%' OR path LIKE '%/xmlrpc%' OR path LIKE '%/cgi-bin%' OR path LIKE '/.well-known%'");
-        // Decode URL-encoded referrers
-        $rows = $db->query("SELECT id, referrer FROM broken_links WHERE referrer LIKE '%\%%'")->fetchAll(PDO::FETCH_ASSOC);
-        $update = $db->prepare("UPDATE broken_links SET referrer = ? WHERE id = ?");
-        foreach ($rows as $row) {
-            $decoded = urldecode($row['referrer']);
-            if ($decoded !== $row['referrer']) {
-                $update->execute([$decoded, $row['id']]);
-            }
-        }
-        // Decode punycode in referrers
-        if (function_exists('idn_to_utf8')) {
-            $rows = $db->query("SELECT id, referrer FROM broken_links WHERE referrer LIKE '%xn--%'")->fetchAll(PDO::FETCH_ASSOC);
+        // Decode URL-encoded referrers (only if old schema with referrer column)
+        $blCols = array_column($db->query("PRAGMA table_info(broken_links)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+        if (in_array('referrer', $blCols, true)) {
+            $rows = $db->query("SELECT id, referrer FROM broken_links WHERE referrer LIKE '%\%%'")->fetchAll(PDO::FETCH_ASSOC);
             $update = $db->prepare("UPDATE broken_links SET referrer = ? WHERE id = ?");
             foreach ($rows as $row) {
-                $host = explode('/', $row['referrer'])[0];
-                $decoded = idn_to_utf8($host, 0, INTL_IDNA_VARIANT_UTS46);
-                if ($decoded !== false && $decoded !== $host) {
-                    $update->execute([str_replace($host, $decoded, $row['referrer']), $row['id']]);
+                $decoded = urldecode($row['referrer']);
+                if ($decoded !== $row['referrer']) {
+                    $update->execute([$decoded, $row['id']]);
+                }
+            }
+            // Decode punycode in referrers
+            if (function_exists('idn_to_utf8')) {
+                $rows = $db->query("SELECT id, referrer FROM broken_links WHERE referrer LIKE '%xn--%'")->fetchAll(PDO::FETCH_ASSOC);
+                $update = $db->prepare("UPDATE broken_links SET referrer = ? WHERE id = ?");
+                foreach ($rows as $row) {
+                    $host = explode('/', $row['referrer'])[0];
+                    $decoded = idn_to_utf8($host, 0, INTL_IDNA_VARIANT_UTS46);
+                    if ($decoded !== false && $decoded !== $host) {
+                        $update->execute([str_replace($host, $decoded, $row['referrer']), $row['id']]);
+                    }
                 }
             }
         }
@@ -1309,13 +1315,16 @@ function run_migrations(PDO $db): void
     if ($version < 6) {
         $db->exec("DELETE FROM broken_links WHERE path IN ('/endpoint-test', '/test-404', '/test-301', '/test-200', '/denna-sida-finns-inte-abc123', '/finns-inte-test', '/finns-inte-test-xyz', '/testar-broken-link-xyz', '/testar-broken-link-123')");
         $db->exec("UPDATE broken_links SET path = REPLACE(path, '//', '/') WHERE path LIKE '//%'");
-        // URL-decode stored referrers (re-run for any missed by v5)
-        $rows = $db->query("SELECT id, referrer FROM broken_links WHERE referrer LIKE '%\%%'")->fetchAll(PDO::FETCH_ASSOC);
-        $update = $db->prepare("UPDATE broken_links SET referrer = ? WHERE id = ?");
-        foreach ($rows as $row) {
-            $decoded = urldecode($row['referrer']);
-            if ($decoded !== $row['referrer']) {
-                $update->execute([$decoded, $row['id']]);
+        // URL-decode stored referrers (only if old schema with referrer column)
+        $blCols = array_column($db->query("PRAGMA table_info(broken_links)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+        if (in_array('referrer', $blCols, true)) {
+            $rows = $db->query("SELECT id, referrer FROM broken_links WHERE referrer LIKE '%\%%'")->fetchAll(PDO::FETCH_ASSOC);
+            $update = $db->prepare("UPDATE broken_links SET referrer = ? WHERE id = ?");
+            foreach ($rows as $row) {
+                $decoded = urldecode($row['referrer']);
+                if ($decoded !== $row['referrer']) {
+                    $update->execute([$decoded, $row['id']]);
+                }
             }
         }
     }
@@ -1452,6 +1461,39 @@ function run_migrations(PDO $db): void
         $db->exec('CREATE INDEX IF NOT EXISTS idx_events_name ON events (event_name, site, created_at)');
     }
 
+    // v13: broken_links redesign — aggregate referrers into single column
+    if ($version < 13) {
+        $hasBL = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='broken_links'")->fetch();
+        if ($hasBL) {
+            $hasReferrerCol = $db->query("PRAGMA table_info(broken_links)")->fetchAll(PDO::FETCH_ASSOC);
+            $colNames = array_column($hasReferrerCol, 'name');
+            if (in_array('referrer', $colNames, true)) {
+                $db->exec('CREATE TABLE broken_links_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    site TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    status INTEGER NOT NULL,
+                    referrers TEXT,
+                    hits INTEGER DEFAULT 1,
+                    first_seen TEXT NOT NULL,
+                    last_seen TEXT NOT NULL
+                )');
+                $db->exec("INSERT INTO broken_links_new (site, path, status, referrers, hits, first_seen, last_seen)
+                    SELECT site, path, status,
+                        SUBSTR(GROUP_CONCAT(DISTINCT referrer), 1, 2000),
+                        SUM(hits),
+                        MIN(first_seen),
+                        MAX(last_seen)
+                    FROM broken_links
+                    GROUP BY site, path, status");
+                $db->exec('DROP TABLE broken_links');
+                $db->exec('ALTER TABLE broken_links_new RENAME TO broken_links');
+                $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status)');
+                $db->exec('CREATE INDEX idx_broken_site_status ON broken_links (site, status, hits DESC)');
+            }
+        }
+    }
+
     file_put_contents($marker, (string) $currentVersion);
 }
 
@@ -1485,12 +1527,19 @@ function handle_status_log(array $config): void
 
     $now = date('Y-m-d H:i:s');
 
-    // Upsert: increment hits if exists, otherwise insert
-    $stmt = $db->prepare('INSERT INTO broken_links (site, path, status, referrer, hits, first_seen, last_seen)
+    // Upsert: increment hits, append referrer if new
+    $stmt = $db->prepare("INSERT INTO broken_links (site, path, status, referrers, hits, first_seen, last_seen)
         VALUES (?, ?, ?, ?, 1, ?, ?)
-        ON CONFLICT(site, path, status, referrer) DO UPDATE SET
+        ON CONFLICT(site, path, status) DO UPDATE SET
             hits = hits + 1,
-            last_seen = excluded.last_seen');
+            last_seen = excluded.last_seen,
+            referrers = CASE
+                WHEN excluded.referrers IS NULL THEN referrers
+                WHEN referrers IS NULL THEN excluded.referrers
+                WHEN INSTR(',' || referrers || ',', ',' || excluded.referrers || ',') > 0 THEN referrers
+                WHEN LENGTH(referrers) > 1900 THEN referrers
+                ELSE referrers || ',' || excluded.referrers
+            END");
     $stmt->execute([$site, $path, $status, $referrer, $now, $now]);
 
     // Lazy retention: clean up entries older than 30 days (once per day)
@@ -1515,6 +1564,16 @@ function cleanup_bot_visits(PDO $db): void
     $stmt = $db->prepare('DELETE FROM bot_visits WHERE created_at < ?');
     $stmt->execute([date('Y-m-d H:i:s', strtotime('-90 days'))]);
     file_put_contents($marker, date('Y-m-d'));
+}
+
+function is_ignored_bot(string $ua, array $patterns): bool
+{
+    foreach ($patterns as $pattern) {
+        if ($pattern !== '' && stripos($ua, $pattern) !== false) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function detect_bot(string $ua): ?array
