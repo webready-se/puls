@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] — 2026-03-30
+
+### Added
+
+- Data export — CSV/JSON download from hamburger menu (client-side, respects site/period)
+- `IGNORED_BOTS` env variable — exclude bot UA patterns from bot_visits tracking
+- PHP syntax check hook — catches .php errors immediately after edit
+- Proactive release checks in session continuity rules
+
+### Changed
+
+- broken_links table redesigned — UNIQUE on `(site, path, status)` instead of `(site, path, status, referrer)`, referrers aggregated into single comma-separated column
+- Time format — "yesterday HH:MM" replaced with "X hr ago" (up to 48h)
+- CLI uses `readline()` for interactive input (arrow keys, Ctrl+A, Home/End)
+- `nginx:config` defaults to APP_URL when set
+- Schema version 12 → 13
+- Test suite: 142 tests (276 assertions)
+
+### Fixed
+
+- Mobile layout for bot activity — no more horizontal scroll, time always right-aligned
+- `.env` parser strips double quotes from values
+- `share:create` uses correct variable for expiry date
+
 ## [1.1.0] — 2026-03-27
 
 ### Added
@@ -109,5 +133,6 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.2.0]: https://github.com/webready-se/puls/releases/tag/v1.2.0
 [1.1.0]: https://github.com/webready-se/puls/releases/tag/v1.1.0
 [1.0.0]: https://github.com/webready-se/puls/releases/tag/v1.0.0
