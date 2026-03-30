@@ -72,6 +72,7 @@ See [docs/integrations.md](docs/integrations.md) for framework examples, bot tra
 |-----------|----------|-------------|
 | `data-site` | Yes | Site name used to separate data in multi-site setups |
 | `data-outbound` | No | Auto-track clicks on external links |
+| `data-auto-events` | No | Auto-track phone clicks, email clicks, downloads, form submissions |
 | `defer` | Recommended | Load script without blocking page render |
 
 ### Custom Events
@@ -102,6 +103,19 @@ document.getElementById('cta').addEventListener('click', function() {
 ```
 
 The `data` parameter is optional. When provided, it is stored as JSON and visible in the dashboard. Keep event names short and consistent — they are grouped by name.
+
+### Auto Event Tracking
+
+Add `data-auto-events` to automatically track common interactions — no custom code needed:
+
+| Interaction | Event name | Data captured |
+|---|---|---|
+| Phone click (`tel:`) | `phone_click` | number, page |
+| Email click (`mailto:`) | `email_click` | email, page |
+| File download (PDF, DOC, XLS, ZIP, etc.) | `download` | file, url, page |
+| Form submission (POST) | `form_submit` | action, page |
+
+All events appear in the dashboard under Traffic > Events with full detail. No markup changes needed — Puls detects these interactions automatically via event delegation.
 
 ### Outbound Link Tracking
 
