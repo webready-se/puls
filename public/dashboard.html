@@ -424,6 +424,16 @@
   .menu-logout:hover { color: var(--red); border-color: var(--red); }
   .menu-logout svg { width: 16px; height: 16px; }
 
+  .export-btns { display: flex; gap: 8px; }
+  .export-btn {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--muted); font-size: 12px;
+    font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .export-btn:hover { color: var(--text); border-color: var(--accent); }
+  .export-btn svg { width: 14px; height: 14px; }
+
   /* Path filter chip */
   .path-filter {
     display: flex; align-items: center; gap: 8px;
@@ -587,6 +597,19 @@
       <button data-value="system" title="System"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Auto</button>
       <button data-value="light" title="Light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>Light</button>
       <button data-value="dark" title="Dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>Dark</button>
+    </div>
+  </div>
+  <div class="menu-section" id="export-section">
+    <span class="menu-label">Export</span>
+    <div class="export-btns">
+      <button class="export-btn" onclick="exportData('csv')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        CSV
+      </button>
+      <button class="export-btn" onclick="exportData('json')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/></svg>
+        JSON
+      </button>
     </div>
   </div>
   <div style="flex:1"></div>
@@ -1791,6 +1814,187 @@
     menuOverlay.classList.remove('open');
     menuPanel.classList.remove('open');
   };
+
+  // --- Export ---
+  if (isShared) {
+    var exportSection = document.getElementById('export-section');
+    if (exportSection) exportSection.style.display = 'none';
+  }
+
+  window.exportData = function(format) {
+    if (!lastData) return;
+    var d = lastData;
+    var siteName = currentSite || 'all-sites';
+    var dateStr = new Date().toISOString().slice(0, 10);
+    var filename = 'puls-' + siteName + '-' + currentDays + 'd-' + dateStr;
+
+    if (format === 'json') {
+      var exported = {
+        site: currentSite || 'all',
+        period: currentDays + ' days',
+        exported_at: new Date().toISOString(),
+        totals: d.totals,
+        bounce_rate: d.bounceRate,
+        median_session_seconds: d.medianSessionSeconds,
+        pageviews_by_day: d.pageviews,
+        pages: d.pages,
+        referrers: d.referrers,
+        utm_campaigns: d.utm,
+        channels: d.channels,
+        browsers: d.browsers,
+        devices: d.devices,
+        languages: d.languages,
+        entry_pages: d.entryPages,
+        exit_pages: d.exitPages,
+        events: d.events,
+        outbound_links: d.outbound
+      };
+      var blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
+      downloadBlob(blob, filename + '.json');
+    } else {
+      var csv = buildCsv(d);
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      downloadBlob(blob, filename + '.csv');
+    }
+    closeMenu();
+  };
+
+  function downloadBlob(blob, name) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  function csvEscape(val) {
+    if (val == null) return '';
+    var s = String(val);
+    if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function csvSection(title, headers, rows) {
+    var lines = ['## ' + title];
+    lines.push(headers.map(csvEscape).join(','));
+    rows.forEach(function(r) { lines.push(r.map(csvEscape).join(',')); });
+    lines.push('');
+    return lines.join('\n');
+  }
+
+  function buildCsv(d) {
+    var parts = [];
+
+    // Summary
+    parts.push(csvSection('Summary', ['Metric', 'Value'], [
+      ['Views', d.totals.views],
+      ['Visitors', d.totals.visitors],
+      ['Bounce rate', d.bounceRate != null ? d.bounceRate + '%' : ''],
+      ['Median session (s)', d.medianSessionSeconds]
+    ]));
+
+    // Pageviews by day
+    if (d.pageviews && d.pageviews.length) {
+      parts.push(csvSection('Pageviews by day',
+        ['Date', 'Views', 'Visitors'],
+        d.pageviews.map(function(p) { return [p.date, p.views, p.visitors]; })
+      ));
+    }
+
+    // Pages
+    if (d.pages && d.pages.length) {
+      parts.push(csvSection('Pages',
+        ['Path', 'Views', 'Visitors'],
+        d.pages.map(function(p) { return [p.path, p.views, p.visitors]; })
+      ));
+    }
+
+    // Referrers
+    if (d.referrers && d.referrers.length) {
+      parts.push(csvSection('Referrers',
+        ['Referrer', 'Views', 'Visitors'],
+        d.referrers.map(function(r) { return [r.referrer, r.views, r.visitors]; })
+      ));
+    }
+
+    // UTM campaigns
+    if (d.utm && d.utm.length) {
+      parts.push(csvSection('UTM campaigns',
+        ['Source', 'Medium', 'Campaign', 'Views', 'Visitors'],
+        d.utm.map(function(u) { return [u.utm_source, u.utm_medium, u.utm_campaign, u.views, u.visitors]; })
+      ));
+    }
+
+    // Channels
+    if (d.channels && d.channels.length) {
+      parts.push(csvSection('Channels',
+        ['Channel', 'Views', 'Visitors'],
+        d.channels.map(function(c) { return [c.channel, c.views, c.visitors]; })
+      ));
+    }
+
+    // Browsers
+    if (d.browsers && d.browsers.length) {
+      parts.push(csvSection('Browsers',
+        ['Browser', 'Count'],
+        d.browsers.map(function(b) { return [b.browser, b.count]; })
+      ));
+    }
+
+    // Devices
+    if (d.devices && d.devices.length) {
+      parts.push(csvSection('Devices',
+        ['Device', 'Count'],
+        d.devices.map(function(dv) { return [dv.device, dv.count]; })
+      ));
+    }
+
+    // Languages
+    if (d.languages && d.languages.length) {
+      parts.push(csvSection('Languages',
+        ['Language', 'Count'],
+        d.languages.map(function(l) { return [l.language, l.count]; })
+      ));
+    }
+
+    // Entry pages
+    if (d.entryPages && d.entryPages.length) {
+      parts.push(csvSection('Entry pages',
+        ['Path', 'Entries'],
+        d.entryPages.map(function(p) { return [p.path, p.entries]; })
+      ));
+    }
+
+    // Exit pages
+    if (d.exitPages && d.exitPages.length) {
+      parts.push(csvSection('Exit pages',
+        ['Path', 'Exits'],
+        d.exitPages.map(function(p) { return [p.path, p.exits]; })
+      ));
+    }
+
+    // Events
+    if (d.events && d.events.length) {
+      parts.push(csvSection('Events',
+        ['Event', 'Count', 'Visitors'],
+        d.events.map(function(e) { return [e.event_name, e.count, e.visitors]; })
+      ));
+    }
+
+    // Outbound links
+    if (d.outbound && d.outbound.length) {
+      parts.push(csvSection('Outbound links',
+        ['URL', 'Clicks', 'Visitors'],
+        d.outbound.map(function(o) { return [o.event_data, o.count, o.visitors]; })
+      ));
+    }
+
+    return parts.join('\n');
+  }
 
   // --- Theme toggle ---
   var themeToggle = document.getElementById('theme-toggle');
