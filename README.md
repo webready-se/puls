@@ -14,11 +14,12 @@ Puls is a cookieless, lightweight analytics tool built with a single PHP file an
 ## Features
 
 - **Cookieless** — GDPR-friendly by default, no consent banners needed
-- **Lightweight** — ~15KB tracking script, single PHP file backend
+- **Lightweight** — ~1.5KB tracking script, single PHP file backend
 - **Multi-site hub** — Track all your sites from one dashboard
 - **Bot detection** — Separates real visitors from bots (AI crawlers, search engines, social, SEO tools)
 - **Privacy-first** — Daily-rotating visitor hashes, no PII stored
 - **Multi-user** — Bcrypt auth with per-user site access control
+- **Data export** — CSV/JSON download from the dashboard
 - **Zero dependencies** — PHP 8.2+ and SQLite, nothing else
 
 <details>
@@ -102,6 +103,8 @@ php puls share:create <site>             # Create a shareable dashboard link
 php puls share:create <site> --label="Client Q1" --expires=2026-06-30
 php puls share:list                      # List all share tokens
 php puls share:revoke <token>            # Revoke a share token
+php puls sites:remove <name>             # Delete all data for a site
+php puls nginx:config                    # Generate Nginx config for a site
 ```
 
 Users with no `--sites` flag can see all sites. Restricted users only see their assigned sites.
@@ -112,11 +115,14 @@ All configuration lives in `.env` (created by `php puls key:generate` from `.env
 
 ```env
 APP_KEY=base64:...          # Auto-generated, used for visitor hashing
+APP_URL=https://puls.example.com  # Base URL (used in CLI for share links)
 ALLOWED_ORIGINS=            # Allowed domains (comma-separated, includes subdomains)
 DB_PATH=data/puls.sqlite    # Database path (relative to project root)
+USERS_FILE=users.json       # User credentials path (relative to project root)
 SESSION_LIFETIME=2592000    # 30 days
 MAX_LOGIN_ATTEMPTS=5
 LOCKOUT_MINUTES=15
+IGNORED_BOTS=               # Bot UA patterns to exclude (comma-separated)
 ```
 
 ### Allowed Origins

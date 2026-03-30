@@ -20,6 +20,8 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `GET /?log&s={site}&p={path}` | No | Server-side bot logging (Nginx mirror) |
 | `GET /?status_log&s={site}&p={path}&status={code}` | No | Broken link/redirect tracking (Nginx post_action) |
 | `GET /?health` | No | Health check (200/503) |
+| `GET /?manifest` | No | PWA web app manifest |
+| `GET /?csrf` | No | CSRF token refresh (AJAX) |
 | `GET /?share=<token>` | No | Shared read-only dashboard |
 | `GET /?api&share=<token>` | No | Shared JSON API (scoped to token's site) |
 | `GET /?api&days=7[&site=x]` | Yes | JSON API |
@@ -38,14 +40,15 @@ public/dashboard.html   — Self-contained dashboard (CSS + JS, no build step)
 config.php              — Configuration (loads .env, auto-detects Forge paths)
 .env.example            — Environment template (checked in)
 .env                    — Environment config (gitignored, created by key:generate)
-puls                    — CLI entrypoint (key:generate, user:add/remove/list)
+puls                    — CLI entrypoint (all management commands, interactive with readline)
 users.json              — User credentials (bcrypt hashed, auto-created by CLI)
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Dev dependencies (Pest)
-phpunit.xml             — Test configuration
-tests/                  — Pest test suite (unit + feature)
+phpunit.xml             — Test configuration (Pest)
+tests/                  — Pest test suite (142 tests, unit + feature)
 scripts/hooks/pre-push  — Git hook: runs Pest before allowing push
-scripts/normalize-paths.php — One-time migration to clean old tracking params from paths
+scripts/build-release.sh — Builds release zip with runtime files only
+.claude/hooks/php-lint.sh — PostToolUse hook: syntax-checks PHP after edit
 ```
 
 ### Key Design Decisions
