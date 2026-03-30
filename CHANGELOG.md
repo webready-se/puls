@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] — 2026-03-30
+
+### Added
+
+- Site overview card — shows all sites with visitors, views, trend, and first seen date on All Sites view
+- Persist site and period selection across page reloads via localStorage
+- Puls logo is now clickable — returns to All Sites view
+- Path-scoped docs-sync rule to keep README/CLAUDE.md up to date
+
+### Changed
+
+- Updated README.md and CLAUDE.md with current features, endpoints, and config options
+
 ## [1.2.0] — 2026-03-30
 
 ### Added
@@ -133,6 +146,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.3.0]: https://github.com/webready-se/puls/releases/tag/v1.3.0
 [1.2.0]: https://github.com/webready-se/puls/releases/tag/v1.2.0
 [1.1.0]: https://github.com/webready-se/puls/releases/tag/v1.1.0
 [1.0.0]: https://github.com/webready-se/puls/releases/tag/v1.0.0
