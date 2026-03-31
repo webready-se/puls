@@ -1312,7 +1312,7 @@
     rows.forEach(function(r) {
       var pct = (+r.clicks / max) * 100;
       var display = r.url ? r.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '(unknown)';
-      html += '<div class="trow">' +
+      html += '<div class="trow trow-clickable" onclick="loadOutboundDetail(\'' + esc(r.url || '') + '\', this)">' +
         '<span class="trow-label" title="' + esc(r.url || '') + '">' + esc(display) + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#06b6d4"></div></div>' +
         '<span class="trow-val">' + num(r.clicks) + '</span>' +
@@ -2026,6 +2026,50 @@
           }
           html += '<div class="event-detail-row">' +
             (dataStr ? '<span class="event-detail-data">' + esc(dataStr) + '</span>' : '') +
+            '<span class="event-detail-page">' + esc(item.page_path) + '</span>' +
+            '<span class="event-detail-time">' + formatTime(item.created_at) + '</span>' +
+          '</div>';
+        });
+        if (items.length > 20) {
+          html += '<div style="padding:4px 0;color:var(--muted);font-size:11px">+ ' + (items.length - 20) + ' more</div>';
+        }
+        detail.innerHTML = html;
+      })
+      .catch(function() { detail.innerHTML = '<span style="color:var(--muted)">Failed to load</span>'; });
+  };
+
+  window.loadOutboundDetail = function(url, el) {
+    var existing = el.nextElementSibling;
+    if (existing && existing.classList.contains('event-detail')) {
+      existing.remove();
+      return;
+    }
+    document.querySelectorAll('.event-detail').forEach(function(d) { d.remove(); });
+
+    var apiBase = currentFrom && currentTo
+      ? apiUrl('?api&from=' + currentFrom + '&to=' + currentTo)
+      : apiUrl('?api&days=' + currentDays);
+    var fetchUrl = apiBase + '&event=outbound_click&event_url=' + encodeURIComponent(url);
+    if (currentSite) fetchUrl += '&site=' + encodeURIComponent(currentSite);
+
+    var detail = document.createElement('div');
+    detail.className = 'event-detail';
+    detail.innerHTML = '<span style="color:var(--muted)">Loading...</span>';
+    el.after(detail);
+
+    fetch(fetchUrl)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var items = data.eventDetail || [];
+        if (!items.length) {
+          detail.innerHTML = '<span style="color:var(--muted)">No detail data</span>';
+          return;
+        }
+        var html = '';
+        items.slice(0, 20).forEach(function(item) {
+          var text = item.event_data && item.event_data.text ? item.event_data.text : '';
+          html += '<div class="event-detail-row">' +
+            (text ? '<span class="event-detail-data">' + esc(text) + '</span>' : '') +
             '<span class="event-detail-page">' + esc(item.page_path) + '</span>' +
             '<span class="event-detail-time">' + formatTime(item.created_at) + '</span>' +
           '</div>';

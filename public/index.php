@@ -937,9 +937,15 @@ function get_api_data(array $config, array $user): string
     // Event detail drill-down: recent occurrences of a specific event
     $eventDetail = [];
     $eventName = $_GET['event'] ?? '';
+    $eventUrl = $_GET['event_url'] ?? '';
     if ($eventName) {
-        $stmt = $db->prepare("SELECT event_data, page_path, created_at FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT 50");
-        $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
+        if ($eventUrl) {
+            $stmt = $db->prepare("SELECT event_data, page_path, created_at FROM events WHERE event_name = ? AND json_extract(event_data, '\$.url') = ? AND {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT 50");
+            $stmt->execute(array_merge([$eventName, $eventUrl], $dateParams, $siteParams));
+        } else {
+            $stmt = $db->prepare("SELECT event_data, page_path, created_at FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT 50");
+            $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
+        }
         $eventDetail = $stmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($eventDetail as &$ed) {
             $ed['event_data'] = $ed['event_data'] ? json_decode($ed['event_data'], true) : null;
