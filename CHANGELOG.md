@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] — 2026-03-31
+
+### Added
+
+- Custom date range picker — calendar icon opens from/to date selector, backend supports `&from=&to=` parameters
+- Auto event tracking — `data-auto-events` attribute for zero-config tracking of phone clicks, email clicks, file downloads, and form submissions via event delegation
+- Event drill-down — click an event name in the dashboard to see individual occurrences with data (number, email, action), page path, and timestamp
+- `data-auto-events` documented in README with data captured table
+
+### Changed
+
+- All snippet examples now include `data-outbound` by default
+- Expanded `puls.track` documentation with script attributes table and practical examples
+- All API queries refactored to use `$dateFilter`/`$dateParams` for consistent date filtering
+- Auto-events use capture phase to work with `stopPropagation` (JS-handled forms)
+
+### Fixed
+
+- Tracking script supports `data-*` attributes on dynamically injected script tags (querySelector fallback)
+- Dark mode calendar picker icon now visible (CSS filter invert)
+
 ## [1.3.0] — 2026-03-30
 
 ### Added
@@ -146,6 +167,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.4.0]: https://github.com/webready-se/puls/releases/tag/v1.4.0
 [1.3.0]: https://github.com/webready-se/puls/releases/tag/v1.3.0
 [1.2.0]: https://github.com/webready-se/puls/releases/tag/v1.2.0
 [1.1.0]: https://github.com/webready-se/puls/releases/tag/v1.1.0
