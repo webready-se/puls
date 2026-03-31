@@ -451,7 +451,7 @@ function get_tracking_script(): string
     return <<<'JS'
     (function(){
       if(navigator.webdriver||document.visibilityState==='prerender')return;
-      var sc=document.currentScript||{src:'/stats.php',dataset:{}};
+      var sc=document.currentScript||document.querySelector('script[src*="?js"][data-site]')||{src:'/stats.php',dataset:{}};
       var base=sc.src.split('?')[0];
       var ep=base+'?collect';
       var evEp=base+'?event';
