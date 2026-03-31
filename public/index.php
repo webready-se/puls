@@ -934,6 +934,19 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge($dateParams, $siteParams, $pathParams));
     $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Event detail drill-down: recent occurrences of a specific event
+    $eventDetail = [];
+    $eventName = $_GET['event'] ?? '';
+    if ($eventName) {
+        $stmt = $db->prepare("SELECT event_data, page_path, created_at FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT 50");
+        $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
+        $eventDetail = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($eventDetail as &$ed) {
+            $ed['event_data'] = $ed['event_data'] ? json_decode($ed['event_data'], true) : null;
+        }
+        unset($ed);
+    }
+
     $stmt = $db->prepare("SELECT COUNT(DISTINCT event_name) FROM events WHERE {$dateFilter} {$siteFilter}");
     $stmt->execute(array_merge($dateParams, $siteParams));
     $eventsTotal = (int) $stmt->fetchColumn();
@@ -1017,6 +1030,7 @@ function get_api_data(array $config, array $user): string
         'siteOverview' => $siteOverview ?? [],
         'brokenLinks' => $brokenLinks,
         'events'    => $events,
+        'eventDetail' => $eventDetail,
         'eventsTotal' => $eventsTotal,
         'outbound'  => $outbound,
         'outboundTotal' => $outboundTotal,

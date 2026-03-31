@@ -250,6 +250,12 @@
   .trow-val { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: var(--muted); }
   .trow-clickable { cursor: pointer; border-radius: 6px; padding: 7px 6px; margin: 0 -6px; transition: background 0.15s; }
   .trow-clickable:hover { background: var(--subtle); }
+  .event-detail { margin: 0 -6px 8px; padding: 8px 10px; background: var(--subtle); border-radius: 8px; font-size: 12px; }
+  .event-detail-row { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); align-items: baseline; }
+  .event-detail-row:last-child { border-bottom: none; }
+  .event-detail-data { color: var(--text); font-family: monospace; font-size: 11px; word-break: break-all; }
+  .event-detail-page { color: var(--light); font-size: 11px; min-width: 80px; }
+  .event-detail-time { color: var(--muted); font-size: 11px; white-space: nowrap; margin-left: auto; }
 
   /* Card tabs */
   .card-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: -22px -22px 16px; padding: 0 22px; }
@@ -1152,7 +1158,7 @@
     exitPages: function(d) { return renderTableContent(d.exitPages, 'path', 'exits', '#d97706'); },
     referrers: function(d) { return renderTableContent(d.referrers, 'source', 'visitors', '#8b5cf6'); },
     utm: function(d) { return renderUtmContent(d.utm); },
-    events: function(d) { return renderTableContent(d.events, 'event_name', 'count', '#a78bfa'); },
+    events: function(d) { return renderEventsContent(d.events); },
     outbound: function(d) { return renderOutboundContent(d.outbound); },
     bots: function(d) { return renderBotTableContent(d.bots); },
     botPages: function(d) { return renderTableContent(d.botPages, 'path', 'visits', '#2563eb'); },
@@ -1268,7 +1274,7 @@
         showAllBtn(utmTotal, 'utm', 'UTM campaigns') +
       '</div>' +
       '<div class="tab-panel" data-panel="events" style="display:none">' +
-        renderTableContent(events, 'event_name', 'count', '#a78bfa') +
+        renderEventsContent(events) +
         showAllBtn(eventsTotal, 'events', 'Custom events') +
       '</div>' +
       '<div class="tab-panel" data-panel="outbound" style="display:none">' +
@@ -1276,6 +1282,24 @@
         showAllBtn(outboundTotal, 'outbound', 'Outbound links') +
       '</div>' +
     '</div>';
+    return html;
+  }
+
+  function renderEventsContent(rows) {
+    if (!rows || !rows.length) {
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
+    }
+    var max = Math.max.apply(null, rows.map(function(r) { return +r.count; }));
+    var html = '';
+    rows.forEach(function(r) {
+      var pct = (+r.count / max) * 100;
+      var name = r.event_name.replace(/_/g, ' ');
+      html += '<div class="trow trow-clickable" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
+        '<span class="trow-label">' + esc(name) + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#a78bfa"></div></div>' +
+        '<span class="trow-val">' + num(r.count) + '</span>' +
+      '</div>';
+    });
     return html;
   }
 
@@ -1962,6 +1986,57 @@
       datePicker.classList.remove('open');
     }
   });
+
+  window.loadEventDetail = function(eventName, el) {
+    // Toggle: close if already open
+    var existing = el.nextElementSibling;
+    if (existing && existing.classList.contains('event-detail')) {
+      existing.remove();
+      return;
+    }
+    // Close any other open detail
+    document.querySelectorAll('.event-detail').forEach(function(d) { d.remove(); });
+
+    var url = apiUrl('?api&days=' + currentDays + '&event=' + encodeURIComponent(eventName));
+    if (currentFrom && currentTo) url = apiUrl('?api&from=' + currentFrom + '&to=' + currentTo + '&event=' + encodeURIComponent(eventName));
+    if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+
+    var detail = document.createElement('div');
+    detail.className = 'event-detail';
+    detail.innerHTML = '<span style="color:var(--muted)">Loading...</span>';
+    el.after(detail);
+
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var items = data.eventDetail || [];
+        if (!items.length) {
+          detail.innerHTML = '<span style="color:var(--muted)">No detail data</span>';
+          return;
+        }
+        var html = '';
+        items.slice(0, 20).forEach(function(item) {
+          var dataStr = '';
+          if (item.event_data) {
+            var parts = [];
+            for (var k in item.event_data) {
+              parts.push(k + ': ' + item.event_data[k]);
+            }
+            dataStr = parts.join(', ');
+          }
+          html += '<div class="event-detail-row">' +
+            (dataStr ? '<span class="event-detail-data">' + esc(dataStr) + '</span>' : '') +
+            '<span class="event-detail-page">' + esc(item.page_path) + '</span>' +
+            '<span class="event-detail-time">' + formatTime(item.created_at) + '</span>' +
+          '</div>';
+        });
+        if (items.length > 20) {
+          html += '<div style="padding:4px 0;color:var(--muted);font-size:11px">+ ' + (items.length - 20) + ' more</div>';
+        }
+        detail.innerHTML = html;
+      })
+      .catch(function() { detail.innerHTML = '<span style="color:var(--muted)">Failed to load</span>'; });
+  };
 
   window.selectSite = function(site) {
     siteSelect.value = site;
