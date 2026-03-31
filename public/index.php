@@ -466,20 +466,18 @@ function get_tracking_script(): string
       window.puls={track:function(name,data){if(!name)return;var p={event_name:name,site:site,page_path:location.pathname};if(data&&typeof data==='object')p.event_data=data;navigator.sendBeacon?navigator.sendBeacon(evEp,JSON.stringify(p)):0}};
       if(sc.dataset.outbound!==undefined){document.addEventListener('click',function(e){var a=e.target.closest('a[href]');if(!a)return;try{var u=new URL(a.href,location.origin);if(u.hostname===location.hostname||u.protocol!=='http:'&&u.protocol!=='https:')return;puls.track('outbound_click',{url:u.href,text:(a.textContent||'').trim().substring(0,200)})}catch(ex){}},true)}
       if(sc.dataset.autoEvents!==undefined){
-        document.body.addEventListener('click',function(e){
+        document.addEventListener('click',function(e){
           var a=e.target.closest('a[href]');if(!a)return;
           var h=a.getAttribute('href')||'';
           if(h.indexOf('tel:')===0){puls.track('phone_click',{number:h.replace('tel:','').replace(/\s/g,''),page:location.pathname})}
           else if(h.indexOf('mailto:')===0){puls.track('email_click',{email:h.replace('mailto:','').split('?')[0],page:location.pathname})}
           else{var ext=h.split('?')[0].split('.').pop().toLowerCase();if(['pdf','doc','docx','xls','xlsx','csv','zip','rar'].indexOf(ext)>=0){puls.track('download',{file:h.split('/').pop().split('?')[0],url:h,page:location.pathname})}}
-        });
-        document.body.addEventListener('submit',function(e){
+        },true);
+        document.addEventListener('submit',function(e){
           var f=e.target.closest('form');if(!f)return;
           var action=f.getAttribute('action')||location.pathname;
-          var method=(f.getAttribute('method')||'get').toUpperCase();
-          if(method==='GET')return;
           puls.track('form_submit',{action:action,page:location.pathname})
-        });
+        },true);
       }
     })();
     JS;
