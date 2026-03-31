@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] — 2026-03-31
+
+### Added
+
+- Summary insight cards — Best day, Peak hour, Top page, Top source shown below stat cards
+- Outbound link drill-down — click an outbound URL to see which pages the clicks came from
+- Event drill-down for outbound uses `&event_url=` API parameter for URL-specific filtering
+
+### Fixed
+
+- Auto-events use capture phase to work with `stopPropagation` (JS-handled forms like fetch/preventDefault)
+- Tracking script supports `data-*` attributes on dynamically injected scripts (querySelector fallback)
+
 ## [1.4.0] — 2026-03-31
 
 ### Added
@@ -167,6 +180,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.5.0]: https://github.com/webready-se/puls/releases/tag/v1.5.0
 [1.4.0]: https://github.com/webready-se/puls/releases/tag/v1.4.0
 [1.3.0]: https://github.com/webready-se/puls/releases/tag/v1.3.0
 [1.2.0]: https://github.com/webready-se/puls/releases/tag/v1.2.0

@@ -119,7 +119,7 @@
 - [ ] **Comparison mode** — "This week vs last" as overlay in chart
 - [ ] **Goals/conversions** — define target page (e.g. /thank-you), show conversion rate
 - [x] **Custom date range** — date picker beyond 7d/30d/90d
-- [ ] **Summary cards** — "Best day: Tuesday", "Peak traffic: 2–3 PM"
+- [x] **Summary cards** — "Best day: Tuesday", "Peak traffic: 2–3 PM"
 
 ## Epic 10: Release Management
 
