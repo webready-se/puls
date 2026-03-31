@@ -54,6 +54,15 @@ function createTestDb(string $path): PDO
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )');
 
+    $db->exec('CREATE TABLE goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site TEXT NOT NULL,
+        path TEXT NOT NULL,
+        label TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )');
+    $db->exec('CREATE UNIQUE INDEX idx_goals_unique ON goals (site, path)');
+
     return $db;
 }
 

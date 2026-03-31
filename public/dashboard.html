@@ -204,6 +204,20 @@
   .summary-card-value { font-size: 15px; font-weight: 700; color: var(--text); }
   .summary-card-sub { font-size: 11px; color: var(--light); margin-top: 2px; }
 
+  /* Goals */
+  .goal-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .goal-row:last-child { border-bottom: none; }
+  .goal-label { font-weight: 600; font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .goal-path { font-size: 11px; color: var(--muted); }
+  .goal-rate { font-size: 20px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+  .goal-meta { font-size: 11px; color: var(--light); white-space: nowrap; text-align: right; }
+  .goal-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
+  .goal-remove:hover { color: var(--red); background: var(--subtle); }
+  .goal-toggle { background: none; border: none; color: var(--border); cursor: pointer; font-size: 14px; padding: 0; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
+  .trow:hover .goal-toggle { opacity: 1; }
+  .goal-toggle:hover { color: var(--accent); }
+  .goal-toggle.is-goal { color: var(--accent); opacity: 1; }
+
   /* Chart */
   .card {
     background: var(--card); border-radius: var(--radius); padding: 22px;
@@ -956,6 +970,7 @@
 
     html += renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) +
       renderSummary(d.summary) +
+      renderGoals(d.goals) +
       renderSiteOverview(d.siteOverview) +
       renderChart(d);
 
@@ -982,6 +997,26 @@
 
     if (!isShared) html += renderTools(d.site);
     app.innerHTML = html;
+  }
+
+  function renderGoals(goals) {
+    if (!goals || !goals.length || isShared) return '';
+    var html = '<div class="card"><span class="card-title">Goals</span><div style="margin-top:12px">';
+    goals.forEach(function(g) {
+      html += '<div class="goal-row">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="goal-label">' + esc(g.label) + '</div>' +
+          (g.label !== g.path ? '<div class="goal-path">' + esc(g.path) + '</div>' : '') +
+        '</div>' +
+        '<div style="text-align:right">' +
+          '<div class="goal-rate">' + g.rate + '%</div>' +
+          '<div class="goal-meta">' + num(g.conversions) + ' of ' + num(lastData.totals.visitors) + ' visitors</div>' +
+        '</div>' +
+        '<button class="goal-remove" onclick="removeGoal(\'' + esc(g.path) + '\')" title="Remove goal">&times;</button>' +
+      '</div>';
+    });
+    html += '</div></div>';
+    return html;
   }
 
   function renderSummary(summary) {
@@ -1200,8 +1235,29 @@
     return html;
   }
 
+  function renderPagesContent(rows) {
+    if (!rows || !rows.length) {
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
+    }
+    var max = Math.max.apply(null, rows.map(function(r) { return +r.views; }));
+    var goalPaths = (lastData && lastData.goals) ? lastData.goals.map(function(g) { return g.path; }) : [];
+    var html = '';
+    rows.forEach(function(r) {
+      var pct = (+r.views / max) * 100;
+      var isGoal = goalPaths.indexOf(r.path) >= 0;
+      var goalBtn = isShared ? '' : '<button class="goal-toggle' + (isGoal ? ' is-goal' : '') + '" onclick="event.stopPropagation();toggleGoal(\'' + esc(r.path) + '\')" title="' + (isGoal ? 'Remove goal' : 'Set as goal') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button>';
+      html += '<div class="trow">' +
+        goalBtn +
+        '<span class="trow-label" title="' + esc(r.path) + '">' + esc(decode(r.path)) + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#6366f1"></div></div>' +
+        '<span class="trow-val">' + num(r.views) + '</span>' +
+      '</div>';
+    });
+    return html;
+  }
+
   var expandRenderers = {
-    pages: function(d) { return renderTableContent(d.pages, 'path', 'views', '#6366f1'); },
+    pages: function(d) { return renderPagesContent(d.pages); },
     entryPages: function(d) { return renderTableContent(d.entryPages, 'path', 'entries', '#059669'); },
     exitPages: function(d) { return renderTableContent(d.exitPages, 'path', 'exits', '#d97706'); },
     referrers: function(d) { return renderTableContent(d.referrers, 'source', 'visitors', '#8b5cf6'); },
@@ -2084,6 +2140,29 @@
         detail.innerHTML = html;
       })
       .catch(function() { detail.innerHTML = '<span style="color:var(--muted)">Failed to load</span>'; });
+  };
+
+  window.toggleGoal = function(path) {
+    var goalPaths = (lastData && lastData.goals) ? lastData.goals.map(function(g) { return g.path; }) : [];
+    var isGoal = goalPaths.indexOf(path) >= 0;
+    var site = currentSite || (sites.length === 1 ? sites[0] : '');
+    if (!site) return;
+    var endpoint = isGoal ? '?goal_remove' : '?goal_add';
+    fetch(apiUrl(endpoint), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: site, path: path })
+    }).then(function() { load(currentDays); });
+  };
+
+  window.removeGoal = function(path) {
+    var site = currentSite || (sites.length === 1 ? sites[0] : '');
+    if (!site) return;
+    fetch(apiUrl('?goal_remove'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: site, path: path })
+    }).then(function() { load(currentDays); });
   };
 
   window.loadOutboundDetail = function(url, el) {

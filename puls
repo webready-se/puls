@@ -404,7 +404,7 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
     // Rename in all tables
     $db->beginTransaction();
 
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals'];
     foreach ($tables as $table) {
         $stmt = $db->prepare("UPDATE {$table} SET site = ? WHERE site = ?");
         $stmt->execute([$newName, $oldName]);
@@ -511,7 +511,7 @@ function sitesRemove(array $config, ?string $siteName): void
     }
 
     $db->beginTransaction();
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals'];
     foreach ($tables as $table) {
         $stmt = $db->prepare("DELETE FROM {$table} WHERE site = ?");
         $stmt->execute([$siteName]);
