@@ -192,6 +192,18 @@
     .site-overview-stat { min-width: 55px; }
   }
 
+  /* Summary insights */
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  @media (max-width: 800px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 374px) { .summary-grid { grid-template-columns: 1fr; } }
+  .summary-card {
+    background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+    border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .summary-card-label { font-size: 11px; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+  .summary-card-value { font-size: 15px; font-weight: 700; color: var(--text); }
+  .summary-card-sub { font-size: 11px; color: var(--light); margin-top: 2px; }
+
   /* Chart */
   .card {
     background: var(--card); border-radius: var(--radius); padding: 22px;
@@ -943,6 +955,7 @@
     }
 
     html += renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) +
+      renderSummary(d.summary) +
       renderSiteOverview(d.siteOverview) +
       renderChart(d);
 
@@ -969,6 +982,41 @@
 
     if (!isShared) html += renderTools(d.site);
     app.innerHTML = html;
+  }
+
+  function renderSummary(summary) {
+    if (!summary) return '';
+    var html = '<div class="summary-grid">';
+    if (summary.bestDay) {
+      html += '<div class="summary-card">' +
+        '<div class="summary-card-label">Best day</div>' +
+        '<div class="summary-card-value">' + esc(summary.bestDay) + '</div>' +
+        '<div class="summary-card-sub">' + num(summary.bestDayViews) + ' views</div>' +
+      '</div>';
+    }
+    if (summary.peakHour) {
+      html += '<div class="summary-card">' +
+        '<div class="summary-card-label">Peak hour</div>' +
+        '<div class="summary-card-value">' + esc(summary.peakHour) + '</div>' +
+        '<div class="summary-card-sub">' + num(summary.peakHourViews) + ' views</div>' +
+      '</div>';
+    }
+    if (summary.topPage) {
+      html += '<div class="summary-card">' +
+        '<div class="summary-card-label">Top page</div>' +
+        '<div class="summary-card-value" style="font-size:13px;word-break:break-all">' + esc(decode(summary.topPage)) + '</div>' +
+        '<div class="summary-card-sub">' + num(summary.topPageViews) + ' views</div>' +
+      '</div>';
+    }
+    if (summary.topSource) {
+      html += '<div class="summary-card">' +
+        '<div class="summary-card-label">Top source</div>' +
+        '<div class="summary-card-value">' + esc(summary.topSource) + '</div>' +
+        '<div class="summary-card-sub">' + num(summary.topSourceVisitors) + ' visitors</div>' +
+      '</div>';
+    }
+    html += '</div>';
+    return html;
   }
 
   function renderSiteOverview(overview) {

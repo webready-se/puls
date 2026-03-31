@@ -1000,6 +1000,50 @@ function get_api_data(array $config, array $user): string
         }
     }
 
+    // Summary insights (skip when filtered to path/channel)
+    $summary = null;
+    if (!$path && !$channel) {
+        $stmt = $db->prepare("SELECT CASE CAST(strftime('%w', created_at) AS INTEGER)
+            WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday'
+            WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday'
+            WHEN 6 THEN 'Saturday' END as day, COUNT(*) as views
+            FROM pageviews WHERE {$dateFilter} {$siteFilter}
+            GROUP BY strftime('%w', created_at) ORDER BY views DESC LIMIT 1");
+        $stmt->execute(array_merge($dateParams, $siteParams));
+        $bestDay = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $stmt = $db->prepare("SELECT CAST(strftime('%H', created_at) AS INTEGER) as hour, COUNT(*) as views
+            FROM pageviews WHERE {$dateFilter} {$siteFilter}
+            GROUP BY hour ORDER BY views DESC LIMIT 1");
+        $stmt->execute(array_merge($dateParams, $siteParams));
+        $peakHour = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $stmt = $db->prepare("SELECT path, COUNT(*) as views
+            FROM pageviews WHERE {$dateFilter} {$siteFilter} AND path != '/'
+            GROUP BY path ORDER BY views DESC LIMIT 1");
+        $stmt->execute(array_merge($dateParams, $siteParams));
+        $topPage = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $stmt = $db->prepare("SELECT referrer, COUNT(DISTINCT visitor_hash) as visitors
+            FROM pageviews WHERE {$dateFilter} {$siteFilter} AND referrer IS NOT NULL
+            GROUP BY referrer ORDER BY visitors DESC LIMIT 1");
+        $stmt->execute(array_merge($dateParams, $siteParams));
+        $topSource = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($bestDay) {
+            $summary = [
+                'bestDay' => $bestDay['day'],
+                'bestDayViews' => (int) $bestDay['views'],
+                'peakHour' => $peakHour ? sprintf('%d:00–%d:00', $peakHour['hour'], $peakHour['hour'] + 1) : null,
+                'peakHourViews' => $peakHour ? (int) $peakHour['views'] : null,
+                'topPage' => $topPage ? $topPage['path'] : null,
+                'topPageViews' => $topPage ? (int) $topPage['views'] : null,
+                'topSource' => $topSource ? $topSource['referrer'] : null,
+                'topSourceVisitors' => $topSource ? (int) $topSource['visitors'] : null,
+            ];
+        }
+    }
+
     return json_encode([
         'site'      => $site ?: 'All sites',
         'path'      => $path ?: null,
@@ -1033,6 +1077,7 @@ function get_api_data(array $config, array $user): string
         'botPages'  => $botPages,
         'botPagesTotal' => $botPagesTotal,
         'botActivity' => $botActivity,
+        'summary'   => $summary,
         'siteOverview' => $siteOverview ?? [],
         'brokenLinks' => $brokenLinks,
         'events'    => $events,
