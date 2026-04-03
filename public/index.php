@@ -154,6 +154,26 @@ if (isset($_GET['login']) || $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_PO
     handle_login($config);
 }
 
+if (isset($_GET['goal_add']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_auth();
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (empty($input['site']) || empty($input['path'])) respond('', 400);
+    $db = get_db($config['db_path']);
+    $stmt = $db->prepare('INSERT OR IGNORE INTO goals (site, path, label, created_at) VALUES (?, ?, ?, ?)');
+    $stmt->execute([substr($input['site'], 0, 200), substr($input['path'], 0, 500), substr($input['label'] ?? '', 0, 200), date('Y-m-d H:i:s')]);
+    respond(json_encode(['ok' => true]), 200, 'application/json');
+}
+
+if (isset($_GET['goal_remove']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_auth();
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (empty($input['site']) || empty($input['path'])) respond('', 400);
+    $db = get_db($config['db_path']);
+    $stmt = $db->prepare('DELETE FROM goals WHERE site = ? AND path = ?');
+    $stmt->execute([$input['site'], $input['path']]);
+    respond(json_encode(['ok' => true]), 200, 'application/json');
+}
+
 if (isset($_GET['api'])) {
     require_auth();
     $user = get_current_user_data($config);
@@ -1044,6 +1064,33 @@ function get_api_data(array $config, array $user): string
         }
     }
 
+    // Goals with conversion rates
+    $goals = [];
+    $goalsTable = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='goals'")->fetch();
+    if ($goalsTable && !$path && !$channel) {
+        $stmt = $db->prepare("SELECT path, label FROM goals WHERE site = ? ORDER BY created_at");
+        $goalSite = $site ?: '';
+        if ($goalSite) {
+            $stmt->execute([$goalSite]);
+        } else {
+            $stmt = $db->query("SELECT DISTINCT path, label FROM goals ORDER BY created_at");
+        }
+        $goalRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $totalVisitors = (int) ($totals['visitors'] ?? 0);
+        foreach ($goalRows as $g) {
+            $stmt = $db->prepare("SELECT COUNT(DISTINCT visitor_hash) as conversions FROM pageviews WHERE path = ? AND {$dateFilter} {$siteFilter}");
+            $stmt->execute(array_merge([$g['path']], $dateParams, $siteParams));
+            $conversions = (int) $stmt->fetchColumn();
+            $rate = $totalVisitors > 0 ? round(100 * $conversions / $totalVisitors, 1) : 0;
+            $goals[] = [
+                'path' => $g['path'],
+                'label' => $g['label'] ?: $g['path'],
+                'conversions' => $conversions,
+                'rate' => $rate,
+            ];
+        }
+    }
+
     return json_encode([
         'site'      => $site ?: 'All sites',
         'path'      => $path ?: null,
@@ -1078,6 +1125,7 @@ function get_api_data(array $config, array $user): string
         'botPagesTotal' => $botPagesTotal,
         'botActivity' => $botActivity,
         'summary'   => $summary,
+        'goals'     => $goals,
         'siteOverview' => $siteOverview ?? [],
         'brokenLinks' => $brokenLinks,
         'events'    => $events,
@@ -1085,7 +1133,7 @@ function get_api_data(array $config, array $user): string
         'eventsTotal' => $eventsTotal,
         'outbound'  => $outbound,
         'outboundTotal' => $outboundTotal,
-    ], JSON_PRETTY_PRINT);
+    ], JSON_INVALID_UTF8_SUBSTITUTE);
 }
 
 // =====================================================================
@@ -1183,6 +1231,14 @@ function get_db(string $path): PDO
         )');
         $db->exec('CREATE INDEX idx_events_site_date ON events (site, created_at)');
         $db->exec('CREATE INDEX idx_events_name ON events (event_name, site, created_at)');
+        $db->exec('CREATE TABLE goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            path TEXT NOT NULL,
+            label TEXT,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE UNIQUE INDEX idx_goals_unique ON goals (site, path)');
     } else {
         run_migrations($db);
     }
@@ -1349,7 +1405,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 13; // Bump this when adding new migrations
+    $currentVersion = 14; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -1623,6 +1679,18 @@ function run_migrations(PDO $db): void
         }
     }
 
+    // v14: goals table
+    if ($version < 14) {
+        $db->exec('CREATE TABLE IF NOT EXISTS goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            path TEXT NOT NULL,
+            label TEXT,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_unique ON goals (site, path)');
+    }
+
     file_put_contents($marker, (string) $currentVersion);
 }
 
@@ -1638,8 +1706,13 @@ function handle_status_log(array $config): void
     $site = normalize_site($_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown'));
     $path = substr($path, 0, 500);
 
+    // Sanitize: replace invalid UTF-8 sequences (e.g. %C0%AE path traversal attacks)
+    if (!mb_check_encoding($path, 'UTF-8')) {
+        $path = mb_convert_encoding($path, 'UTF-8', 'UTF-8');
+    }
+
     // Ignore noise paths (scanners probing for vulnerabilities)
-    if (preg_match('#\.php\d?|/cgi-bin|^/\.well-known|/wp-|/wordpress|^/\.env|^/\.git|/xmlrpc|/administrator#i', $path)) return;
+    if (preg_match('#\.php\d?|/cgi-bin|^/\.well-known|/wp-|/wordpress|^/\.env|^/\.git|/xmlrpc|/administrator|/etc/passwd#i', $path)) return;
 
     // Truncate referrer to domain+path (strip query strings, decode punycode + URL-encoding)
     $referrer = $_SERVER['HTTP_X_ORIGINAL_REFERER'] ?? $_SERVER['HTTP_REFERER'] ?? null;
