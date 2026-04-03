@@ -213,8 +213,8 @@
   .goal-meta { font-size: 11px; color: var(--light); white-space: nowrap; text-align: right; }
   .goal-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
   .goal-remove:hover { color: var(--red); background: var(--subtle); }
-  .goal-toggle { background: none; border: none; color: var(--border); cursor: pointer; font-size: 14px; padding: 0; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
-  .trow:hover .goal-toggle { opacity: 1; }
+  .goal-toggle { background: none; border: none; color: var(--border); cursor: pointer; font-size: 14px; padding: 0; flex-shrink: 0; opacity: 0.25; transition: opacity 0.15s; }
+  .trow:hover .goal-toggle { opacity: 0.7; }
   .goal-toggle:hover { color: var(--accent); }
   .goal-toggle.is-goal { color: var(--accent); opacity: 1; }
 
@@ -501,6 +501,17 @@
   .export-btn:hover { color: var(--text); border-color: var(--accent); }
   .export-btn svg { width: 14px; height: 14px; }
 
+  .goal-search { width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 12px; font-family: inherit; outline: none; }
+  .goal-search:focus { border-color: var(--accent); }
+  .goal-search::placeholder { color: var(--light); }
+  .goal-list { max-height: 200px; overflow-y: auto; margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+  .goal-list:empty::after { content: 'No pages match'; display: block; font-size: 11px; color: var(--light); padding: 6px 0; }
+  .goal-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; font-size: 12px; color: var(--text); cursor: pointer; border: none; background: none; text-align: left; font-family: inherit; width: 100%; }
+  .goal-item:hover { background: var(--subtle); }
+  .goal-item .goal-item-icon { width: 14px; height: 14px; flex-shrink: 0; color: var(--border); }
+  .goal-item.is-goal .goal-item-icon { color: var(--accent); }
+  .goal-item-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   /* Path filter chip */
   .path-filter {
     display: flex; align-items: center; gap: 8px;
@@ -686,6 +697,11 @@
         JSON
       </button>
     </div>
+  </div>
+  <div class="menu-section" id="goals-section" style="display:none">
+    <span class="menu-label">Goals</span>
+    <input type="text" class="goal-search" id="goal-search" placeholder="Search pages..." autocomplete="off" spellcheck="false">
+    <div class="goal-list" id="goal-list"></div>
   </div>
   <div style="flex:1"></div>
   <a href="/?logout" class="menu-logout">
@@ -2217,6 +2233,7 @@
   window.openMenu = function() {
     menuOverlay.classList.add('open');
     menuPanel.classList.add('open');
+    populateGoalPicker();
   };
 
   window.closeMenu = function() {
@@ -2224,10 +2241,85 @@
     menuPanel.classList.remove('open');
   };
 
+  // --- Goal picker in menu ---
+  var goalSection = document.getElementById('goals-section');
+  var goalSearch = document.getElementById('goal-search');
+  var goalList = document.getElementById('goal-list');
+
+  function populateGoalPicker() {
+    if (isShared || !lastData || !lastData.pages) {
+      if (goalSection) goalSection.style.display = 'none';
+      return;
+    }
+    goalSection.style.display = '';
+    goalSearch.value = '';
+    renderGoalList('');
+  }
+
+  function renderGoalList(filter) {
+    if (!lastData || !lastData.pages) { goalList.innerHTML = ''; return; }
+    var goalPaths = (lastData.goals || []).map(function(g) { return g.path; });
+    var lower = filter.toLowerCase();
+    var pages = lastData.pages.filter(function(p) {
+      return !lower || decode(p.path).toLowerCase().indexOf(lower) >= 0;
+    });
+    var html = '';
+    // Show current goals first when no filter
+    if (!lower) {
+      goalPaths.forEach(function(gp) {
+        var exists = pages.some(function(p) { return p.path === gp; });
+        if (!exists) {
+          html += goalItemHtml(gp, true);
+        }
+      });
+    }
+    pages.forEach(function(p) {
+      var isGoal = goalPaths.indexOf(p.path) >= 0;
+      html += goalItemHtml(p.path, isGoal);
+    });
+    goalList.innerHTML = html;
+  }
+
+  function goalItemHtml(path, isGoal) {
+    return '<button class="goal-item' + (isGoal ? ' is-goal' : '') + '" onclick="menuToggleGoal(\'' + esc(path) + '\')">' +
+      '<svg class="goal-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>' +
+      '<span class="goal-item-path">' + esc(decode(path)) + '</span>' +
+    '</button>';
+  }
+
+  if (goalSearch) {
+    goalSearch.addEventListener('input', function() {
+      renderGoalList(this.value);
+    });
+  }
+
+  window.menuToggleGoal = function(path) {
+    var goalPaths = (lastData && lastData.goals) ? lastData.goals.map(function(g) { return g.path; }) : [];
+    var isGoal = goalPaths.indexOf(path) >= 0;
+    var site = currentSite || (sites.length === 1 ? sites[0] : '');
+    if (!site) return;
+    var endpoint = isGoal ? '?goal_remove' : '?goal_add';
+    // Optimistic update: toggle in local data immediately
+    if (isGoal) {
+      lastData.goals = lastData.goals.filter(function(g) { return g.path !== path; });
+    } else {
+      lastData.goals = lastData.goals || [];
+      lastData.goals.push({ path: path, label: path, conversions: 0, rate: 0 });
+    }
+    renderGoalList(goalSearch.value);
+    // Send to server and refresh in background
+    fetch(apiUrl(endpoint), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: site, path: path })
+    }).then(function() { load(currentDays); });
+  };
+
   // --- Export ---
   if (isShared) {
     var exportSection = document.getElementById('export-section');
     if (exportSection) exportSection.style.display = 'none';
+    if (goalSection) goalSection.style.display = 'none';
   }
 
   window.exportData = function(format) {
