@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] — 2026-04-04
+
+### Added
+
+- Goals/conversions — set target pages and track conversion rate per goal
+- Goal picker in hamburger menu — searchable page list for adding/removing goals
+- Target icon on page rows with improved visibility (always slightly visible, not just on hover)
+- Country/region stats — detect visitor country from Accept-Language header, new Countries tab with flag emojis
+- Backfill migration (v15) populates country for existing data from unambiguous language codes
+- Expanded language name mapping — Romanian, Albanian, Lithuanian, Ukrainian, Hindi, Croatian, Persian, Bulgarian, etc.
+
+### Fixed
+
+- Invalid UTF-8 bytes from scanner bots in broken_links caused empty API responses
+- API now uses `JSON_INVALID_UTF8_SUBSTITUTE` to safely handle malformed data
+- Sanitize invalid UTF-8 before storing in broken_links
+- Added `/etc/passwd` to scanner noise path filter
+
 ## [1.5.0] — 2026-03-31
 
 ### Added
@@ -180,6 +198,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.6.0]: https://github.com/webready-se/puls/releases/tag/v1.6.0
 [1.5.0]: https://github.com/webready-se/puls/releases/tag/v1.5.0
 [1.4.0]: https://github.com/webready-se/puls/releases/tag/v1.4.0
 [1.3.0]: https://github.com/webready-se/puls/releases/tag/v1.3.0
