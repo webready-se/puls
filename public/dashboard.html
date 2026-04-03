@@ -997,12 +997,12 @@
       '</div>' +
       '<div class="grid-2">' +
         renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal, d.events, d.eventsTotal, d.outbound, d.outboundTotal) +
-        renderTabbedVisitors(d.browsers, d.devices, d.languages) +
+        renderTabbedVisitors(d.browsers, d.devices, d.languages, d.countries) +
       '</div>';
     } else {
       html += '<div class="grid-2">' +
         renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal, d.events, d.eventsTotal, d.outbound, d.outboundTotal) +
-        renderTabbedVisitors(d.browsers, d.devices, d.languages) +
+        renderTabbedVisitors(d.browsers, d.devices, d.languages, d.countries) +
       '</div>';
     }
 
@@ -1458,15 +1458,39 @@
     return html;
   }
 
-  function renderTabbedVisitors(browsers, devices, languages) {
+  function countryFlag(code) {
+    if (!code || code.length !== 2) return '';
+    return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 65, 0x1F1E6 + code.charCodeAt(1) - 65);
+  }
+
+  function renderCountries(countries) {
+    if (!countries || !countries.length) {
+      return '<p style="color:var(--muted);font-size:13px;margin-top:12px">No data yet</p>';
+    }
+    var max = Math.max.apply(null, countries.map(function(c) { return +c.visitors; }));
+    var html = '';
+    countries.forEach(function(c) {
+      var pct = (+c.visitors / max) * 100;
+      html += '<div class="trow">' +
+        '<span class="trow-label" style="display:flex;align-items:center"><span style="margin-right:6px;font-size:18px;line-height:1">' + countryFlag(c.code) + '</span>' + esc(c.name) + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#d97706"></div></div>' +
+        '<span class="trow-val">' + num(c.visitors) + '</span>' +
+      '</div>';
+    });
+    return html;
+  }
+
+  function renderTabbedVisitors(browsers, devices, languages, countries) {
     var html = '<div class="card">' +
       '<div class="card-tabs">' +
         '<div class="card-tab active" data-tab="browsers" onclick="switchPageTab(this)">Browsers</div>' +
         '<div class="card-tab" data-tab="devices" onclick="switchPageTab(this)">Devices</div>' +
+        '<div class="card-tab" data-tab="countries" onclick="switchPageTab(this)">Countries</div>' +
         '<div class="card-tab" data-tab="languages" onclick="switchPageTab(this)">Languages</div>' +
       '</div>' +
       '<div class="tab-panel" data-panel="browsers">' + renderPctBars(browsers, '#6366f1') + '</div>' +
       '<div class="tab-panel" data-panel="devices" style="display:none">' + renderPctBars(devices, '#8b5cf6') + '</div>' +
+      '<div class="tab-panel" data-panel="countries" style="display:none">' + renderCountries(countries) + '</div>' +
       '<div class="tab-panel" data-panel="languages" style="display:none">' + renderPctBars(languages, '#059669') + '</div>' +
     '</div>';
     return html;

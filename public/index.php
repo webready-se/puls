@@ -567,13 +567,15 @@ function handle_collect(array $config): void
     }
 
     $lang = null;
+    $country = null;
     if (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
         $lang = substr($_SERVER['HTTP_ACCEPT_LANGUAGE'], 0, 2);
+        $country = detect_country($_SERVER['HTTP_ACCEPT_LANGUAGE']);
     }
 
     $path = normalize_path(urldecode(substr($input['u'], 0, 500)));
 
-    $stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, utm_term, utm_content, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, utm_term, utm_content, language, country, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $stmt->execute([
         $site,
         $path,
@@ -587,6 +589,7 @@ function handle_collect(array $config): void
         $utmTerm,
         $utmContent,
         $lang,
+        $country,
         date('Y-m-d H:i:s'),
     ]);
 }
@@ -853,8 +856,41 @@ function get_api_data(array $config, array $user): string
     $langNames = ['sv' => 'Swedish', 'en' => 'English', 'nb' => 'Norwegian', 'da' => 'Danish', 'fi' => 'Finnish',
                    'de' => 'German', 'fr' => 'French', 'es' => 'Spanish', 'nl' => 'Dutch', 'pl' => 'Polish',
                    'it' => 'Italian', 'pt' => 'Portuguese', 'ru' => 'Russian', 'zh' => 'Chinese', 'ja' => 'Japanese',
-                   'ko' => 'Korean', 'ar' => 'Arabic', 'tr' => 'Turkish', 'th' => 'Thai', 'vi' => 'Vietnamese'];
+                   'ko' => 'Korean', 'ar' => 'Arabic', 'tr' => 'Turkish', 'th' => 'Thai', 'vi' => 'Vietnamese',
+                   'ro' => 'Romanian', 'sq' => 'Albanian', 'lt' => 'Lithuanian', 'uk' => 'Ukrainian',
+                   'hi' => 'Hindi', 'hr' => 'Croatian', 'fa' => 'Persian', 'bg' => 'Bulgarian',
+                   'sk' => 'Slovak', 'so' => 'Somali', 'hu' => 'Hungarian', 'et' => 'Estonian',
+                   'el' => 'Greek', 'bs' => 'Bosnian', 'he' => 'Hebrew', 'lv' => 'Latvian',
+                   'sl' => 'Slovenian', 'cs' => 'Czech', 'ms' => 'Malay', 'id' => 'Indonesian',
+                   'bn' => 'Bengali', 'ka' => 'Georgian', 'sr' => 'Serbian', 'mk' => 'Macedonian'];
     $languages = array_map(fn($l) => ['name' => $langNames[$l['name']] ?? strtoupper($l['name']), 'pct' => $smartPct($l['cnt'], $langTotal)], $languages);
+
+    // Countries (from Accept-Language region)
+    $countryNames = [
+        'SE' => 'Sweden', 'NO' => 'Norway', 'DK' => 'Denmark', 'FI' => 'Finland', 'IS' => 'Iceland',
+        'US' => 'United States', 'GB' => 'United Kingdom', 'CA' => 'Canada', 'AU' => 'Australia', 'NZ' => 'New Zealand',
+        'DE' => 'Germany', 'FR' => 'France', 'ES' => 'Spain', 'IT' => 'Italy', 'PT' => 'Portugal',
+        'NL' => 'Netherlands', 'BE' => 'Belgium', 'AT' => 'Austria', 'CH' => 'Switzerland',
+        'PL' => 'Poland', 'CZ' => 'Czech Republic', 'SK' => 'Slovakia', 'HU' => 'Hungary',
+        'RO' => 'Romania', 'BG' => 'Bulgaria', 'HR' => 'Croatia', 'SI' => 'Slovenia',
+        'RS' => 'Serbia', 'UA' => 'Ukraine', 'RU' => 'Russia', 'BY' => 'Belarus',
+        'LT' => 'Lithuania', 'LV' => 'Latvia', 'EE' => 'Estonia',
+        'IE' => 'Ireland', 'LU' => 'Luxembourg', 'MT' => 'Malta', 'CY' => 'Cyprus',
+        'GR' => 'Greece', 'TR' => 'Turkey', 'IL' => 'Israel', 'SA' => 'Saudi Arabia', 'AE' => 'UAE',
+        'IN' => 'India', 'CN' => 'China', 'JP' => 'Japan', 'KR' => 'South Korea',
+        'TH' => 'Thailand', 'VN' => 'Vietnam', 'ID' => 'Indonesia', 'MY' => 'Malaysia', 'SG' => 'Singapore', 'PH' => 'Philippines',
+        'BR' => 'Brazil', 'MX' => 'Mexico', 'AR' => 'Argentina', 'CO' => 'Colombia', 'CL' => 'Chile',
+        'ZA' => 'South Africa', 'NG' => 'Nigeria', 'EG' => 'Egypt', 'KE' => 'Kenya',
+        'AL' => 'Albania', 'GE' => 'Georgia', 'IR' => 'Iran', 'BD' => 'Bangladesh',
+    ];
+    $stmt = $db->prepare("SELECT country as code, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} AND country IS NOT NULL GROUP BY country ORDER BY visitors DESC");
+    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+    $countries = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $countries = array_map(fn($c) => [
+        'code' => $c['code'],
+        'name' => $countryNames[$c['code']] ?? $c['code'],
+        'visitors' => (int) $c['visitors'],
+    ], $countries);
 
     // Traffic channels: classify each visitor's first pageview
     $stmt = $db->prepare("
@@ -1118,6 +1154,7 @@ function get_api_data(array $config, array $user): string
         'utmTotal'  => $utmTotal,
         'channels'  => $channels,
         'languages' => $languages,
+        'countries' => $countries,
         'bots'      => $bots,
         'botsTotal' => $botsTotal,
         'botCategories' => $botCategories,
@@ -1185,6 +1222,7 @@ function get_db(string $path): PDO
             utm_term TEXT,
             utm_content TEXT,
             language TEXT,
+            country TEXT,
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE INDEX idx_site_date ON pageviews (site, created_at)');
@@ -1405,7 +1443,7 @@ function run_migrations(PDO $db): void
 {
     $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
     $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
-    $currentVersion = 14; // Bump this when adding new migrations
+    $currentVersion = 15; // Bump this when adding new migrations
 
     $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
     if ($version >= $currentVersion) return;
@@ -1679,7 +1717,7 @@ function run_migrations(PDO $db): void
         }
     }
 
-    // v14: goals table
+    // v14: goals table + country column
     if ($version < 14) {
         $db->exec('CREATE TABLE IF NOT EXISTS goals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1689,6 +1727,27 @@ function run_migrations(PDO $db): void
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_unique ON goals (site, path)');
+    }
+
+    // v15: country column on pageviews + backfill from language
+    if ($version < 15) {
+        $cols = array_column($db->query('PRAGMA table_info(pageviews)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        if (!in_array('country', $cols)) {
+            $db->exec('ALTER TABLE pageviews ADD COLUMN country TEXT');
+        }
+        // Backfill country from language codes where mapping is unambiguous
+        $langToCountry = [
+            'sv' => 'SE', 'da' => 'DK', 'nb' => 'NO', 'nn' => 'NO', 'fi' => 'FI',
+            'is' => 'IS', 'ja' => 'JP', 'ko' => 'KR', 'zh' => 'CN', 'uk' => 'UA',
+            'cs' => 'CZ', 'el' => 'GR', 'he' => 'IL', 'hi' => 'IN', 'th' => 'TH',
+            'vi' => 'VN', 'ar' => 'SA', 'fa' => 'IR', 'bn' => 'BD', 'ka' => 'GE',
+            'et' => 'EE', 'lv' => 'LV', 'lt' => 'LT', 'sl' => 'SI', 'hr' => 'HR',
+            'sk' => 'SK', 'bg' => 'BG', 'ro' => 'RO', 'hu' => 'HU', 'sq' => 'AL',
+        ];
+        $update = $db->prepare('UPDATE pageviews SET country = ? WHERE language = ? AND country IS NULL');
+        foreach ($langToCountry as $lang => $cc) {
+            $update->execute([$cc, $lang]);
+        }
     }
 
     file_put_contents($marker, (string) $currentVersion);
@@ -1864,4 +1923,29 @@ function detect_device(int $width): string
     if ($width < 768)    return 'Mobile';
     if ($width < 1024)   return 'Tablet';
     return 'Desktop';
+}
+
+function detect_country(string $acceptLanguage): ?string
+{
+    // Extract region from Accept-Language header
+    // Examples: "sv-SE,sv;q=0.9" → "SE", "en-US,en;q=0.8" → "US", "de" → "DE"
+    $primary = explode(',', $acceptLanguage)[0];
+    $primary = explode(';', $primary)[0]; // strip quality
+
+    // Try lang-REGION format first (e.g. sv-SE, en-US, de-AT)
+    if (preg_match('/^[a-z]{2}-([A-Z]{2})$/i', trim($primary), $m)) {
+        return strtoupper($m[1]);
+    }
+
+    // Fallback: map bare language codes to most likely country
+    $langToCountry = [
+        'sv' => 'SE', 'da' => 'DK', 'nb' => 'NO', 'nn' => 'NO', 'fi' => 'FI',
+        'is' => 'IS', 'ja' => 'JP', 'ko' => 'KR', 'zh' => 'CN', 'uk' => 'UA',
+        'cs' => 'CZ', 'el' => 'GR', 'he' => 'IL', 'hi' => 'IN', 'th' => 'TH',
+        'vi' => 'VN', 'ar' => 'SA', 'fa' => 'IR', 'bn' => 'BD', 'ka' => 'GE',
+        'et' => 'EE', 'lv' => 'LV', 'lt' => 'LT', 'sl' => 'SI', 'hr' => 'HR',
+        'sk' => 'SK', 'bg' => 'BG', 'ro' => 'RO', 'hu' => 'HU', 'sq' => 'AL',
+    ];
+    $lang = strtolower(substr(trim($primary), 0, 2));
+    return $langToCountry[$lang] ?? null;
 }
