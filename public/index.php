@@ -1133,7 +1133,7 @@ function get_api_data(array $config, array $user): string
         'eventsTotal' => $eventsTotal,
         'outbound'  => $outbound,
         'outboundTotal' => $outboundTotal,
-    ], JSON_PRETTY_PRINT);
+    ], JSON_INVALID_UTF8_SUBSTITUTE);
 }
 
 // =====================================================================
@@ -1706,8 +1706,13 @@ function handle_status_log(array $config): void
     $site = normalize_site($_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown'));
     $path = substr($path, 0, 500);
 
+    // Sanitize: replace invalid UTF-8 sequences (e.g. %C0%AE path traversal attacks)
+    if (!mb_check_encoding($path, 'UTF-8')) {
+        $path = mb_convert_encoding($path, 'UTF-8', 'UTF-8');
+    }
+
     // Ignore noise paths (scanners probing for vulnerabilities)
-    if (preg_match('#\.php\d?|/cgi-bin|^/\.well-known|/wp-|/wordpress|^/\.env|^/\.git|/xmlrpc|/administrator#i', $path)) return;
+    if (preg_match('#\.php\d?|/cgi-bin|^/\.well-known|/wp-|/wordpress|^/\.env|^/\.git|/xmlrpc|/administrator|/etc/passwd#i', $path)) return;
 
     // Truncate referrer to domain+path (strip query strings, decode punycode + URL-encoding)
     $referrer = $_SERVER['HTTP_X_ORIGINAL_REFERER'] ?? $_SERVER['HTTP_REFERER'] ?? null;
