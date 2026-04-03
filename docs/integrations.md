@@ -144,6 +144,62 @@ Puls hooks into `pushState` and `popstate` automatically — no React Router int
 
 That's it. Works on any HTML page.
 
+## Custom Events
+
+Track any interaction with `puls.track(name, data)`. Events appear in the dashboard under Traffic > Events.
+
+```javascript
+// Form submission
+document.querySelector('form').addEventListener('submit', function() {
+  puls.track('form_submit', { form: 'contact' });
+});
+
+// Phone number click
+document.querySelector('a[href^="tel:"]').addEventListener('click', function() {
+  puls.track('phone_click');
+});
+
+// File download
+puls.track('download', { file: 'brochure.pdf' });
+
+// Signup with plan info
+puls.track('signup', { plan: 'pro' });
+
+// CTA button click
+document.getElementById('cta').addEventListener('click', function() {
+  puls.track('cta_click', { location: 'hero' });
+});
+```
+
+The `data` parameter is optional. When provided, it is stored as JSON and visible in the dashboard drill-down. Keep event names short and consistent — they are grouped by name.
+
+## Auto Event Tracking
+
+Add `data-auto-events` to the script tag to automatically track common interactions — no custom code needed:
+
+```html
+<script src="https://your-puls-domain/?js" data-site="my-site" data-outbound data-auto-events defer></script>
+```
+
+| Interaction | Event name | Data captured |
+|---|---|---|
+| Phone click (`tel:`) | `phone_click` | number, page |
+| Email click (`mailto:`) | `email_click` | email, page |
+| File download (PDF, DOC, XLS, ZIP, etc.) | `download` | file, url, page |
+| Form submission (POST) | `form_submit` | action, page |
+
+All events appear in the dashboard under Traffic > Events with full detail. No markup changes needed — Puls detects these interactions automatically via event delegation.
+
+## Outbound Link Tracking
+
+Add `data-outbound` to the script tag to auto-track clicks on external links:
+
+```html
+<script src="https://your-puls-domain/?js" data-site="my-site" data-outbound defer></script>
+```
+
+Clicks on links pointing to other domains are tracked as `outbound_click` events. Results appear in the dashboard under Traffic > Outbound, with drill-down showing which pages the clicks came from.
+
 ## Bot Tracking Pixel (optional)
 
 Add a `<noscript>` pixel to catch bots and visitors that don't execute JavaScript:

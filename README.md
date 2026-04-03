@@ -11,16 +11,62 @@ Puls is a cookieless, lightweight analytics tool built with a single PHP file an
 
 ![Puls Dashboard](docs/screenshots/dashboard.png)
 
+## Why Puls?
+
+Most analytics tools are either privacy-invasive (Google Analytics) or require Docker, Node.js, or managed hosting (Plausible, Umami). Fathom is great but costs $15+/month.
+
+Puls is **one PHP file**. Upload it, run `php puls key:generate`, and you're live. No containers, no queues, no external databases. SQLite handles everything. Perfect for freelancers, agencies, and anyone who wants analytics without infrastructure.
+
+## Privacy
+
+Puls is designed to be GDPR-friendly without consent banners:
+
+- **No cookies** — ever
+- **No IP storage** — visitor hashes rotate daily and use a server-side salt
+- **No fingerprinting** — no canvas, font, or WebGL tricks
+- **No PII** — no names, emails, or identifiers stored
+- **Data collected:** page path, referrer domain, browser, device type, UTM params, language, country (from Accept-Language header)
+- **Not collected:** IP addresses, cookies, personal data, fingerprints
+
 ## Features
 
+**Core**
 - **Cookieless** — GDPR-friendly by default, no consent banners needed
 - **Lightweight** — ~1.5KB tracking script, single PHP file backend
-- **Multi-site hub** — Track all your sites from one dashboard
-- **Bot detection** — Separates real visitors from bots (AI crawlers, search engines, social, SEO tools)
-- **Privacy-first** — Daily-rotating visitor hashes, no PII stored
-- **Multi-user** — Bcrypt auth with per-user site access control
-- **Data export** — CSV/JSON download from the dashboard
 - **Zero dependencies** — PHP 8.2+ and SQLite, nothing else
+
+**Dashboard**
+- **Multi-site hub** — track all your sites from one dashboard with site overview
+- **Traffic channels** — Paid, Campaign, Organic, Social, Referral, Direct with click filtering
+- **Country stats** — visitor countries from Accept-Language with flag emojis
+- **Custom date range** — 24h, 7d, 30d, 90d, or pick any from/to dates
+- **Goals/conversions** — set target pages and track conversion rate
+- **Trend indicators** — comparison with previous period (▲12%)
+- **Bounce rate & session length** — median session duration, inverted bounce trend
+- **Entry/exit pages** — see where visitors land and leave
+- **Summary insights** — best day, peak hour, top page, top source
+- **Realtime** — "N online now" badge (last 5 min)
+- **Dark mode** — System/Dark/Light theme
+- **CMD+K** — command palette with page search and filtering
+- **PWA** — installable, pull-to-refresh
+
+**Tracking**
+- **Custom events** — `puls.track('signup', { plan: 'pro' })` JS API
+- **Auto events** — zero-config tracking of phone clicks, email clicks, downloads, form submissions
+- **Outbound links** — auto-track clicks on external links
+- **UTM campaigns** — full UTM support with guided link wizard
+- **Google Ads** — auto-detect `gad_source`/`gad_campaignid` (JS + server-side)
+
+**Bot & link monitoring**
+- **Bot detection** — 25+ bots: AI crawlers, search engines, social, SEO, monitors
+- **Server-side bot tracking** — Nginx mirror for zero-latency capture
+- **Broken link tracking** — 404/301 via Nginx post_action with referrer info
+
+**Sharing & access**
+- **Multi-user** — bcrypt auth with per-user site access control
+- **Shareable dashboards** — token-based read-only links
+- **Data export** — CSV/JSON download from the dashboard
+- **Interactive CLI** — all management commands with pickers and prompts
 
 <details>
 <summary>Bot detection & broken link tracking</summary>
@@ -64,10 +110,6 @@ php -S localhost:8080 -t public
 
 This tracks pageviews and outbound link clicks automatically. Works with Next.js, Astro, Laravel, Statamic, React, static HTML, and anything else that serves HTML.
 
-See [docs/integrations.md](docs/integrations.md) for framework examples, bot tracking pixel, server-side Nginx mirror, and reverse proxy setup.
-
-### Script attributes
-
 | Attribute | Required | Description |
 |-----------|----------|-------------|
 | `data-site` | Yes | Site name used to separate data in multi-site setups |
@@ -77,49 +119,19 @@ See [docs/integrations.md](docs/integrations.md) for framework examples, bot tra
 
 ### Custom Events
 
-Track any interaction with `puls.track(name, data)`. Events appear in the dashboard under Traffic > Events.
-
 ```javascript
-// Form submission
-document.querySelector('form').addEventListener('submit', function() {
-  puls.track('form_submit', { form: 'contact' });
-});
-
-// Phone number click
-document.querySelector('a[href^="tel:"]').addEventListener('click', function() {
-  puls.track('phone_click');
-});
-
-// File download
-puls.track('download', { file: 'brochure.pdf' });
-
-// Signup with plan info
 puls.track('signup', { plan: 'pro' });
-
-// CTA button click
-document.getElementById('cta').addEventListener('click', function() {
-  puls.track('cta_click', { location: 'hero' });
-});
+puls.track('download', { file: 'brochure.pdf' });
 ```
 
-The `data` parameter is optional. When provided, it is stored as JSON and visible in the dashboard. Keep event names short and consistent — they are grouped by name.
+Full documentation in [docs/integrations.md](docs/integrations.md):
 
-### Auto Event Tracking
-
-Add `data-auto-events` to automatically track common interactions — no custom code needed:
-
-| Interaction | Event name | Data captured |
-|---|---|---|
-| Phone click (`tel:`) | `phone_click` | number, page |
-| Email click (`mailto:`) | `email_click` | email, page |
-| File download (PDF, DOC, XLS, ZIP, etc.) | `download` | file, url, page |
-| Form submission (POST) | `form_submit` | action, page |
-
-All events appear in the dashboard under Traffic > Events with full detail. No markup changes needed — Puls detects these interactions automatically via event delegation.
-
-### Outbound Link Tracking
-
-When `data-outbound` is set on the script tag, clicks on external links are automatically tracked as `outbound_click` events. No extra code needed — results appear under Traffic > Outbound.
+- Framework examples (Next.js, Astro, Laravel, Statamic, React)
+- Custom events API and auto event tracking
+- Outbound link tracking
+- Bot tracking pixel (`<noscript>`)
+- Server-side bot tracking (Nginx mirror)
+- Reverse proxy setup and rate limiting
 
 ## CLI
 
@@ -142,7 +154,7 @@ php puls sites:remove <name>             # Delete all data for a site
 php puls nginx:config                    # Generate Nginx config for a site
 ```
 
-Users with no `--sites` flag can see all sites. Restricted users only see their assigned sites.
+All commands work without arguments — interactive pickers and prompts guide you through.
 
 ## Configuration
 
@@ -259,14 +271,6 @@ $ACTIVATE_RELEASE()
 4. Done
 
 > **Important:** Keep `.env` and `users.json` in the project root — never place them inside `public/`. They contain your secret key and password hashes.
-
-## Data Collected
-
-**Pageviews:** path, referrer domain, browser, device type, daily visitor hash, UTM params (source, medium, campaign, term, content), language
-
-**Bots:** path, bot name, category (AI, Search engine, Social, SEO, Monitor), user agent
-
-**Not collected:** IP addresses, cookies, personal data, fingerprints
 
 ## License
 
