@@ -783,6 +783,11 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
     $previousTotals = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    // Previous period daily breakdown (for chart comparison overlay)
+    $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY date ORDER BY date");
+    $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
+    $previousPageviews = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     // Bounce rate and session length (skip when filtered to a single path — not meaningful)
     $bounceRate = 0;
     $previousBounceRate = null;
@@ -1144,6 +1149,7 @@ function get_api_data(array $config, array $user): string
         'entryPages' => $entryPages,
         'exitPages'  => $exitPages,
         'pageviews' => $byDay,
+        'previousPageviews' => $previousPageviews,
         'pages'     => $pages,
         'pagesTotal' => $pagesTotal,
         'referrers' => $referrers,

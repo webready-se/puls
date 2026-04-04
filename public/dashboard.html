@@ -229,6 +229,7 @@
   .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
   .card-subtitle { font-size: 12px; color: var(--light); }
   .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-top: 30px; }
+  .chart-scroll.compare { padding-top: 80px; }
   .chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 0 4px; }
   @media (max-width: 600px) { .chart { gap: 3px; } }
   .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; min-width: 36px; padding: 0 2px; }
@@ -253,7 +254,31 @@
     border-top-color: var(--text);
   }
   .chart-bar:hover .tip { display: block; }
+  .chart-col-compare { position: relative; }
+  .chart-col-compare > .tip {
+    display: none; position: absolute; bottom: calc(100% + 14px); left: 50%;
+    transform: translateX(-50%); background: var(--text); color: var(--bg);
+    padding: 6px 12px; border-radius: 8px; font-size: 11px; white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 20;
+  }
+  .chart-col-compare > .tip::after {
+    content: ''; position: absolute; top: 100%; left: 50%;
+    transform: translateX(-50%); border: 5px solid transparent;
+    border-top-color: var(--text);
+  }
+  .chart-col-compare:hover > .tip { display: block; }
   .chart-date { font-size: 10px; color: var(--light); white-space: nowrap; }
+  .chart-bars { display: flex; align-items: flex-end; gap: 3px; width: 100%; height: 100%; }
+  .chart-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: flex-end; height: 100%; min-width: 0; }
+  .chart-bar-wrap .chart-bar { width: 100%; }
+  .chart-bar-prev { background: var(--border); opacity: 0.7; }
+  .chart-val-prev { font-size: 9px; color: var(--light); font-weight: 500; white-space: nowrap; }
+  .chart-legend { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--muted); }
+  .chart-legend-item { display: flex; align-items: center; gap: 5px; }
+  .chart-legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+  .chart-compare-toggle { background: none; border: 1px solid var(--border); color: var(--muted); padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; font-family: inherit; transition: all 0.15s; margin-left: 8px; }
+  .chart-compare-toggle:hover { color: var(--text); border-color: var(--accent); }
+  .chart-compare-toggle.active { color: var(--accent); border-color: var(--accent); background: var(--subtle); }
 
   /* Grid */
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
@@ -1129,10 +1154,12 @@
   }
 
   var chartMode = 'views';
+  var compareMode = localStorage.getItem('puls-compare') === '1';
 
   function renderChart(d) {
     if (!d.pageviews || !d.pageviews.length) return '';
     var siteName = currentSite || 'all sites';
+    var hasCompare = d.previousPageviews && d.previousPageviews.length > 0;
 
     return '<div class="card" id="chart-card">' +
       '<div class="card-header">' +
@@ -1140,27 +1167,71 @@
           '<div class="card-tab' + (chartMode === 'views' ? ' active' : '') + '" data-chart="views" onclick="switchChartMode(this)">Pageviews</div>' +
           '<div class="card-tab' + (chartMode === 'visitors' ? ' active' : '') + '" data-chart="visitors" onclick="switchChartMode(this)">Visitors</div>' +
         '</div>' +
-        '<span class="card-subtitle">' + siteName + ' — last ' + currentDays + ' days</span>' +
+        '<span class="card-subtitle">' + siteName + ' — last ' + currentDays + ' days' +
+          (hasCompare ? '<button class="chart-compare-toggle' + (compareMode ? ' active' : '') + '" onclick="toggleCompareMode(this)">Compare</button>' : '') +
+        '</span>' +
       '</div>' +
-      '<div class="chart-scroll"><div class="chart">' + buildBars(d.pageviews) + '</div></div>' +
+      (compareMode && hasCompare ? '<div class="chart-legend" style="padding:0 4px 10px">' +
+        '<div class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--accent)"></span>Current period</div>' +
+        '<div class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--border)"></span>Previous period</div>' +
+      '</div>' : '') +
+      '<div class="chart-scroll' + (compareMode && hasCompare ? ' compare' : '') + '"><div class="chart">' + buildBars(d.pageviews, d.previousPageviews) + '</div></div>' +
     '</div>';
   }
 
-  function buildBars(pageviews) {
+  function buildBars(pageviews, previousPageviews) {
     var key = chartMode === 'visitors' ? 'visitors' : 'views';
-    var tipLabel = chartMode === 'visitors' ? 'visitors' : 'views';
-    var maxVal = Math.max.apply(null, pageviews.map(function(p) { return +p[key]; }).concat([1]));
+    var showCompare = compareMode && previousPageviews && previousPageviews.length > 0;
+    var allVals = pageviews.map(function(p) { return +p[key]; });
+    if (showCompare) {
+      allVals = allVals.concat(previousPageviews.map(function(p) { return +p[key]; }));
+    }
+    var maxVal = Math.max.apply(null, allVals.concat([1]));
     var bars = '';
-    pageviews.forEach(function(p) {
+    pageviews.forEach(function(p, i) {
       var h = Math.max(4, (+p[key] / maxVal) * 140);
       var label = formatDay(p.date);
-      bars += '<div class="chart-col">' +
-        '<span class="chart-val">' + num(p[key]) + '</span>' +
-        '<div class="chart-bar" style="height:' + h + 'px">' +
-          '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
-        '</div>' +
-        '<span class="chart-date">' + label + '</span>' +
-      '</div>';
+      var prev = showCompare && previousPageviews[i] ? previousPageviews[i] : null;
+      var prevH = prev ? Math.max(4, (+prev[key] / maxVal) * 140) : 0;
+
+      if (showCompare) {
+        var curVal = +p[key];
+        var prevVal = prev ? +prev[key] : 0;
+        var delta = prevVal > 0 ? Math.round(((curVal - prevVal) / prevVal) * 100) : null;
+        var deltaStr = delta === null ? '' : (delta >= 0 ? ' (+' + delta + '%)' : ' (' + delta + '%)');
+        // Tooltip has inverted background (dark text → light bg in dark mode),
+        // so use darker colors that read well on the light tooltip surface.
+        var deltaColor = delta === null ? '#64748b' : (delta >= 0 ? '#059669' : '#dc2626');
+        var prevLabel = prev ? formatDay(prev.date) : '';
+        var combinedTip = '<div class="tip" style="text-align:left">' +
+          '<div style="font-weight:600;margin-bottom:4px">' + label + '<span style="color:' + deltaColor + ';font-weight:500">' + deltaStr + '</span></div>' +
+          '<div>' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
+          (prev ? '<div style="color:var(--light);margin-top:2px">vs ' + prevLabel + ': ' + num(prev.views) + ' / ' + num(prev.visitors) + '</div>' : '') +
+        '</div>';
+
+        bars += '<div class="chart-col chart-col-compare">' +
+          combinedTip +
+          '<div class="chart-bars">' +
+            '<div class="chart-bar-wrap">' +
+              '<span class="chart-val">' + num(p[key]) + '</span>' +
+              '<div class="chart-bar" style="height:' + h + 'px"></div>' +
+            '</div>' +
+            '<div class="chart-bar-wrap">' +
+              '<span class="chart-val-prev">' + (prev ? num(prev[key]) : '0') + '</span>' +
+              '<div class="chart-bar chart-bar-prev" style="height:' + prevH + 'px"></div>' +
+            '</div>' +
+          '</div>' +
+          '<span class="chart-date">' + label + '</span>' +
+        '</div>';
+      } else {
+        bars += '<div class="chart-col">' +
+          '<span class="chart-val">' + num(p[key]) + '</span>' +
+          '<div class="chart-bar" style="height:' + h + 'px">' +
+            '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
+          '</div>' +
+          '<span class="chart-date">' + label + '</span>' +
+        '</div>';
+      }
     });
     return bars;
   }
@@ -1171,7 +1242,17 @@
     card.querySelectorAll('.card-tab').forEach(function(t) { t.classList.remove('active'); });
     el.classList.add('active');
     var chartEl = card.querySelector('.chart');
-    chartEl.innerHTML = buildBars(lastData.pageviews);
+    chartEl.innerHTML = buildBars(lastData.pageviews, lastData.previousPageviews);
+  };
+
+  window.toggleCompareMode = function(el) {
+    compareMode = !compareMode;
+    localStorage.setItem('puls-compare', compareMode ? '1' : '0');
+    // Re-render whole chart card to update legend
+    var card = el.closest('.card');
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = renderChart(lastData);
+    card.replaceWith(wrapper.firstChild);
   };
 
   function renderTable(title, rows, labelKey, valKey, color) {
