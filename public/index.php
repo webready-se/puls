@@ -1447,11 +1447,20 @@ function normalize_path(string $path): string
 
 function run_migrations(PDO $db): void
 {
-    $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
-    $marker = dirname($dbFile ?: __DIR__) . '/.schema_version';
     $currentVersion = 15; // Bump this when adding new migrations
 
-    $version = file_exists($marker) ? (int) file_get_contents($marker) : 0;
+    // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
+    $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
+
+    // Backward compat: if user_version is 0 but legacy .schema_version file exists
+    // in the same directory, seed from it (one-time migration to per-DB versioning).
+    $dbFile = $db->query("PRAGMA database_list")->fetch()['file'] ?? '';
+    $legacyMarker = dirname($dbFile ?: __DIR__) . '/.schema_version';
+    if ($version === 0 && file_exists($legacyMarker)) {
+        $version = (int) file_get_contents($legacyMarker);
+        $db->exec('PRAGMA user_version = ' . $version);
+    }
+
     if ($version >= $currentVersion) return;
 
     // v1: UTM columns
@@ -1756,7 +1765,7 @@ function run_migrations(PDO $db): void
         }
     }
 
-    file_put_contents($marker, (string) $currentVersion);
+    $db->exec('PRAGMA user_version = ' . $currentVersion);
 }
 
 function handle_status_log(array $config): void
