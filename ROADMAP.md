@@ -116,7 +116,7 @@
 - [x] **Outbound link tracking** — auto-track clicks on external links via JS click listener
 - [x] **Auto event tracking** — `data-auto-events` attribute for zero-config tracking of phone clicks, email clicks, downloads, form submissions
 - [x] **Country/region stats** — based on Accept-Language, flag emojis + visitor count in Countries tab
-- [ ] **Comparison mode** — "This week vs last" as overlay in chart
+- [x] **Comparison mode** — "This week vs last" as overlay in chart with combined tooltip and % delta
 - [x] **Goals/conversions** — define target page (e.g. /thank-you), show conversion rate
 - [x] **Custom date range** — date picker beyond 7d/30d/90d
 - [x] **Summary cards** — "Best day: Tuesday", "Peak traffic: 2–3 PM"
