@@ -132,9 +132,9 @@
 
 ## Epic 11: Adoption
 
-- [ ] **Dockerfile** — Alpine + PHP built-in server (~30MB image), optional alternative to zip/git
-- [ ] **One-click deploy buttons** — DigitalOcean, Railway, Render badges in README
-- [ ] **White-label** — configurable branding (name, logo) via .env for customer installs
+- [x] **Dockerfile** — Alpine + PHP built-in server (~93MB image), auto-setup entrypoint
+- [x] **One-click deploy buttons** — Render, Railway, Fly.io configs + badge in README
+- [x] **White-label** — configurable branding (APP_NAME, APP_TAGLINE, APP_ACCENT) via .env
 
 ## Epic 12: Automation
 

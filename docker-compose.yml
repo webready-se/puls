@@ -1,0 +1,12 @@
+services:
+  puls:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMIN_PASSWORD=changeme
+    volumes:
+      - puls-data:/app/data
+
+volumes:
+  puls-data:

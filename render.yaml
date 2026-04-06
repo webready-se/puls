@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: puls
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: ADMIN_PASSWORD
+        generateValue: true
+    disk:
+      name: puls-data
+      mountPath: /app/data
+      sizeGB: 1
+    healthCheckPath: /?health

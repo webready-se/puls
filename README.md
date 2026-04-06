@@ -91,6 +91,25 @@ Puls is designed to be GDPR-friendly without consent banners:
 
 ## Quick Start
 
+### Docker
+
+```bash
+docker run -p 8080:8080 -e ADMIN_PASSWORD=changeme -v puls-data:/app/data puls
+```
+
+Or with Docker Compose:
+
+```bash
+curl -O https://raw.githubusercontent.com/webready-se/puls/main/docker-compose.yml
+docker compose up
+```
+
+Open `http://localhost:8080` and log in with `admin` / your password.
+
+### One-Click Deploy
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/webready-se/puls)
+
 ### Download
 
 Grab the [latest release](https://github.com/webready-se/puls/releases/latest) and extract:
@@ -193,6 +212,18 @@ ALLOWED_ORIGINS=example.com,another-site.com
 ```
 
 This allows tracking from `example.com`, `www.example.com`, `app.example.com`, etc. Leave empty to allow all origins.
+
+### White-label
+
+Customize branding via `.env`:
+
+```env
+APP_NAME=MyAnalytics
+APP_TAGLINE=Your custom tagline
+APP_ACCENT=#e11d48
+```
+
+This changes the login page, dashboard header, PWA manifest, and favicon. The footer always shows "Powered by Puls".
 
 ## Deployment
 
