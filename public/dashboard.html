@@ -14,7 +14,15 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='%236366f1'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
 <script>
 // Theme: apply immediately in <head> to prevent flash of wrong theme
+// Hash params override localStorage (used by scripts/screenshots.sh)
 (function() {
+  var hash = {};
+  location.hash.replace(/^#/, '').split('&').forEach(function(p) {
+    var kv = p.split('='); if (kv[0]) hash[kv[0]] = decodeURIComponent(kv[1] || '');
+  });
+  if (hash.theme) localStorage.setItem('puls-theme', hash.theme);
+  if (hash.compare) localStorage.setItem('puls-compare', hash.compare);
+  if (hash.tabs) localStorage.setItem('puls-screenshot-tabs', hash.tabs);
   var s = localStorage.getItem('puls-theme') || 'system';
   if (s === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
   else if (s === 'light') document.documentElement.setAttribute('data-theme', 'light');
@@ -1038,6 +1046,17 @@
 
     if (!isShared) html += renderTools(d.site);
     app.innerHTML = html;
+
+    // Screenshot helper: switch tabs if requested (used by scripts/screenshots.sh)
+    var screenshotTabs = localStorage.getItem('puls-screenshot-tabs');
+    if (screenshotTabs) {
+      localStorage.removeItem('puls-screenshot-tabs');
+      var tabs = JSON.parse(screenshotTabs);
+      Object.keys(tabs).forEach(function(k) {
+        var tab = document.querySelector('.card-tab[data-tab="' + tabs[k] + '"]');
+        if (tab) tab.click();
+      });
+    }
   }
 
   function renderGoals(goals) {

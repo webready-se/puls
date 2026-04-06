@@ -2,14 +2,15 @@
 # Generate dashboard screenshots for README using seeded demo data.
 # Usage: bash scripts/screenshots.sh
 #
-# Requires: Google Chrome (macOS default path)
+# Requires: Google Chrome (macOS default path), Python 3 with Pillow
+# Uses URL hash params (#theme=dark&compare=1&tabs=...) to control
+# dashboard state — no redirects needed, Chrome captures in one load.
 
 set -e
 
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 PORT=8765
 OUT_DIR="docs/screenshots"
-PROFILE="/tmp/puls-screenshots-profile-$$"
 
 cd "$(dirname "$0")/.."
 
@@ -17,6 +18,12 @@ if [ ! -f "$CHROME" ]; then
     echo "Error: Google Chrome not found at $CHROME"
     exit 1
 fi
+
+python3 -c "from PIL import Image" 2>/dev/null || {
+    echo "Error: Python Pillow required for image cropping"
+    echo "  pip3 install Pillow"
+    exit 1
+}
 
 echo "→ Seeding demo database..."
 php scripts/seed-demo.php data/demo.sqlite > /tmp/seed-output.txt
@@ -31,21 +38,19 @@ sleep 1
 
 cleanup() {
     kill $SERVER_PID 2>/dev/null || true
-    rm -rf "$PROFILE"
-    rm -f public/_prime.html
 }
 trap cleanup EXIT
 
 mkdir -p "$OUT_DIR"
 
-SHARE_URL="http://localhost:$PORT/?share=$TOKEN"
+BASE="http://localhost:$PORT/?share=$TOKEN"
 
 shoot() {
     local name=$1
-    local url=$2
+    local hash=$2
     local width=${3:-1400}
     local height=${4:-1900}
-    echo "→ $name.png"
+    echo "→ $name.png (${width}x${height})"
     "$CHROME" \
         --headless \
         --disable-gpu \
@@ -55,38 +60,41 @@ shoot() {
         --disable-extensions \
         --force-device-scale-factor=2 \
         --window-size=$width,$height \
-        --virtual-time-budget=4000 \
         --screenshot="$OUT_DIR/$name.png" \
-        "$url" 2>/dev/null || true
+        "${BASE}#${hash}" 2>/dev/null || true
 }
 
-# For themed views, use a tiny prime page on same origin that sets localStorage and redirects.
-prime_and_shoot() {
-    local name=$1
-    local theme=$2
-    local compare=$3
-    local width=${4:-1400}
-    local height=${5:-1900}
+echo ""
+echo "Taking screenshots..."
 
-    cat > public/_prime.html <<EOF
-<!DOCTYPE html>
-<html><body><script>
-localStorage.setItem('puls-theme', '$theme');
-localStorage.setItem('puls-compare', '$compare');
-setTimeout(function() { location.href = '$SHARE_URL'; }, 100);
-</script></body></html>
-EOF
-    shoot "$name" "http://localhost:$PORT/_prime.html" "$width" "$height"
-}
+# 1. Hero: dark mode, default tabs
+shoot dashboard "theme=dark"
 
-# Default theme (respects system) — probably dark for most devs
-shoot dashboard "$SHARE_URL"
+# 2. Compare mode: dark, previous period overlay
+shoot dashboard-compare "theme=dark&compare=1"
 
-# Explicit dark with compare mode on
-prime_and_shoot dashboard-compare dark 1
+# 3. Events + Countries tabs active
+shoot events 'theme=dark&tabs={"traffic":"events","visitors":"countries"}'
 
-# Light mode
-prime_and_shoot dashboard-light light 0
+# 4. Full page capture (tall) — will be cropped to bots + broken links
+shoot dashboard-full "theme=dark" 1400 4000
+
+# 5. Light mode
+shoot dashboard-light "theme=light"
+
+# Crop bots + broken links section from the full-page capture (42%–88% of height).
+if [ -f "$OUT_DIR/dashboard-full.png" ]; then
+    echo "→ Cropping bots.png from full-page capture..."
+    python3 -c "
+from PIL import Image
+img = Image.open('$OUT_DIR/dashboard-full.png')
+w, h = img.size
+cropped = img.crop((0, int(h * 0.42), w, int(h * 0.88)))
+cropped.save('$OUT_DIR/bots.png')
+print(f'  {cropped.size[0]}x{cropped.size[1]}px')
+"
+    rm -f "$OUT_DIR/dashboard-full.png"
+fi
 
 echo ""
 echo "Screenshots saved to $OUT_DIR/"

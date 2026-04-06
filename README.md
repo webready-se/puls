@@ -69,11 +69,23 @@ Puls is designed to be GDPR-friendly without consent banners:
 - **Interactive CLI** — all management commands with pickers and prompts
 
 <details>
-<summary>Bot detection & broken link tracking</summary>
+<summary>More screenshots</summary>
 
-![Bots & Crawlers](docs/screenshots/bots.png)
+**Compare with previous period**
 
-![Pages to fix](docs/screenshots/broken-links.png)
+![Comparison mode](docs/screenshots/dashboard-compare.png)
+
+**Events & country stats**
+
+![Events and countries](docs/screenshots/events.png)
+
+**Bot detection & broken link tracking**
+
+![Bots & crawlers](docs/screenshots/bots.png)
+
+**Light mode**
+
+![Light mode](docs/screenshots/dashboard-light.png)
 
 </details>
 

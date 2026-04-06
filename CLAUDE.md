@@ -48,6 +48,8 @@ phpunit.xml             — Test configuration (Pest)
 tests/                  — Pest test suite (142 tests, unit + feature)
 scripts/hooks/pre-push  — Git hook: runs Pest before allowing push
 scripts/build-release.sh — Builds release zip with runtime files only
+scripts/screenshots.sh  — Generates all README screenshots (headless Chrome + demo DB)
+scripts/seed-demo.php   — Seeds a demo SQLite database with realistic fake data
 .claude/hooks/php-lint.sh — PostToolUse hook: syntax-checks PHP after edit
 ```
 
@@ -81,6 +83,18 @@ php -S localhost:8080 -t public
 # Add user with site restriction
 php puls user:add client --sites=their-site
 ```
+
+### Screenshots
+
+All README screenshots are auto-generated from a seeded demo database:
+
+```bash
+bash scripts/screenshots.sh    # Requires: Chrome, Python 3 + Pillow
+```
+
+This seeds `data/demo.sqlite` with 30 days of realistic fake data, starts a dev server, and captures 5 screenshots via headless Chrome using a share token URL. Dashboard state (theme, compare mode, active tabs) is controlled via URL hash params (`#theme=dark&compare=1&tabs=...`), which `dashboard.html` reads at init. The bots screenshot is cropped from a tall full-page capture using Pillow.
+
+Screenshots: `dashboard`, `dashboard-compare`, `events`, `bots`, `dashboard-light`.
 
 ### Pre-push hook
 
