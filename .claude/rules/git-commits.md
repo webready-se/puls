@@ -18,3 +18,4 @@ Types: feat, fix, refactor, docs, style, chore, test
 - **Always ask the user before committing or pushing**
 - Never push directly to main during development — use feature branches
 - Tests must pass before pushing (pre-push hook enforces this)
+- Delete feature branches (local + remote) after merge — use `gh api` for remote to avoid pre-push hook on delete
