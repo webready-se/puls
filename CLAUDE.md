@@ -50,6 +50,10 @@ scripts/hooks/pre-push  — Git hook: runs Pest before allowing push
 scripts/build-release.sh — Builds release zip with runtime files only
 scripts/screenshots.sh  — Generates all README screenshots (headless Chrome + demo DB)
 scripts/seed-demo.php   — Seeds a demo SQLite database with realistic fake data
+Dockerfile              — Alpine + PHP built-in server (~93MB image)
+docker-entrypoint.sh    — Auto-generates APP_KEY, creates admin from ADMIN_PASSWORD env var
+docker-compose.yml      — One-command setup with volume for /app/data
+.dockerignore           — Excludes dev files from Docker build
 .claude/hooks/php-lint.sh — PostToolUse hook: syntax-checks PHP after edit
 ```
 

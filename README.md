@@ -91,6 +91,21 @@ Puls is designed to be GDPR-friendly without consent banners:
 
 ## Quick Start
 
+### Docker
+
+```bash
+docker run -p 8080:8080 -e ADMIN_PASSWORD=changeme -v puls-data:/app/data puls
+```
+
+Or with Docker Compose:
+
+```bash
+curl -O https://raw.githubusercontent.com/webready-se/puls/main/docker-compose.yml
+docker compose up
+```
+
+Open `http://localhost:8080` and log in with `admin` / your password.
+
 ### Download
 
 Grab the [latest release](https://github.com/webready-se/puls/releases/latest) and extract:

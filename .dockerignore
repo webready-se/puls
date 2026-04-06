@@ -1,0 +1,12 @@
+.git
+.github
+.claude
+vendor
+tests
+composer.*
+phpunit.xml
+docs
+data/
+.env
+users.json
+*.md
