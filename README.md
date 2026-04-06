@@ -109,9 +109,6 @@ Open `http://localhost:8080` and log in with `admin` / your password.
 ### One-Click Deploy
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/webready-se/puls)
-[![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/webready-se/puls/tree/main)
-
-> **Note:** DigitalOcean App Platform does not support persistent disks for Docker apps — data resets on redeploy. Use Render for persistent deployments.
 
 ### Download
 

@@ -1,0 +1,15 @@
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+[[http_service.checks]]
+  path = "/?health"
+  interval = "30s"
+  timeout = "3s"
+
+[mounts]
+  source = "puls_data"
+  destination = "/app/data"
