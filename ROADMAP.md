@@ -141,12 +141,12 @@
 Lighthouse: Performance 100, A11y 71 → target 90+. No visual regressions.
 
 **Quick wins (zero visual impact)**
-- [ ] **ARIA attributes** — aria-label on icon buttons, aria-hidden on decorative SVGs, aria-live on live badge
-- [ ] **Language fix** — login page lang="sv" → lang="en"
-- [ ] **Reduced motion** — `@media (prefers-reduced-motion: reduce)` disables animations
-- [ ] **Skip-to-content link** — hidden link for keyboard users to jump past header
-- [ ] **Meta description** — add `<meta name="description">` for SEO (Lighthouse flag)
-- [ ] **Main landmark** — wrap #app in `<main>` element
+- [x] **ARIA attributes** — aria-label on icon buttons, aria-hidden on decorative SVGs, aria-live on live badge
+- [x] **Language fix** — login page lang="sv" → lang="en"
+- [x] **Reduced motion** — `@media (prefers-reduced-motion: reduce)` disables animations
+- [x] **Skip-to-content link** — hidden link for keyboard users to jump past header
+- [x] **Meta description** — add `<meta name="description">` for SEO (Lighthouse flag)
+- [x] **Main landmark** — wrap #app in `<main>` element
 
 **Low risk (minimal visual change)**
 - [ ] **Focus indicators** — replace `outline: none` with accent-colored glow on all interactive elements
