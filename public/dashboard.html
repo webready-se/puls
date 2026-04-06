@@ -26,6 +26,12 @@
   var s = localStorage.getItem('puls-theme') || 'system';
   if (s === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
   else if (s === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  // Apply branding accent color early to prevent flash
+  var b = window.PULS_BRANDING;
+  if (b && b.accent && b.accent !== '#6366f1') {
+    document.documentElement.style.setProperty('--accent', b.accent);
+    document.documentElement.style.setProperty('--accent2', b.accent);
+  }
 })();
 </script>
 <style>
@@ -74,7 +80,7 @@
     width: 34px; height: 34px; border-radius: 10px;
     background: linear-gradient(135deg, var(--accent), var(--accent2));
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
   }
   .logo-icon svg { width: 18px; height: 18px; }
   .logo-text { font-weight: 700; font-size: 18px; color: var(--text); }
@@ -763,6 +769,22 @@
   const shareToken = isShared ? window.PULS_SHARE.token : null;
   const shareSite = isShared ? window.PULS_SHARE.site : null;
 
+  // --- Branding ---
+  const branding = window.PULS_BRANDING || {};
+  const appName = branding.name || 'Puls';
+  if (appName !== 'Puls') {
+    document.title = appName;
+    var metaTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (metaTitle) metaTitle.content = appName;
+    var logoText = document.querySelector('.logo-text');
+    if (logoText) logoText.textContent = appName;
+  }
+  if (branding.accent && branding.accent !== '#6366f1') {
+    var faviconSvg = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='" + branding.accent + "'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>");
+    var favicon = document.querySelector('link[rel="icon"]');
+    if (favicon) favicon.href = faviconSvg;
+  }
+
   // --- State ---
   let currentDays = isShared ? 7 : (+(localStorage.getItem('puls-days')) || 7);
   let currentSite = isShared ? shareSite : (localStorage.getItem('puls-site') || '');
@@ -962,7 +984,7 @@
       app.innerHTML = '<div class="empty">' + icons.chart +
         '<p>No data yet. Add the tracking snippet below to start collecting visitor stats.</p></div>' +
         renderSnippet(d.site) +
-        '<div class="footer">Puls — One file. No cookies. Full picture.</div>';
+        '<div class="footer">' + (appName !== 'Puls' ? appName + ' — Powered by Puls' : 'Puls — One file. No cookies. Full picture.') + '</div>';
       return;
     }
 
@@ -1823,7 +1845,7 @@
     '<div class="tools-content' + (isOpen ? ' open' : '') + '">' +
       renderSnippet(site) +
     '</div>' +
-    '<div class="footer">Puls — One file. No cookies. Full picture.</div>';
+    '<div class="footer">' + (appName !== 'Puls' ? appName + ' — Powered by Puls' : 'Puls — One file. No cookies. Full picture.') + '</div>';
   }
 
   function renderSnippet(site) {

@@ -50,12 +50,12 @@ if (isset($_GET['js'])) {
 
 if (isset($_GET['manifest'])) {
     respond(json_encode([
-        'name' => 'Puls',
-        'short_name' => 'Puls',
+        'name' => $config['app_name'],
+        'short_name' => $config['app_name'],
         'start_url' => '/',
         'display' => 'standalone',
         'background_color' => '#f8fafc',
-        'theme_color' => '#6366f1',
+        'theme_color' => $config['app_accent'],
         'icons' => [
             ['src' => '/icon-192.png', 'sizes' => '192x192', 'type' => 'image/png'],
             ['src' => '/icon-512.png', 'sizes' => '512x512', 'type' => 'image/png'],
@@ -136,7 +136,8 @@ if (isset($_GET['share'])) {
     if (file_exists($dashboard)) {
         $html = file_get_contents($dashboard);
         $shareJson = json_encode(['token' => $share['token'], 'site' => $share['site']]);
-        $html = str_replace('</title>', '</title><script>window.PULS_SHARE=' . $shareJson . ';</script>', $html);
+        $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent']]);
+        $html = str_replace('</title>', '</title><script>window.PULS_SHARE=' . $shareJson . ';window.PULS_BRANDING=' . $brandingJson . ';</script>', $html);
         respond($html, 200, 'text/html', security_headers());
     }
     respond('Dashboard file not found.', 404, 'text/plain');
@@ -188,7 +189,10 @@ if (!is_authenticated()) {
 // Serve dashboard
 $dashboard = __DIR__ . '/dashboard.html';
 if (file_exists($dashboard)) {
-    respond(file_get_contents($dashboard), 200, 'text/html', security_headers());
+    $html = file_get_contents($dashboard);
+    $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent']]);
+    $html = str_replace('</title>', '</title><script>window.PULS_BRANDING=' . $brandingJson . ';</script>', $html);
+    respond($html, 200, 'text/html', security_headers());
 }
 respond('Dashboard file not found.', 404, 'text/plain');
 
@@ -243,7 +247,7 @@ function handle_login(array $config): void
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['_login'])) {
         // Verify CSRF token
         if (!hash_equals($_SESSION['csrf_token'] ?? '', $_POST['_token'] ?? '')) {
-            show_login('Invalid request. Try again.');
+            show_login($config, 'Invalid request. Try again.');
             return;
         }
 
@@ -252,7 +256,7 @@ function handle_login(array $config): void
 
         // Check brute-force lockout
         if (is_locked_out($config)) {
-            show_login("Too many failed attempts. Wait {$config['lockout_minutes']} minutes.");
+            show_login($config, "Too many failed attempts. Wait {$config['lockout_minutes']} minutes.");
             return;
         }
 
@@ -279,7 +283,7 @@ function handle_login(array $config): void
         return;
     }
 
-    show_login();
+    show_login($config);
 }
 
 function handle_logout(): void
@@ -342,11 +346,15 @@ function load_users(string $file): array
     return json_decode(file_get_contents($file), true) ?: [];
 }
 
-function show_login(?string $error = null): void
+function show_login(array $config, ?string $error = null): void
 {
     $token = bin2hex(random_bytes(32));
     $_SESSION['csrf_token'] = $token;
     $errorHtml = $error ? '<div class="error">' . htmlspecialchars($error) . '</div>' : '';
+    $name = htmlspecialchars($config['app_name']);
+    $tagline = htmlspecialchars($config['app_tagline']);
+    $accent = htmlspecialchars($config['app_accent']);
+    $accentEnc = str_replace('#', '%23', $accent);
 
     respond(<<<HTML
     <!DOCTYPE html>
@@ -356,13 +364,13 @@ function show_login(?string $error = null): void
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Puls">
-    <meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)">
+    <meta name="apple-mobile-web-app-title" content="{$name}">
+    <meta name="theme-color" content="{$accent}" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <link rel="manifest" href="/?manifest">
     <link rel="apple-touch-icon" href="/icon-180.png">
-    <title>Puls — Log in</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='%236366f1'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
+    <title>{$name} — Log in</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='{$accentEnc}'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
     <script>
       (function() {
         var s = localStorage.getItem('puls-theme') || 'system';
@@ -375,13 +383,13 @@ function show_login(?string $error = null): void
       :root {
         --bg: #f8fafc; --card: #fff; --border: #e2e8f0;
         --text: #1e293b; --muted: #94a3b8; --label: #475569;
-        --accent: #6366f1; --accent2: #8b5cf6;
+        --accent: {$accent}; --accent2: {$accent};
         --error-bg: #fef2f2; --error-text: #dc2626; --error-border: #fecaca;
       }
       [data-theme="dark"] {
         --bg: #0f172a; --card: #1e293b; --border: #334155;
         --text: #f1f5f9; --muted: #64748b; --label: #94a3b8;
-        --accent: #818cf8; --accent2: #a78bfa;
+        --accent: {$accent}; --accent2: {$accent};
         --error-bg: rgba(248,113,113,0.1); --error-text: #f87171; --error-border: rgba(248,113,113,0.2);
       }
       @media (prefers-color-scheme: dark) {
@@ -407,7 +415,7 @@ function show_login(?string $error = null): void
         width: 40px; height: 40px; border-radius: 12px;
         background: linear-gradient(135deg, var(--accent), var(--accent2));
         display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+        box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
       }
       .logo-icon svg { width: 20px; height: 20px; }
       .logo-text { font-weight: 700; font-size: 22px; }
@@ -419,7 +427,7 @@ function show_login(?string $error = null): void
         font-size: 14px; outline: none;
         margin-bottom: 16px; transition: border-color 0.15s;
       }
-      input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+      input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
       button {
         width: 100%; padding: 12px; border-radius: 10px; border: none;
         background: linear-gradient(135deg, var(--accent), var(--accent2));
@@ -442,9 +450,9 @@ function show_login(?string $error = null): void
             <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
           </svg>
         </div>
-        <span class="logo-text">Puls</span>
+        <span class="logo-text">{$name}</span>
       </div>
-      <p class="tagline">See your traffic. Respect their privacy.</p>
+      <p class="tagline">{$tagline}</p>
       {$errorHtml}
       <form method="POST" action="/?login">
         <input type="hidden" name="_login" value="1">

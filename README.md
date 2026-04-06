@@ -209,6 +209,18 @@ ALLOWED_ORIGINS=example.com,another-site.com
 
 This allows tracking from `example.com`, `www.example.com`, `app.example.com`, etc. Leave empty to allow all origins.
 
+### White-label
+
+Customize branding via `.env`:
+
+```env
+APP_NAME=MyAnalytics
+APP_TAGLINE=Your custom tagline
+APP_ACCENT=#e11d48
+```
+
+This changes the login page, dashboard header, PWA manifest, and favicon. The footer always shows "Powered by Puls".
+
 ## Deployment
 
 ### Requirements

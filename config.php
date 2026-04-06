@@ -40,6 +40,12 @@ if (empty($appKey) && file_exists($envFile)) {
 return [
     'app_key' => $appKey,
 
+    'app_name' => $_ENV['APP_NAME'] ?? 'Puls',
+
+    'app_tagline' => $_ENV['APP_TAGLINE'] ?? 'See your traffic. Respect their privacy.',
+
+    'app_accent' => $_ENV['APP_ACCENT'] ?? '#6366f1',
+
     'db_path' => resolve_path($_ENV['DB_PATH'] ?? 'data/puls.sqlite'),
 
     'users_file' => resolve_path($_ENV['USERS_FILE'] ?? 'users.json'),
