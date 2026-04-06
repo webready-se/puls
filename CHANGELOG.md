@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] — 2026-04-06
+
+### Added
+
+- Docker support — Alpine + PHP built-in server image with auto-setup entrypoint (generates APP_KEY, creates admin from ADMIN_PASSWORD env var)
+- White-label branding — APP_NAME, APP_TAGLINE, APP_ACCENT env vars customize login, dashboard, manifest, and favicon
+- One-click deploy — Render (with deploy button), Railway, and Fly.io configs with persistent disk support
+- docker-compose.yml for single-command local setup
+
+### Changed
+
+- Footer shows "Powered by Puls" when custom APP_NAME is set
+- Logo icon box-shadow uses CSS color-mix for dynamic accent color support
+
 ## [1.7.0] — 2026-04-06
 
 ### Added
@@ -215,6 +229,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.8.0]: https://github.com/webready-se/puls/releases/tag/v1.8.0
 [1.7.0]: https://github.com/webready-se/puls/releases/tag/v1.7.0
 [1.6.0]: https://github.com/webready-se/puls/releases/tag/v1.6.0
 [1.5.0]: https://github.com/webready-se/puls/releases/tag/v1.5.0
