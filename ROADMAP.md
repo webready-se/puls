@@ -136,9 +136,35 @@
 - [x] **One-click deploy buttons** — Render, Railway, Fly.io configs + badge in README
 - [x] **White-label** — configurable branding (APP_NAME, APP_TAGLINE, APP_ACCENT) via .env
 
-## Epic 12: Automation
+## Epic 12: Accessibility & Polish
 
-- [ ] **Weekly report via email** — CLI command + cron for summaries, uses `mail()` — no dependencies
+Lighthouse: Performance 100, A11y 71 → target 90+. No visual regressions.
+
+**Quick wins (zero visual impact)**
+- [ ] **ARIA attributes** — aria-label on icon buttons, aria-hidden on decorative SVGs, aria-live on live badge
+- [ ] **Language fix** — login page lang="sv" → lang="en"
+- [ ] **Reduced motion** — `@media (prefers-reduced-motion: reduce)` disables animations
+- [ ] **Skip-to-content link** — hidden link for keyboard users to jump past header
+- [ ] **Meta description** — add `<meta name="description">` for SEO (Lighthouse flag)
+- [ ] **Main landmark** — wrap #app in `<main>` element
+
+**Low risk (minimal visual change)**
+- [ ] **Focus indicators** — replace `outline: none` with accent-colored glow on all interactive elements
+- [ ] **Form labels** — aria-label on search inputs, goal search, date picker
+- [ ] **Login form** — autocomplete attributes, error linked via aria-describedby
+
+**Medium risk (test visually)**
+- [ ] **Color contrast** — darken muted text (#64748b → #475569) to meet WCAG AA 4.5:1
+- [ ] **Semantic buttons** — convert onclick divs to `<button>` with CSS reset (28 instances)
+- [ ] **Tab ARIA pattern** — role="tab", aria-selected on card tabs
+
+**Larger effort**
+- [ ] **Modal focus trap** — prevent Tab from escaping overlays
+- [ ] **Screen reader live regions** — aria-live on #app for dynamic content updates
+
+## Epic 13: Automation
+
+- [ ] **Weekly report via email** — CLI command + cron for summaries, uses `mail()`— no dependencies
 - [ ] **Webhooks** — HTTP callbacks on traffic spikes, new 404s, or threshold alerts
 - [x] **Auto-refresh** — dashboard refreshes every 60 seconds (paused during UTM wizard)
 
