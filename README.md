@@ -110,6 +110,8 @@ Open `http://localhost:8080` and log in with `admin` / your password.
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/webready-se/puls)
 
+Also includes configs for [Railway](https://railway.app) (`railway.toml`) and [Fly.io](https://fly.io) (`fly.toml`) — just clone and deploy.
+
 ### Download
 
 Grab the [latest release](https://github.com/webready-se/puls/releases/latest) and extract:
