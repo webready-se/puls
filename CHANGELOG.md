@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.10.0] — 2026-04-16
+
+### Changed
+
+- Default accent palette switched from generic indigo (`#6366f1`) to Webready's brand colors: `#f16272` coral as primary, `#19acca` teal as secondary
+- Dashboard chart bars, donut segments, and UTM wizard now use the coral/teal palette
+- Snippet and UTM wizard boxes switched from deep indigo gradient to neutral near-black (`#1a1a1a` -> `#0a0a0a`) so coral accents pop without a competing tinted background
+- Login page dark mode fallback updated to match new palette
+- Semantic colors preserved: channel colors (Paid/Organic/Social/etc.) and bot category tags remain distinct since they carry information
+- `APP_ACCENT` env var still overrides everything - white-label customers see no change
+
 ## [1.9.0] — 2026-04-16
 
 ### Changed
@@ -240,6 +251,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.10.0]: https://github.com/webready-se/puls/releases/tag/v1.10.0
 [1.9.0]: https://github.com/webready-se/puls/releases/tag/v1.9.0
 [1.8.0]: https://github.com/webready-se/puls/releases/tag/v1.8.0
 [1.7.0]: https://github.com/webready-se/puls/releases/tag/v1.7.0
