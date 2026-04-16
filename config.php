@@ -44,7 +44,7 @@ return [
 
     'app_tagline' => $_ENV['APP_TAGLINE'] ?? 'See your traffic. Respect their privacy.',
 
-    'app_accent' => $_ENV['APP_ACCENT'] ?? '#6366f1',
+    'app_accent' => $_ENV['APP_ACCENT'] ?? '#f16272',
 
     'db_path' => resolve_path($_ENV['DB_PATH'] ?? 'data/puls.sqlite'),
 

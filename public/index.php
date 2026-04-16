@@ -397,7 +397,7 @@ function show_login(array $config, ?string $error = null): void
         :root:not([data-theme="light"]) {
           --bg: #0f172a; --card: #1e293b; --border: #334155;
           --text: #f1f5f9; --muted: #64748b; --label: #94a3b8;
-          --accent: #818cf8; --accent2: #a78bfa;
+          --accent: #fb7185; --accent2: #f16272;
           --error-bg: rgba(248,113,113,0.1); --error-text: #f87171; --error-border: rgba(248,113,113,0.2);
         }
       }

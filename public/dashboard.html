@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Puls">
-<meta name="theme-color" content="#6366f1">
+<meta name="theme-color" content="#f16272">
 <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/?manifest">
 <link rel="apple-touch-icon" href="/icon-180.png">
@@ -29,7 +29,7 @@
   else if (s === 'light') document.documentElement.setAttribute('data-theme', 'light');
   // Apply branding accent color early to prevent flash
   var b = window.PULS_BRANDING;
-  if (b && b.accent && b.accent !== '#6366f1') {
+  if (b && b.accent && b.accent !== '#f16272') {
     document.documentElement.style.setProperty('--accent', b.accent);
     document.documentElement.style.setProperty('--accent2', b.accent);
   }
@@ -40,7 +40,7 @@
   :root {
     --bg: #f8fafc; --card: #fff; --border: #e2e8f0;
     --text: #1e293b; --muted: #475569; --light: #94a3b8;
-    --accent: #6366f1; --accent2: #8b5cf6; --accent-light: #818cf8;
+    --accent: #f16272; --accent2: #e5596b; --accent-light: #fb7185;
     --green: #059669; --green-bg: #ecfdf5;
     --red: #dc2626; --red-bg: #fef2f2;
     --subtle: #f1f5f9;
@@ -49,7 +49,7 @@
   [data-theme="dark"] {
     --bg: #0f172a; --card: #1e293b; --border: #334155;
     --text: #f1f5f9; --muted: #94a3b8; --light: #64748b;
-    --accent: #818cf8; --accent2: #a78bfa; --accent-light: #6366f1;
+    --accent: #fb7185; --accent2: #f16272; --accent-light: #ff8a99;
     --green: #34d399; --green-bg: rgba(52,211,153,0.1);
     --red: #f87171; --red-bg: rgba(248,113,113,0.1);
     --subtle: #334155; --calendar-icon-filter: invert(1);
@@ -58,7 +58,7 @@
     :root:not([data-theme="light"]) {
       --bg: #0f172a; --card: #1e293b; --border: #334155;
       --text: #f1f5f9; --muted: #94a3b8; --light: #64748b;
-      --accent: #818cf8; --accent2: #a78bfa; --accent-light: #6366f1;
+      --accent: #fb7185; --accent2: #f16272; --accent-light: #ff8a99;
       --green: #34d399; --green-bg: rgba(52,211,153,0.1);
       --red: #f87171; --red-bg: rgba(248,113,113,0.1);
       --subtle: #334155; --calendar-icon-filter: invert(1);
@@ -103,7 +103,7 @@
     font-size: 13px; color: var(--text); background: var(--card);
     cursor: pointer; font-weight: 500; outline: none;
   }
-  .site-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .site-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
   .period-group { display: flex; background: var(--subtle); border-radius: 10px; padding: 3px; }
   .period-btn {
     padding: 7px 14px; border-radius: 8px; border: none; font-size: 13px;
@@ -368,84 +368,84 @@
 
   /* Snippet */
   .snippet {
-    background: linear-gradient(135deg, #1e1b4b, #312e81);
+    background: linear-gradient(135deg, #1a1a1a, #0a0a0a);
     border-radius: var(--radius); padding: 24px; margin-bottom: 14px;
   }
-  .snippet h3 { color: #e0e7ff; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
-  .snippet p { color: #a5b4fc; font-size: 12px; margin-bottom: 12px; }
+  .snippet h3 { color: #f1f5f9; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .snippet p { color: #94a3b8; font-size: 12px; margin-bottom: 12px; }
   .snippet pre {
-    background: rgba(0,0,0,0.3); border-radius: 10px; padding: 16px;
-    font-size: 12px; line-height: 1.7; color: #c7d2fe; overflow-x: auto;
+    background: rgba(0,0,0,0.4); border-radius: 10px; padding: 16px;
+    font-size: 12px; line-height: 1.7; color: #cbd5e1; overflow-x: auto;
     word-break: break-all; white-space: pre-wrap; cursor: pointer;
     position: relative;
   }
-  .snippet pre:hover { background: rgba(0,0,0,0.4); }
+  .snippet pre:hover { background: rgba(0,0,0,0.55); }
   .snippet pre.copied::after {
     content: 'Copied!'; position: absolute; top: 8px; right: 12px;
-    font-size: 11px; color: #a5f3fc; font-weight: 600;
+    font-size: 11px; color: #fb7185; font-weight: 600;
   }
   .snippet input, .snippet select {
-    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #e0e7ff;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #f1f5f9;
     outline: none; width: 100%;
   }
-  .snippet input::placeholder { color: rgba(165,180,252,0.5); }
+  .snippet input::placeholder { color: rgba(255,255,255,0.35); }
   .snippet input:focus, .snippet select:focus {
-    border-color: rgba(165,180,252,0.4); background: rgba(255,255,255,0.15);
+    border-color: rgba(241,98,114,0.5); background: rgba(255,255,255,0.1);
   }
-  .snippet select option { background: #1e1b4b; color: #e0e7ff; }
+  .snippet select option { background: #1a1a1a; color: #f1f5f9; }
   .snippet-grid {
     display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;
   }
   @media (max-width: 600px) { .snippet-grid { grid-template-columns: 1fr; } }
-  .snippet label { display: block; font-size: 11px; color: #a5b4fc; margin-bottom: 4px; font-weight: 500; }
+  .snippet label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px; font-weight: 500; }
 
   /* UTM wizard */
   .utm-step { margin-bottom: 16px; }
   .utm-step-label {
-    font-size: 12px; font-weight: 600; color: #e0e7ff; margin-bottom: 8px;
+    font-size: 12px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px;
     display: flex; align-items: center; gap: 8px;
   }
   .utm-step-num {
     width: 20px; height: 20px; border-radius: 50%; font-size: 11px;
     display: inline-flex; align-items: center; justify-content: center;
-    background: rgba(165,180,252,0.2); color: #a5b4fc; font-weight: 700; flex-shrink: 0;
+    background: rgba(255,255,255,0.1); color: #94a3b8; font-weight: 700; flex-shrink: 0;
   }
-  .utm-step-num.active { background: #6366f1; color: #fff; }
+  .utm-step-num.active { background: #f16272; color: #fff; }
   .utm-channels {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
   }
   @media (max-width: 500px) { .utm-channels { grid-template-columns: repeat(2, 1fr); } }
   .utm-ch-btn {
-    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
     border-radius: 10px; padding: 10px 8px; cursor: pointer; text-align: center;
-    font-size: 12px; color: #c7d2fe; transition: all 0.15s;
+    font-size: 12px; color: #cbd5e1; transition: all 0.15s;
   }
-  .utm-ch-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(165,180,252,0.3); }
-  .utm-ch-btn.selected { background: rgba(99,102,241,0.3); border-color: #6366f1; color: #e0e7ff; }
+  .utm-ch-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(241,98,114,0.4); }
+  .utm-ch-btn.selected { background: rgba(241,98,114,0.3); border-color: #f16272; color: #fff; }
   .utm-ch-btn .utm-ch-icon { font-size: 18px; display: block; margin-bottom: 4px; }
   .utm-result-box {
-    background: rgba(0,0,0,0.3); border-radius: 10px; padding: 16px;
+    background: rgba(0,0,0,0.4); border-radius: 10px; padding: 16px;
     margin-top: 12px; position: relative;
   }
   .utm-result-url {
-    font-size: 12px; line-height: 1.7; color: #c7d2fe; word-break: break-all;
+    font-size: 12px; line-height: 1.7; color: #cbd5e1; word-break: break-all;
     font-family: monospace;
   }
-  .utm-result-url .utm-highlight { color: #a5f3fc; }
+  .utm-result-url .utm-highlight { color: #fb7185; }
   .utm-copy-btn {
     display: block; width: 100%; margin-top: 10px; padding: 10px;
-    background: #6366f1; border: none; border-radius: 8px;
+    background: #f16272; border: none; border-radius: 8px;
     color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
     transition: opacity 0.15s;
   }
   .utm-copy-btn:hover { opacity: 0.85; }
   .utm-copy-btn.copied { background: #059669; }
   .utm-advanced-toggle {
-    font-size: 11px; color: #818cf8; cursor: pointer; margin-top: 12px;
+    font-size: 11px; color: #fb7185; cursor: pointer; margin-top: 12px;
     display: inline-flex; align-items: center; gap: 4px;
   }
-  .utm-advanced-toggle:hover { color: #a5b4fc; }
+  .utm-advanced-toggle:hover { color: #ff8a99; }
   .utm-advanced { display: none; margin-top: 12px; }
   .utm-advanced.open { display: block; }
   .utm-placeholder { color: #64748b; font-size: 13px; text-align: center; padding: 12px; }
@@ -778,7 +778,7 @@
 (function() {
   // --- Config ---
   const API = '/';
-  const COLORS = ['#6366f1','#8b5cf6','#a78bfa','#c4b5fd','#ddd6fe','#94a3b8'];
+  const COLORS = ['#f16272','#19acca','#f59e0b','#22c55e','#8b5cf6','#94a3b8'];
   const isShared = !!window.PULS_SHARE;
   const shareToken = isShared ? window.PULS_SHARE.token : null;
   const shareSite = isShared ? window.PULS_SHARE.site : null;
@@ -793,7 +793,7 @@
     var logoText = document.querySelector('.logo-text');
     if (logoText) logoText.textContent = appName;
   }
-  if (branding.accent && branding.accent !== '#6366f1') {
+  if (branding.accent && branding.accent !== '#f16272') {
     var faviconSvg = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='" + branding.accent + "'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>");
     var favicon = document.querySelector('link[rel="icon"]');
     if (favicon) favicon.href = faviconSvg;
@@ -1044,7 +1044,7 @@
     }
     if (d.channel) {
       var channelName = Object.keys(channelSlugs).find(function(k) { return channelSlugs[k] === d.channel; }) || d.channel;
-      var cColor = channelColors[channelName] || '#6366f1';
+      var cColor = channelColors[channelName] || '#f16272';
       html += '<div class="path-filter">' +
         '<span style="width:10px;height:10px;border-radius:50%;background:' + cColor + ';flex-shrink:0"></span>' +
         '<span>Channel</span>' +
@@ -1401,7 +1401,7 @@
       html += '<div class="trow">' +
         goalBtn +
         '<span class="trow-label" title="' + esc(r.path) + '">' + esc(decode(r.path)) + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#6366f1"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#f16272"></div></div>' +
         '<span class="trow-val">' + num(r.views) + '</span>' +
       '</div>';
     });
@@ -1412,7 +1412,7 @@
     pages: function(d) { return renderPagesContent(d.pages); },
     entryPages: function(d) { return renderTableContent(d.entryPages, 'path', 'entries', '#059669'); },
     exitPages: function(d) { return renderTableContent(d.exitPages, 'path', 'exits', '#d97706'); },
-    referrers: function(d) { return renderTableContent(d.referrers, 'source', 'visitors', '#8b5cf6'); },
+    referrers: function(d) { return renderTableContent(d.referrers, 'source', 'visitors', '#19acca'); },
     utm: function(d) { return renderUtmContent(d.utm); },
     events: function(d) { return renderEventsContent(d.events); },
     outbound: function(d) { return renderOutboundContent(d.outbound); },
@@ -1428,7 +1428,7 @@
 
   function renderTabbedPages(pages, entryPages, exitPages, pagesTotal) {
     var tabs = [
-      { id: 'popular', label: 'Popular', rows: pages, valKey: 'views', color: '#6366f1', expand: 'pages', total: pagesTotal },
+      { id: 'popular', label: 'Popular', rows: pages, valKey: 'views', color: '#f16272', expand: 'pages', total: pagesTotal },
       { id: 'entry', label: 'Entry', rows: entryPages, valKey: 'entries', color: '#059669', expand: 'entryPages', total: 0 },
       { id: 'exit', label: 'Exit', rows: exitPages, valKey: 'exits', color: '#d97706', expand: 'exitPages', total: 0 }
     ];
@@ -1522,7 +1522,7 @@
         '<div class="card-tab" data-tab="outbound" onclick="switchPageTab(this)">Outbound</div>' +
       '</div>' +
       '<div class="tab-panel" data-panel="sources">' +
-        renderTableContent(referrers, 'source', 'visitors', '#8b5cf6') +
+        renderTableContent(referrers, 'source', 'visitors', '#19acca') +
         showAllBtn(referrersTotal, 'referrers', 'Traffic sources') +
       '</div>' +
       '<div class="tab-panel" data-panel="utm" style="display:none">' +
@@ -1552,7 +1552,7 @@
       var name = r.event_name.replace(/_/g, ' ');
       html += '<div class="trow trow-clickable" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
         '<span class="trow-label">' + esc(name) + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#a78bfa"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#f16272"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
       '</div>';
     });
@@ -1624,8 +1624,8 @@
         '<div class="card-tab" data-tab="countries" onclick="switchPageTab(this)">Countries</div>' +
         '<div class="card-tab" data-tab="languages" onclick="switchPageTab(this)">Languages</div>' +
       '</div>' +
-      '<div class="tab-panel" data-panel="browsers">' + renderPctBars(browsers, '#6366f1') + '</div>' +
-      '<div class="tab-panel" data-panel="devices" style="display:none">' + renderPctBars(devices, '#8b5cf6') + '</div>' +
+      '<div class="tab-panel" data-panel="browsers">' + renderPctBars(browsers, '#f16272') + '</div>' +
+      '<div class="tab-panel" data-panel="devices" style="display:none">' + renderPctBars(devices, '#19acca') + '</div>' +
       '<div class="tab-panel" data-panel="countries" style="display:none">' + renderCountries(countries) + '</div>' +
       '<div class="tab-panel" data-panel="languages" style="display:none">' + renderPctBars(languages, '#059669') + '</div>' +
     '</div>';
@@ -1649,7 +1649,7 @@
     var html = '';
     channels.forEach(function(c) {
       var pct = (+c.visitors / maxVisitors) * 100;
-      var color = channelColors[c.channel] || '#6366f1';
+      var color = channelColors[c.channel] || '#f16272';
       var slug = channelSlugs[c.channel] || '';
       html += '<div class="trow trow-clickable" onclick="filterChannel(\'' + slug + '\')">' +
         '<span class="trow-label">' + esc(c.channel) +
@@ -1993,7 +1993,7 @@
         '    proxy_set_header X-Original-Referer $http_referer;\n' +
         '}' +
       '</pre>' +
-      '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#e0e7ff">How does it work?</strong> Nginx sends a copy of bot requests to Puls in the background (mirror). ' +
+      '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#f1f5f9">How does it work?</strong> Nginx sends a copy of bot requests to Puls in the background (mirror). ' +
         'Broken links (404) are caught via post_action after the response is sent. ' +
         'PHP site: add post_action in the PHP block. Static site: in the error_page location. Zero impact on response time.</p>' +
     '</div>';
