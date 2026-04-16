@@ -129,7 +129,7 @@
     padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
     background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit;
   }
-  .date-picker input[type="date"]:focus { border-color: var(--accent); outline: none; }
+  .date-picker input[type="date"]:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
   .date-picker input[type="date"]::-webkit-calendar-picker-indicator { filter: var(--calendar-icon-filter, none); }
   .date-picker-apply {
     padding: 8px 16px; border-radius: 8px; border: none; background: var(--accent);
@@ -542,7 +542,7 @@
   .export-btn svg { width: 14px; height: 14px; }
 
   .goal-search { width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 12px; font-family: inherit; outline: none; }
-  .goal-search:focus { border-color: var(--accent); }
+  .goal-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
   .goal-search::placeholder { color: var(--light); }
   .goal-list { max-height: 200px; overflow-y: auto; margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
   .goal-list:empty::after { content: 'No pages match'; display: block; font-size: 11px; color: var(--light); padding: 6px 0; }
@@ -661,6 +661,9 @@
     font-size: 14px; font-weight: 600; border-radius: 0 0 8px 0; text-decoration: none;
   }
   .skip-link:focus { left: 0; }
+  /* Keyboard-only focus indicator. Mouse clicks don't trigger :focus-visible. */
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
