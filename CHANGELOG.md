@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] — 2026-04-16
+
+### Changed
+
+- Accessibility sweep continuing Epic 12 after the quick wins in 1.8.x
+- Login form: `autocomplete="username"` / `"current-password"` attributes so password managers work, error banner gets `role="alert"` and is linked to inputs via `aria-describedby`
+- Visible keyboard focus indicators: global `:focus-visible` rule shows an accent outline on any interactive element when reached via keyboard (mouse clicks unchanged)
+- Date picker and goal search inputs gain an accent glow on focus to match other form fields
+- Unlabeled inputs get `aria-label`: date range inputs, goal search, command palette
+- Muted text darkened in light mode (`#64748b` → `#475569`) to meet WCAG AA contrast (4.25:1 → 7.49:1). Dark mode unchanged.
+
 ## [1.8.0] — 2026-04-06
 
 ### Added
@@ -229,6 +240,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.9.0]: https://github.com/webready-se/puls/releases/tag/v1.9.0
 [1.8.0]: https://github.com/webready-se/puls/releases/tag/v1.8.0
 [1.7.0]: https://github.com/webready-se/puls/releases/tag/v1.7.0
 [1.6.0]: https://github.com/webready-se/puls/releases/tag/v1.6.0

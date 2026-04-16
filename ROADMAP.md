@@ -149,12 +149,12 @@ Lighthouse: Performance 100, A11y 71 → target 90+. No visual regressions.
 - [x] **Main landmark** — wrap #app in `<main>` element
 
 **Low risk (minimal visual change)**
-- [ ] **Focus indicators** — replace `outline: none` with accent-colored glow on all interactive elements
-- [ ] **Form labels** — aria-label on search inputs, goal search, date picker
+- [x] **Focus indicators** — replace `outline: none` with accent-colored glow on all interactive elements
+- [x] **Form labels** — aria-label on search inputs, goal search, date picker
 - [x] **Login form** — autocomplete attributes, error linked via aria-describedby
 
 **Medium risk (test visually)**
-- [ ] **Color contrast** — darken muted text (#64748b → #475569) to meet WCAG AA 4.5:1
+- [x] **Color contrast** — darken muted text (#64748b → #475569) to meet WCAG AA 4.5:1
 - [ ] **Semantic buttons** — convert onclick divs to `<button>` with CSS reset (28 instances)
 - [ ] **Tab ARIA pattern** — role="tab", aria-selected on card tabs
 
