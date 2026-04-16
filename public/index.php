@@ -350,7 +350,8 @@ function show_login(array $config, ?string $error = null): void
 {
     $token = bin2hex(random_bytes(32));
     $_SESSION['csrf_token'] = $token;
-    $errorHtml = $error ? '<div class="error">' . htmlspecialchars($error) . '</div>' : '';
+    $errorHtml = $error ? '<div class="error" id="login-error" role="alert">' . htmlspecialchars($error) . '</div>' : '';
+    $describedBy = $error ? ' aria-describedby="login-error"' : '';
     $name = htmlspecialchars($config['app_name']);
     $tagline = htmlspecialchars($config['app_tagline']);
     $accent = htmlspecialchars($config['app_accent']);
@@ -458,9 +459,9 @@ function show_login(array $config, ?string $error = null): void
         <input type="hidden" name="_login" value="1">
         <input type="hidden" name="_token" value="{$token}">
         <label for="username">Username</label>
-        <input type="text" id="username" name="username" required autofocus>
+        <input type="text" id="username" name="username" autocomplete="username" required autofocus{$describedBy}>
         <label for="password">Password</label>
-        <input type="password" id="password" name="password" required>
+        <input type="password" id="password" name="password" autocomplete="current-password" required{$describedBy}>
         <button type="submit">Log in</button>
       </form>
     </div>
