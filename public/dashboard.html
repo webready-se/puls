@@ -702,8 +702,8 @@
       </button>
     </div>
     <div class="date-picker" id="date-picker">
-      <label>From<input type="date" id="date-from"></label>
-      <label>To<input type="date" id="date-to"></label>
+      <label>From<input type="date" id="date-from" aria-label="Start date"></label>
+      <label>To<input type="date" id="date-to" aria-label="End date"></label>
       <button class="date-picker-apply" onclick="applyDateRange()">Apply</button>
     </div>
     <button class="menu-btn" id="menu-btn" onclick="openMenu()" aria-label="Menu">
@@ -753,7 +753,7 @@
   </div>
   <div class="menu-section" id="goals-section" style="display:none">
     <span class="menu-label">Goals</span>
-    <input type="text" class="goal-search" id="goal-search" placeholder="Search pages..." autocomplete="off" spellcheck="false">
+    <input type="text" class="goal-search" id="goal-search" placeholder="Search pages..." aria-label="Search pages for conversion goal" autocomplete="off" spellcheck="false">
     <div class="goal-list" id="goal-list"></div>
   </div>
   <div style="flex:1"></div>
@@ -767,7 +767,7 @@
   <div class="cmd-dialog">
     <div class="cmd-input-wrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input class="cmd-input" id="cmd-input" type="text" placeholder="Search pages..." autocomplete="off" spellcheck="false">
+      <input class="cmd-input" id="cmd-input" type="text" placeholder="Search pages..." aria-label="Search pages" autocomplete="off" spellcheck="false">
     </div>
     <div class="cmd-results" id="cmd-results"></div>
     <div class="cmd-hint">↑↓ navigate · Enter open · Esc close</div>
