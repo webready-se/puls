@@ -151,7 +151,7 @@ Lighthouse: Performance 100, A11y 71 → target 90+. No visual regressions.
 **Low risk (minimal visual change)**
 - [ ] **Focus indicators** — replace `outline: none` with accent-colored glow on all interactive elements
 - [ ] **Form labels** — aria-label on search inputs, goal search, date picker
-- [ ] **Login form** — autocomplete attributes, error linked via aria-describedby
+- [x] **Login form** — autocomplete attributes, error linked via aria-describedby
 
 **Medium risk (test visually)**
 - [ ] **Color contrast** — darken muted text (#64748b → #475569) to meet WCAG AA 4.5:1
