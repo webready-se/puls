@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.10.2] — 2026-05-13
+
+### Fixed
+
+- Tracking script: defer initial beacon send via `requestIdleCallback` (with `setTimeout` fallback) so reading `innerWidth` no longer triggers a forced reflow on the critical path. PageSpeed previously attributed ~116 ms of layout time to this read.
+
 ## [1.10.1] — 2026-04-16
 
 ### Fixed
@@ -258,6 +264,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.10.2]: https://github.com/webready-se/puls/releases/tag/v1.10.2
 [1.10.1]: https://github.com/webready-se/puls/releases/tag/v1.10.1
 [1.10.0]: https://github.com/webready-se/puls/releases/tag/v1.10.0
 [1.9.0]: https://github.com/webready-se/puls/releases/tag/v1.9.0
