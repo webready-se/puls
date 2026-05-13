@@ -201,6 +201,13 @@
   .site-overview-row:last-child { border-bottom: none; }
   .site-overview-row:hover { background: var(--subtle); margin: 0 -12px; padding-left: 12px; padding-right: 12px; border-radius: 8px; }
   .site-overview-name { font-weight: 600; font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .site-overview-live {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--green); font-weight: 600;
+    background: var(--green-bg); padding: 1px 7px; border-radius: 10px;
+    margin-left: 8px; vertical-align: middle;
+  }
+  .site-overview-live .live-dot { width: 6px; height: 6px; }
   .site-overview-stat { font-size: 12px; color: var(--light); white-space: nowrap; min-width: 70px; text-align: right; }
   .site-overview-trend { font-size: 11px; white-space: nowrap; min-width: 45px; text-align: right; }
   @media (max-width: 600px) {
@@ -1168,8 +1175,12 @@
         var fd = new Date(s.first_seen + 'T00:00:00');
         sinceHtml = '<div style="font-size:10px;color:var(--muted);font-weight:400;margin-top:1px;opacity:0.6">since ' + fd.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + '</div>';
       }
+      var liveHtml = '';
+      if (s.live > 0) {
+        liveHtml = '<span class="site-overview-live" title="' + s.live + ' online now"><span class="live-dot" aria-hidden="true"></span>' + s.live + '</span>';
+      }
       html += '<div class="site-overview-row" onclick="selectSite(\'' + esc(s.site) + '\')">' +
-        '<span class="site-overview-name">' + esc(s.site) + sinceHtml + '</span>' +
+        '<span class="site-overview-name">' + esc(s.site) + liveHtml + sinceHtml + '</span>' +
         '<span class="site-overview-stat">' + num(s.visitors) + ' visitors</span>' +
         '<span class="site-overview-stat">' + num(s.views) + ' views</span>' +
         trendHtml +

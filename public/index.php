@@ -1058,6 +1058,15 @@ function get_api_data(array $config, array $user): string
             $prevMap[$row['site']] = (int) $row['views'];
         }
 
+        $stmt = $db->prepare("SELECT site, COUNT(DISTINCT visitor_hash) as live
+            FROM pageviews WHERE created_at >= ? {$siteFilter}
+            GROUP BY site");
+        $stmt->execute(array_merge([date('Y-m-d H:i:s', strtotime('-5 minutes'))], $siteParams));
+        $liveMap = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $liveMap[$row['site']] = (int) $row['live'];
+        }
+
         foreach ($currentSites as $s) {
             $prev = $prevMap[$s['site']] ?? 0;
             $trend = $prev > 0 ? (int) round((((int)$s['views'] - $prev) / $prev) * 100) : null;
@@ -1065,6 +1074,7 @@ function get_api_data(array $config, array $user): string
                 'site' => $s['site'],
                 'views' => (int) $s['views'],
                 'visitors' => (int) $s['visitors'],
+                'live' => $liveMap[$s['site']] ?? 0,
                 'trend' => $trend,
                 'first_seen' => $s['first_seen'] ? substr($s['first_seen'], 0, 10) : null,
             ];
