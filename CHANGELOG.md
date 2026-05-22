@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] — 2026-05-22
+
+### Added
+
+- Live visitors per site on the all-sites overview — a small green pulsing badge next to each site name, counting distinct visitors in the last 5 minutes. Only shown when > 0; refreshes with the existing 60 s dashboard reload (no extra polling).
+
+### Fixed
+
+- Compare overlay: "previous period" no longer renders 0 for the rightmost bar. The current period spanned `days + 1` calendar dates while previous spanned `days`, so index-aligned chart bars always mismatched on the last entry (most visible at 24h, where 1 of 2 bars was blank). Both periods now span exactly `days` dates.
+- CMD+K search dialog: removed the rectangular keyboard-focus outline that the global `:focus-visible` rule drew inside the rounded dialog chrome.
+
 ## [1.10.2] — 2026-05-13
 
 ### Fixed
@@ -264,6 +275,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.11.0]: https://github.com/webready-se/puls/releases/tag/v1.11.0
 [1.10.2]: https://github.com/webready-se/puls/releases/tag/v1.10.2
 [1.10.1]: https://github.com/webready-se/puls/releases/tag/v1.10.1
 [1.10.0]: https://github.com/webready-se/puls/releases/tag/v1.10.0
