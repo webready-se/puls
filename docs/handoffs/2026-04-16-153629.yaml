@@ -1,0 +1,43 @@
+date: 2026-04-16-153629
+phase: "Epic 12 a11y sweep + Webready brand color adoption, three releases"
+notes: |
+  Session 22. Started with a question about passkeys (WebAuthn) — explored
+  feasibility, concluded cost/benefit isn't there for Puls (1-5 users per
+  deployment, bcrypt+lockout handles realistic threats, hand-rolled CBOR/COSE
+  crypto is a maintenance debt). Dropped entirely, not even parked as an idea.
+
+  Shipped three releases:
+
+  v1.9.0 — Epic 12 a11y continuation (PRs #16, #17, #18):
+  - Login form: autocomplete + aria-describedby for errors
+  - Global :focus-visible rule for keyboard focus indicators
+  - aria-label on date range, goal search, command palette inputs
+  - Muted text darkened (#64748b → #475569) for WCAG AA 4.5:1 in light mode
+
+  v1.10.0 — Webready brand color adoption (PR #19):
+  - Observed default #6366f1 indigo felt like "AI-SaaS go-to color"
+  - User shared https://webready.se/ — curl'd the homepage and found the
+    brand uses only two non-neutral colors: #f16272 coral and #19acca teal
+  - Lucky convergence: my independent suggestion was coral/teal
+  - Swapped default APP_ACCENT to #f16272, used #19acca as secondary for
+    sources/devices/donut palette
+  - Snippet and UTM wizard boxes converted from deep indigo gradient to
+    neutral near-black so coral accents pop
+  - Semantic colors (channel colors, bot tags) preserved
+
+  v1.10.1 — Brand sweep missed PNG icons (user caught it):
+  - icon-180/192/512 were still indigo, regenerated from SVG via rsvg-convert
+  - dashboard.html had a hardcoded favicon fill in indigo
+
+  Tests: 155 passing throughout. Epic 12 status: all Low risk + first Medium
+  risk (color contrast) items done. Remaining medium/larger: semantic buttons,
+  tab ARIA pattern, modal focus trap, screen reader live regions.
+decisions:
+  - "Dropped passkeys entirely. Reasoning: threat model doesn't justify 500-800 lines of hand-rolled CBOR/COSE/signature verification, plus recovery story and testing burden. User agreed to scrap rather than park as idea."
+  - "Snippet/UTM box background: chose neutral near-black (#1a1a1a → #0a0a0a) over coral or teal tint. Reasoning: lets coral buttons inside pop without competing tinted background, matches rest of app's dark mode palette."
+  - "Kept channel colors and bot category colors distinct (semantic). Only changed brand accents."
+  - "Used three separate PRs for a11y (login, focus+labels, color contrast) for clean reviewability. Bundled brand change into one PR since all changes serve one design goal."
+next:
+  - "Option: continue Epic 12 Medium risk items — semantic buttons (28 onclick divs → <button>) or tab ARIA pattern. Both are own-session-sized."
+  - "Option: start Epic 13 Automation (weekly email report via mail() + cron, or webhooks for threshold alerts)."
+  - "Option: polish v1.10.1 release notes on GitHub if CI picked anything up unusual."

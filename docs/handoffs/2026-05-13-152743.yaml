@@ -1,0 +1,21 @@
+date: 2026-05-13-152743
+phase: "Live visitors per site on all-sites overview"
+notes: |
+  Added a small green pulsing badge next to each site name on the all-sites
+  overview, mirroring the header live badge. Counts distinct visitors in the
+  last 5 minutes per site, only rendered when > 0. No polling — picks up the
+  existing 60s dashboard reload.
+
+  Backend (public/index.php): new GROUP BY site live query inside the
+  siteOverview block, merged in via $liveMap. Frontend (public/dashboard.html):
+  new .site-overview-live CSS class (compact version of header .live-badge)
+  and liveHtml in renderSiteOverview(). All 155 Pest tests pass; CI green on
+  PHP 8.3/8.4/8.5.
+
+  PR #20 merged to main, feature branch deleted locally and remote.
+decisions:
+  - "Skipped polling — refresh via existing 60s load cycle is enough for 'live' feel without extra DB load"
+  - "Used GROUP BY site instead of N separate queries — one extra query for the whole overview"
+  - "No Pest test added — site overview is auth-gated and share tokens are scoped to one site, so it can't reach the overview branch; change is mostly visual"
+next:
+  - "Tag a patch release when more changes accumulate — user wants to wait. Unreleased since v1.10.0: PWA icon fix, defer initial beacon, live visitors per site"

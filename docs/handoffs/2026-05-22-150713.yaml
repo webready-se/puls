@@ -1,0 +1,33 @@
+date: 2026-05-22-150713
+phase: "Bugfix sweep + v1.11.0 release + tightening PHP version floor"
+notes: |
+  Started from user reports of two dashboard bugs:
+  - Compare overlay: "previous period" always 0 on 24h/7d views
+  - CMD+K input: rectangular keyboard-focus ring inside the rounded dialog
+
+  Root-caused and shipped both as separate PRs (#21, #22), then bundled
+  the live-visitors-per-site feature (PR #20, already on main) into a
+  minor release v1.11.0.
+
+  Follow-up: noticed PHP version inconsistency (README/CLAUDE said 8.2+,
+  CI tested 8.3-8.5, composer.json had no `require.php`). Set the floor
+  to 8.3 across composer.json + docs (PR #23). Closed out a small chore
+  PR (#24) refreshing stale test counts and adding composer metadata
+  (description, keywords, homepage).
+
+  Verified the CMD+K fix in Chrome with `:focus-visible` actually matching.
+  Confirmed compare alignment via API output (current and previous both
+  span exactly N dates, last bar pairs correctly).
+
+decisions:
+  - "Compare fix: anchor $since at today - (days-1) so current period spans exactly N dates. Standard analytics interpretation; days=1 (24h) now means today vs yesterday rather than the previous behavior of yesterday-through-now."
+  - "PHP floor at 8.3 (not 8.2) since CI never tested 8.2. Matches CI matrix; no real users on 8.2."
+  - "v1.11.0 (minor) instead of v1.10.3 (patch) since the unreleased PR #20 (live visitors per site) is a feature."
+  - "Used demo.sqlite for all dev testing; re-seeded so it includes 2026-05-22. Reminder for future sessions: PHP -S needs explicit router (public/index.php) to route /?api correctly."
+
+next:
+  - "Epic 12 a11y backlog: semantic buttons (28 onclick divs), tab ARIA pattern, modal focus trap, screen reader live regions"
+  - "Epic 13: weekly email report (mail() + cron), webhooks for traffic spikes / new 404s"
+
+issues:
+  - "ROADMAP line 141 says 'A11y 71 → target 90+' but a prior session noted hitting 95. Forward-looking framing is stale but Epic 12 still has open items so it's not strictly wrong."
