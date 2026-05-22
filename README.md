@@ -33,7 +33,7 @@ Puls is designed to be GDPR-friendly without consent banners:
 **Core**
 - **Cookieless** — GDPR-friendly by default, no consent banners needed
 - **Lightweight** — ~1.5KB tracking script, single PHP file backend
-- **Zero dependencies** — PHP 8.2+ and SQLite, nothing else
+- **Zero dependencies** — PHP 8.3+ and SQLite, nothing else
 
 **Dashboard**
 - **Multi-site hub** — track all your sites from one dashboard with site overview
@@ -231,7 +231,7 @@ This changes the login page, dashboard header, PWA manifest, and favicon. The fo
 
 ### Requirements
 
-- PHP 8.2+
+- PHP 8.3+ (tested on 8.3, 8.4, 8.5)
 - `pdo_sqlite` extension (included in most PHP installations)
 - Write access to `data/` directory
 
