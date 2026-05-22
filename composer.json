@@ -9,6 +9,10 @@
             "email": "nicklas@webready.se"
         }
     ],
+    "require": {
+        "php": ">=8.3",
+        "ext-pdo_sqlite": "*"
+    },
     "require-dev": {
         "pestphp/pest": "*"
     },
