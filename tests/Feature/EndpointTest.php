@@ -414,6 +414,29 @@ test('share API returns data scoped to site', function () {
         ->and($data)->toHaveKey('totals');
 });
 
+test('api current and previous periods have equal length for days=N', function () {
+    $token = createTestShareToken('period-align');
+    $db = getTestDb();
+    // Seed one pageview per day for the last 14 days so both current and
+    // previous have full data to compare.
+    $stmt = $db->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash) VALUES (?, ?, ?, ?)');
+    for ($i = 0; $i < 14; $i++) {
+        $ts = date('Y-m-d 12:00:00', strtotime("-{$i} days"));
+        $stmt->execute([$ts, 'period-align', '/', "v{$i}"]);
+    }
+
+    foreach ([1, 7] as $days) {
+        $r = http('GET', "/?api&days={$days}&share={$token}");
+        expect($r['status'])->toBe(200);
+        $data = json_decode($r['body'], true);
+        expect(count($data['pageviews']))->toBe($days, "current period for days={$days}")
+            ->and(count($data['previousPageviews']))->toBe($days, "previous period for days={$days}")
+            // Last current day should be today, last previous day should be exactly $days days before
+            ->and($data['pageviews'][$days - 1]['date'])->toBe(date('Y-m-d'))
+            ->and($data['previousPageviews'][$days - 1]['date'])->toBe(date('Y-m-d', strtotime("-{$days} days")));
+    }
+});
+
 test('share API returns 404 for expired token', function () {
     $token = createTestShareToken('test', '2020-01-01 00:00:00');
     $r = http('GET', '/?api&days=7&share=' . $token);

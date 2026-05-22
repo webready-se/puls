@@ -689,7 +689,9 @@ function get_api_data(array $config, array $user): string
         $days = max(1, (int) ((strtotime($to) - strtotime($from)) / 86400) + 1);
     } else {
         $days = max(1, min(365, (int)($_GET['days'] ?? 7)));
-        $since = date('Y-m-d', strtotime("-{$days} days"));
+        // Current period spans exactly $days dates ending today, so previous
+        // (same length, immediately before) aligns with current bar-by-bar.
+        $since = date('Y-m-d', strtotime('-' . ($days - 1) . ' days'));
         $until = '';
     }
     $site = $_GET['site'] ?? '';
