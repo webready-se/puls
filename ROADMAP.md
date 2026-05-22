@@ -21,9 +21,9 @@
 - [x] Self-referral filtering
 - [x] Health check endpoint (`/?health`)
 - [x] Auto-detect Forge zero-deploy paths
-- [x] Pest test suite (106 tests)
+- [x] Pest test suite (156 tests)
 - [x] Pre-push hook — tests run automatically before every push
-- [x] GitHub Actions CI (PHP 8.1–8.4)
+- [x] GitHub Actions CI (PHP 8.3–8.5)
 - [x] Broken link tracking (404/301/other) via Nginx post_action
 - [x] Data retention — auto-cleanup of old pageviews, bot visits, broken links
 - [x] PWA — installable, pull-to-refresh

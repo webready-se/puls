@@ -43,9 +43,9 @@ config.php              — Configuration (loads .env, auto-detects Forge paths)
 puls                    — CLI entrypoint (all management commands, interactive with readline)
 users.json              — User credentials (bcrypt hashed, auto-created by CLI)
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
-composer.json           — Dev dependencies (Pest)
+composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (142 tests, unit + feature)
+tests/                  — Pest test suite (156 tests, unit + feature)
 scripts/hooks/pre-push  — Git hook: runs Pest before allowing push
 scripts/build-release.sh — Builds release zip with runtime files only
 scripts/screenshots.sh  — Generates all README screenshots (headless Chrome + demo DB)

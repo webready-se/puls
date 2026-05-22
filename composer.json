@@ -1,6 +1,8 @@
 {
     "name": "webready/puls",
-    "description": "Cookieless analytics",
+    "description": "Cookieless, lightweight analytics. One PHP file + SQLite. No frameworks, no dependencies.",
+    "keywords": ["analytics", "privacy", "cookieless", "sqlite", "gdpr", "tracking", "self-hosted"],
+    "homepage": "https://github.com/webready-se/puls",
     "license": "MIT",
     "type": "project",
     "authors": [
