@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.1] — 2026-08-21
+
+### Fixed
+
+- Docker image built on PHP 8.2, below the 8.3 floor declared in `composer.json` and below every version covered by CI. It now ships PHP 8.4.
+- `composer install` failed on PHP 8.3 even though 8.3 is the supported floor: `composer.lock` had been resolved on a newer PHP and pulled Symfony packages requiring 8.4+. Composer now resolves the lock against the floor via `config.platform.php`.
+
+### Changed
+
+- Site list query (`?api&sites`, hit on every dashboard load) no longer scans the whole `pageviews` table. A recursive loose index scan replaces `SELECT DISTINCT`, so cost follows the number of sites rather than the number of rows: 92 ms to 0.01 ms on a 2,000,000-row table. Behaviour is unchanged.
+- Dependabot now watches GitHub Actions and the Composer dev dependencies.
+
 ## [1.11.0] — 2026-05-22
 
 ### Added
@@ -275,6 +287,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.11.1]: https://github.com/webready-se/puls/releases/tag/v1.11.1
 [1.11.0]: https://github.com/webready-se/puls/releases/tag/v1.11.0
 [1.10.2]: https://github.com/webready-se/puls/releases/tag/v1.10.2
 [1.10.1]: https://github.com/webready-se/puls/releases/tag/v1.10.1
