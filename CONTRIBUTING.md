@@ -26,6 +26,11 @@ composer install          # installs Pest + activates pre-push hook
 php -S localhost:8080 -t public
 ```
 
+`composer.json` pins `config.platform.php` to 8.3, the lowest PHP version Puls
+supports. Composer therefore resolves `composer.lock` against 8.3 even if you
+develop on a newer PHP, which keeps `composer install` working for everyone on
+the supported range. Raise the pin only when the supported floor itself moves.
+
 ## Code Style
 
 - 4-space indentation in PHP
