@@ -235,6 +235,9 @@ This changes the login page, dashboard header, PWA manifest, and favicon. The fo
 - `pdo_sqlite` extension (included in most PHP installations)
 - Write access to `data/` directory
 
+These apply to file-drop installs. The Docker image bundles its own PHP 8.4, so
+the host needs nothing but Docker.
+
 ### Nginx
 
 ```nginx
