@@ -569,6 +569,61 @@ test('js snippet includes puls.track API', function () {
         ->and($r['body'])->toContain('outbound_click');
 });
 
+// =====================================================================
+// CSRF token refresh
+// =====================================================================
+
+test('csrf endpoint returns a json token', function () {
+    $r = http('GET', '/?csrf');
+    expect($r['status'])->toBe(200);
+
+    $contentType = collect($r['headers'])->first(fn ($h) => str_contains($h, 'Content-Type'));
+    expect($contentType)->toContain('application/json');
+
+    $data = json_decode($r['body'], true);
+    expect($data)->toHaveKey('token')
+        ->and($data['token'])->toMatch('/^[0-9a-f]{64}$/');
+});
+
+test('csrf endpoint issues a fresh token on every call', function () {
+    $first = json_decode(http('GET', '/?csrf')['body'], true);
+    $second = json_decode(http('GET', '/?csrf')['body'], true);
+
+    expect($first['token'])->not->toBe($second['token']);
+});
+
+test('csrf endpoint starts a hardened session', function () {
+    $r = http('GET', '/?csrf');
+
+    $cookie = collect($r['headers'])->first(fn ($h) => str_contains($h, 'Set-Cookie'));
+    expect($cookie)->toContain('PHPSESSID=')
+        ->and($cookie)->toContain('HttpOnly')
+        ->and($cookie)->toContain('SameSite=Strict');
+});
+
+// =====================================================================
+// Logout
+// =====================================================================
+
+test('logout redirects to the login page', function () {
+    $r = http('GET', '/?logout', ['follow_location' => 0]);
+    expect($r['status'])->toBe(302);
+
+    $location = collect($r['headers'])->first(fn ($h) => str_starts_with($h, 'Location:'));
+    expect($location)->toContain('/?login');
+});
+
+test('logout expires the session cookie', function () {
+    $r = http('GET', '/?logout', ['follow_location' => 0]);
+
+    $cleared = collect($r['headers'])->first(
+        fn ($h) => str_contains($h, 'Set-Cookie') && str_contains($h, 'PHPSESSID=deleted')
+    );
+
+    expect($cleared)->not->toBeNull()
+        ->and($cleared)->toContain('Max-Age=0');
+});
+
 /**
  * Helper to make collection-like operations work without Laravel.
  */
