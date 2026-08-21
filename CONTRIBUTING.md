@@ -4,7 +4,7 @@ Thanks for your interest in contributing! Puls is intentionally minimal — one 
 
 ## Ground Rules
 
-- **No runtime dependencies.** Puls must remain deployable as a file drop on any PHP 8.2+ host.
+- **No runtime dependencies.** Puls must remain deployable as a file drop on any PHP 8.3+ host.
 - **No build step.** The dashboard is self-contained HTML/CSS/JS.
 - **Keep it simple.** If a feature needs a framework, it's probably out of scope.
 
@@ -25,6 +25,11 @@ php puls user:add admin
 composer install          # installs Pest + activates pre-push hook
 php -S localhost:8080 -t public
 ```
+
+`composer.json` pins `config.platform.php` to 8.3, the lowest PHP version Puls
+supports. Composer therefore resolves `composer.lock` against 8.3 even if you
+develop on a newer PHP, which keeps `composer install` working for everyone on
+the supported range. Raise the pin only when the supported floor itself moves.
 
 ## Code Style
 

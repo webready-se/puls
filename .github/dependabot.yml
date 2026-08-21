@@ -1,0 +1,25 @@
+version: 2
+
+updates:
+  # GitHub Actions used by the test and release workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Dev-only dependencies. Puls has no runtime dependencies, so this
+  # only ever covers the Pest test toolchain.
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      dev-dependencies:
+        patterns: ["*"]

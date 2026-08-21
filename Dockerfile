@@ -1,4 +1,10 @@
-FROM php:8.2-cli-alpine
+# Runtime image for self-hosting Puls.
+#
+# Puls supports PHP 8.3 and up. This image ships 8.4: it is under active
+# upstream support and is the version the release workflow validates against.
+# Raising it here does not raise the supported floor, which lives in
+# composer.json and applies to file-drop installs.
+FROM php:8.4-cli-alpine
 
 RUN apk add --no-cache --virtual .build-deps sqlite-dev \
     && docker-php-ext-install pdo_sqlite \
