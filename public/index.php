@@ -672,7 +672,16 @@ function get_api_data(array $config, array $user): string
 
     // List all sites (filtered by user access)
     if (isset($_GET['sites'])) {
-        $stmt = $db->query('SELECT DISTINCT site FROM pageviews ORDER BY site');
+        // Loose index scan: walk idx_site_date one distinct site at a time
+        // instead of scanning every row. Cost follows the number of sites,
+        // not the size of the table, so it stays flat as history accumulates.
+        $stmt = $db->query('WITH RECURSIVE tracked(site) AS (
+                SELECT MIN(site) FROM pageviews
+                UNION ALL
+                SELECT (SELECT MIN(site) FROM pageviews WHERE site > tracked.site)
+                FROM tracked WHERE tracked.site IS NOT NULL
+            )
+            SELECT site FROM tracked WHERE site IS NOT NULL ORDER BY site');
         $sites = $stmt->fetchAll(PDO::FETCH_COLUMN);
         if (!empty($allowedSites)) {
             $sites = array_values(array_intersect($sites, $allowedSites));

@@ -975,7 +975,14 @@ function getTrackedSites(string $dbPath): array
 
     $db = new PDO('sqlite:' . $dbPath);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $stmt = $db->query('SELECT DISTINCT site FROM pageviews ORDER BY site');
+    // Loose index scan; see the matching query in public/index.php.
+    $stmt = $db->query('WITH RECURSIVE tracked(site) AS (
+            SELECT MIN(site) FROM pageviews
+            UNION ALL
+            SELECT (SELECT MIN(site) FROM pageviews WHERE site > tracked.site)
+            FROM tracked WHERE tracked.site IS NOT NULL
+        )
+        SELECT site FROM tracked WHERE site IS NOT NULL ORDER BY site');
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 
