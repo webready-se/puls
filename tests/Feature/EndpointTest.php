@@ -686,6 +686,37 @@ test('js auto form_submit skips prevented submits and reads data-puls-event', fu
         ->and($r['body'])->toContain('dataset.pulsEvent');
 });
 
+test('api counts conversions for event goals from the events table', function () {
+    $name = 'goal_event_' . uniqid();
+    foreach (['Mozilla/5.0 Chrome/120.0', 'Mozilla/5.0 Firefox/130.0'] as $ua) {
+        http('POST', '/?event', [
+            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+            'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
+        ]);
+    }
+    $db = getTestDb();
+    $db->prepare('INSERT OR IGNORE INTO goals (site, path, label, type, created_at) VALUES (?, ?, ?, ?, ?)')
+        ->execute(['test', $name, 'Feedback sent', 'event', date('Y-m-d H:i:s')]);
+
+    try {
+        $token = createTestShareToken('test');
+        $r = http('GET', '/?api&days=1&share=' . $token);
+        $data = json_decode($r['body'], true);
+        $goal = collect($data['goals'])->first(fn ($g) => $g['path'] === $name);
+        expect($goal)->not->toBeNull()
+            ->and($goal['type'])->toBe('event')
+            ->and($goal['label'])->toBe('Feedback sent')
+            ->and($goal['conversions'])->toBe(2);
+    } finally {
+        $db->prepare('DELETE FROM goals WHERE site = ? AND path = ?')->execute(['test', $name]);
+    }
+});
+
+test('goals table has a type column after migration', function () {
+    $cols = array_column(getTestDb()->query('PRAGMA table_info(goals)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+    expect($cols)->toContain('type');
+});
+
 test('share API with path filter does not crash on events table', function () {
     // Regression: events table has page_path, not path — using $pathFilter caused SQL error
     $token = createTestShareToken('test');

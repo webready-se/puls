@@ -159,9 +159,10 @@ if (isset($_GET['goal_add']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     require_auth();
     $input = json_decode(file_get_contents('php://input'), true);
     if (empty($input['site']) || empty($input['path'])) respond('', 400);
+    $type = ($input['type'] ?? 'page') === 'event' ? 'event' : 'page';
     $db = get_db($config['db_path']);
-    $stmt = $db->prepare('INSERT OR IGNORE INTO goals (site, path, label, created_at) VALUES (?, ?, ?, ?)');
-    $stmt->execute([substr($input['site'], 0, 200), substr($input['path'], 0, 500), substr($input['label'] ?? '', 0, 200), date('Y-m-d H:i:s')]);
+    $stmt = $db->prepare('INSERT OR IGNORE INTO goals (site, path, label, type, created_at) VALUES (?, ?, ?, ?, ?)');
+    $stmt->execute([substr($input['site'], 0, 200), substr($input['path'], 0, 500), substr($input['label'] ?? '', 0, 200), $type, date('Y-m-d H:i:s')]);
     respond(json_encode(['ok' => true]), 200, 'application/json');
 }
 
@@ -1245,23 +1246,29 @@ function get_api_data(array $config, array $user): string
     $goals = [];
     $goalsTable = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='goals'")->fetch();
     if ($goalsTable && !$path && !$channel) {
-        $stmt = $db->prepare("SELECT path, label FROM goals WHERE site = ? ORDER BY created_at");
+        $stmt = $db->prepare("SELECT path, label, type FROM goals WHERE site = ? ORDER BY created_at");
         $goalSite = $site ?: '';
         if ($goalSite) {
             $stmt->execute([$goalSite]);
         } else {
-            $stmt = $db->query("SELECT DISTINCT path, label FROM goals ORDER BY created_at");
+            $stmt = $db->query("SELECT DISTINCT path, label, type FROM goals ORDER BY created_at");
         }
         $goalRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $totalVisitors = (int) ($totals['visitors'] ?? 0);
         foreach ($goalRows as $g) {
-            $stmt = $db->prepare("SELECT COUNT(DISTINCT visitor_hash) as conversions FROM pageviews WHERE path = ? AND {$dateFilter} {$siteFilter}");
+            // A goal is a page path or an event name; both count distinct visitors who reached it
+            if ($g['type'] === 'event') {
+                $stmt = $db->prepare("SELECT COUNT(DISTINCT visitor_hash) FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter}");
+            } else {
+                $stmt = $db->prepare("SELECT COUNT(DISTINCT visitor_hash) FROM pageviews WHERE path = ? AND {$dateFilter} {$siteFilter}");
+            }
             $stmt->execute(array_merge([$g['path']], $dateParams, $siteParams));
             $conversions = (int) $stmt->fetchColumn();
             $rate = $totalVisitors > 0 ? round(100 * $conversions / $totalVisitors, 1) : 0;
             $goals[] = [
                 'path' => $g['path'],
                 'label' => $g['label'] ?: $g['path'],
+                'type' => $g['type'] ?: 'page',
                 'conversions' => $conversions,
                 'rate' => $rate,
             ];
@@ -1447,6 +1454,7 @@ function get_db(string $path): PDO
             site TEXT NOT NULL,
             path TEXT NOT NULL,
             label TEXT,
+            type TEXT NOT NULL DEFAULT \'page\',
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE UNIQUE INDEX idx_goals_unique ON goals (site, path)');
@@ -1614,7 +1622,7 @@ function normalize_path(string $path): string
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 15; // Bump this when adding new migrations
+    $currentVersion = 16; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -1929,6 +1937,15 @@ function run_migrations(PDO $db): void
         $update = $db->prepare('UPDATE pageviews SET country = ? WHERE language = ? AND country IS NULL');
         foreach ($langToCountry as $lang => $cc) {
             $update->execute([$cc, $lang]);
+        }
+    }
+
+    // v16: goals can target an event name as well as a page path.
+    // `path` keeps the target for both kinds (paths start with "/", event names do not).
+    if ($version < 16) {
+        $goalCols = array_column($db->query('PRAGMA table_info(goals)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        if ($goalCols && !in_array('type', $goalCols, true)) {
+            $db->exec("ALTER TABLE goals ADD COLUMN type TEXT NOT NULL DEFAULT 'page'");
         }
     }
 

@@ -186,7 +186,7 @@ Feedback from the first SPA integration (ten named events with data). Today even
 
 **Later**
 - [ ] **Two-event funnel** — pick two event names, get ratio and trend (feedback_opened vs feedback_sent)
-- [ ] **Goals as events** — a goal is a path or an event name, same conversion view
+- [x] **Goals as events** — a goal is a path or an event name, same conversion view
 - [x] **Event API via share token** — `?api&share=…&event=x&group=key` JSON + CSV with data keys as columns (Epic 13)
 - [ ] **App version on hits** — `data-version` stored on pageviews/events, release markers in charts, group by version
 - [ ] **Saved breakdowns** — name a grouping ("Missed searches" = search_miss by query), show as its own card
