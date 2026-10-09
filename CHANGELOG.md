@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Goals and funnels for events that have not happened yet. The goal search offers the typed text as a new event goal (or page goal for `/paths`), and such goals show No hits yet. The funnel's Then field is free text with seen events as suggestions.
+- Details button on breakdown cards opens the event drill-down inside the card, grouped on the card's key. It reopens in place after a refresh or period change.
+- The smoke test covers these, keyboard activation of rows and a logged-in pass.
+
+### Fixed
+
+- Event, outbound and channel rows can be reached and opened from the keyboard (role=button, tabindex, Enter and Space, focus ring). The settings close button is labelled Close settings.
+
 ## [1.19.1] — 2026-10-09
 
 ### Fixed
