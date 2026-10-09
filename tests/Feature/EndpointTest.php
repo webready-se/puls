@@ -622,9 +622,9 @@ test('api event drill-down discovers data keys and groups by key', function () {
     expect($r['status'])->toBe(200);
     $data = json_decode($r['body'], true);
     expect($data['eventGroup'])->toBe([
-        ['value' => 'kale', 'count' => 2, 'visitors' => 2],
-        ['value' => 'rhubarb', 'count' => 1, 'visitors' => 1],
-    ]);
+        ['value' => 'kale', 'count' => 2, 'visitors' => 2, 'new' => true],
+        ['value' => 'rhubarb', 'count' => 1, 'visitors' => 1, 'new' => true],
+    ])->and($data['eventGroupNew'])->toBe(2);
 });
 
 test('api event group ignores keys that are not present', function () {
@@ -635,6 +635,55 @@ test('api event group ignores keys that are not present', function () {
     expect($data['eventGroup'])->toBe([])
         ->and($data['eventGroupKey'])->toBe('nosuch.key')
         ->and($data['eventKeys'])->toBe([]);
+});
+
+test('api event group flags values not seen in the previous period', function () {
+    $name = 'newval_test_' . uniqid();
+    $send = function (string $query, string $ua) use ($name) {
+        http('POST', '/?event', [
+            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+            'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/', 'event_data' => ['query' => $query]]),
+        ]);
+    };
+    $send('kale', 'Mozilla/5.0 Chrome/120.0');
+    $send('rhubarb', 'Mozilla/5.0 Firefox/130.0');
+    // "kale" was also searched in the previous period, "rhubarb" is new
+    $db = getTestDb();
+    $db->prepare('INSERT INTO events (site, event_name, event_data, page_path, visitor_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        ->execute(['test', $name, json_encode(['query' => 'kale']), '/', 'prev-hash', date('Y-m-d H:i:s', strtotime('-3 days'))]);
+
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&days=2&share=' . $token . '&event=' . $name . '&group=query');
+    $data = json_decode($r['body'], true);
+    $flags = array_column($data['eventGroup'], 'new', 'value');
+    expect($flags)->toBe(['kale' => false, 'rhubarb' => true])
+        ->and($data['eventGroupNew'])->toBe(1);
+});
+
+test('api event detail exports CSV with data keys as columns', function () {
+    $name = 'csv_test_' . uniqid();
+    http('POST', '/?event', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/guides', 'event_data' => ['query' => 'kale, "curly"', 'zone' => 4]]),
+    ]);
+
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&days=1&share=' . $token . '&event=' . $name . '&format=csv');
+    expect($r['status'])->toBe(200);
+    $contentType = collect($r['headers'])->first(fn ($h) => str_contains($h, 'Content-Type'));
+    expect($contentType)->toContain('text/csv');
+    $disposition = collect($r['headers'])->first(fn ($h) => str_contains($h, 'Content-Disposition'));
+    expect($disposition)->toContain($name . '.csv');
+
+    $lines = array_values(array_filter(explode("\n", trim($r['body']))));
+    expect($lines[0])->toBe('created_at,page_path,query,zone')
+        ->and($lines[1])->toContain('/guides,"kale, ""curly""",4');
+});
+
+test('js auto form_submit skips prevented submits and reads data-puls-event', function () {
+    $r = http('GET', '/?js');
+    expect($r['body'])->toContain('defaultPrevented')
+        ->and($r['body'])->toContain('dataset.pulsEvent');
 });
 
 test('share API with path filter does not crash on events table', function () {

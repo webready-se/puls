@@ -150,9 +150,15 @@ Track any interaction with `puls.track(name, data)`. Events appear in the dashbo
 
 - **Trend** — one bar per day for the selected period, as count or per 100 visitors, with the previous period overlaid when Compare is on.
 - **Group by** — one chip per key found in the event's data. Pick `query` on a `search_miss` event and you get every searched value with count and unique visitors. The most common key is selected on open. **Recent** shows the raw rows instead.
+- **New values** — in a grouping, values that did not occur in the previous period carry a `new` badge, and the count of new values is shown next to the chips. "New searches with no result this week" is one click.
 - **Totals** — events, visitors, rate per 100 visitors and the change versus the previous period.
+- **CSV** — every row in the period with `created_at`, `page_path` and one column per data key.
 
-The same data is available as JSON: `?api&days=30&event=search_miss&group=query` returns `eventSeries`, `previousEventSeries`, `eventTotals`, `eventKeys` and `eventGroup`. Works with `&share=<token>` for read-only access.
+The same data is available as JSON: `?api&days=30&event=search_miss&group=query` returns `eventSeries`, `previousEventSeries`, `eventTotals`, `eventKeys`, `eventGroup` (each value with `count`, `visitors`, `new`) and `eventGroupNew`. Add `&format=csv` for the CSV instead. Both work with `&share=<token>` for read-only access, so a script can pull missed searches straight into a backlog:
+
+```bash
+curl -s 'https://your-puls-domain/?api&share=TOKEN&days=7&event=search_miss&format=csv' > missed-searches.csv
+```
 
 ```javascript
 // Form submission
@@ -249,9 +255,17 @@ Add `data-auto-events` to the script tag to automatically track common interacti
 | Phone click (`tel:`) | `phone_click` | number, page |
 | Email click (`mailto:`) | `email_click` | email, page |
 | File download (PDF, DOC, XLS, ZIP, etc.) | `download` | file, url, page |
-| Form submission (POST) | `form_submit` | action, page |
+| Form submission | `form_submit` | form, action, page |
 
 All events appear in the dashboard under Traffic > Events with full detail. No markup changes needed — Puls detects these interactions automatically via event delegation.
+
+`form_submit` is skipped when the page called `preventDefault()` on the submit, so a search box or a form handled in JavaScript is not counted as a submission. The `form` field comes from `data-puls-event` on the form, falling back to its `name` or `id`, so several forms on one site can be told apart with **Group by form** in the dashboard:
+
+```html
+<form data-puls-event="newsletter" action="/subscribe" method="post">
+```
+
+If you handle the submit yourself and want to count only successful sends, call `puls.track('newsletter_sent')` after the response instead.
 
 ## Outbound Link Tracking
 
