@@ -163,12 +163,14 @@ On session start:
 1. Check for uncommitted work: `git status` and `git stash list`
 2. Read `ROADMAP.md` to understand current progress
 3. Check for unreleased work: `git log $(git describe --tags --abbrev=0)..HEAD --oneline`
-   — if significant changes have accumulated, suggest a release
+   — suggest a release only per the release policy below (batched, not per PR)
 
-After pushing code, check if a release is warranted:
-- Epic completed → suggest minor release
-- Security or breaking bugfix → suggest patch release immediately
-- 5+ commits since last tag → mention it proactively
+Merging to main deploys puls.wrlabs.se (Forge); that alone needs no release.
+Tagged releases are for self-hosters and are batched, see `.claude/skills/release/`:
+- Epic or coherent feature set completed → suggest a minor release
+- Security, data loss, or broken install/upgrade fix → suggest a patch release immediately
+- Tests, CI, docs, screenshots → never a release of their own
+- `CHANGELOG.md` keeps exactly one `## [Unreleased]` section
 
 Write a handoff when the user says "handoff", "bye", "done for today", or similar.
 
