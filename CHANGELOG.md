@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- Users restricted to specific sites could add and remove goals on any site through `?goal_add` and `?goal_remove`. Both now return 403 for a site outside the user's access, using the same check as the breakdown endpoints.
+
 ### Changed
 
 - Custom events are kept for 400 days instead of 90, so a season can be compared with the same season a year later. Set `EVENTS_RETENTION_DAYS` in `.env` to change it, or `0` to keep events forever. Existing installs keep more history from the next daily cleanup on; nothing already deleted comes back.
