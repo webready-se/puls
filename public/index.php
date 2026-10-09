@@ -1619,9 +1619,11 @@ function get_db(string $path): PDO
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE UNIQUE INDEX idx_goals_unique ON goals (site, path)');
-    } else {
-        run_migrations($db);
     }
+
+    // Always run: a fresh schema gets the tables added by later migrations and
+    // the current user_version, an existing one is brought up to date.
+    run_migrations($db);
 
     return $db;
 }

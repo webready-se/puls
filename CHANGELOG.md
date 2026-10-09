@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- On a brand-new install the first request could fail: the fresh schema lacked the `app_versions` and `breakdowns` tables (added in 1.17.0 and 1.18.0 as migrations only), and migrations did not run until the second request. Migrations now always run after the schema is created, so a new database starts on the current version with every table.
+
 ### Added
 
 - Dashboard smoke test (`node scripts/smoke.mjs`): seeds a demo database with the old schema, serves it, drives headless Chrome over the DevTools protocol through load, release markers, breakdown cards, event drill-down, group by version, funnel, compare and the 90-day view, and fails on any JavaScript error or missing element. Runs in CI as its own job. No npm dependencies.
