@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Saved breakdowns: "Save as card" in an event drill-down keeps that grouping on the dashboard as its own card with the top ten values, NEW badges and the count of new values. Click the title to rename it. Cards show on shared dashboards read-only. API: `breakdowns` in the dashboard response, `?breakdown_add` and `?breakdown_remove` (authenticated, checked against the user's site access).
+
+### Changed
+
+- Migration v18 adds a `breakdowns` table. `sites:rename` and `sites:remove` include it.
+- The 60-second refresh skips a cycle while a card title is being edited.
+
 ## [1.17.0] — 2026-10-09
 
 ### Added

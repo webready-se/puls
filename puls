@@ -404,7 +404,7 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
     // Rename in all tables
     $db->beginTransaction();
 
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns'];
     // Skip tables a not-yet-migrated database does not have
     $existing = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
     foreach (array_intersect($tables, $existing) as $table) {
@@ -513,7 +513,7 @@ function sitesRemove(array $config, ?string $siteName): void
     }
 
     $db->beginTransaction();
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns'];
     // Skip tables a not-yet-migrated database does not have
     $existing = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
     foreach (array_intersect($tables, $existing) as $table) {

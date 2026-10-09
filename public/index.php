@@ -176,6 +176,31 @@ if (isset($_GET['goal_remove']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     respond(json_encode(['ok' => true]), 200, 'application/json');
 }
 
+// Saved breakdowns: an event grouped on one key, shown as its own dashboard card
+if ((isset($_GET['breakdown_add']) || isset($_GET['breakdown_remove'])) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_auth();
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $bdSite = substr((string) ($input['site'] ?? ''), 0, 200);
+    if ($bdSite === '') respond('', 400);
+    $allowed = get_current_user_data($config)['sites'] ?? [];
+    if (!empty($allowed) && !in_array($bdSite, $allowed, true)) {
+        respond(json_encode(['error' => 'Access denied']), 403, 'application/json');
+    }
+    $db = get_db($config['db_path']);
+    if (isset($_GET['breakdown_add'])) {
+        $event = substr(trim((string) ($input['event'] ?? '')), 0, 100);
+        $group = str_replace(['"', '\\'], '', substr(trim((string) ($input['group'] ?? '')), 0, 50));
+        if ($event === '' || $group === '') respond('', 400);
+        $label = substr(trim((string) ($input['label'] ?? '')), 0, 100);
+        // Saving the same event + key again only renames the card
+        $db->prepare('INSERT INTO breakdowns (site, label, event_name, group_key, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (site, event_name, group_key) DO UPDATE SET label = excluded.label')
+            ->execute([$bdSite, $label, $event, $group, date('Y-m-d H:i:s')]);
+    } else {
+        $db->prepare('DELETE FROM breakdowns WHERE site = ? AND id = ?')->execute([$bdSite, (int) ($input['id'] ?? 0)]);
+    }
+    respond(json_encode(['ok' => true]), 200, 'application/json');
+}
+
 if (isset($_GET['api'])) {
     require_auth();
     $user = get_current_user_data($config);
@@ -893,23 +918,7 @@ function get_api_data(array $config, array $user): string
             : ($eventKeys[0]['key'] ?? '');
         if ($groupKey !== '') {
             $eventGroupKey = $groupKey;
-            // "@version" groups on the app_version column, anything else on a JSON data key
-            $isVersion = $groupKey === '@version';
-            $valueExpr = $isVersion ? 'app_version' : 'json_extract(event_data, ?)';
-            $valueParams = $isVersion ? [] : ['$."' . $groupKey . '"'];
-            $stmt = $db->prepare("SELECT {$valueExpr} as value, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND {$valueExpr} IS NOT NULL GROUP BY value ORDER BY count DESC, value LIMIT 200");
-            $stmt->execute(array_merge($valueParams, [$eventName], $dateParams, $siteParams, $valueParams));
-            $eventGroup = array_map(fn ($g) => ['value' => $g['value'], 'count' => (int) $g['count'], 'visitors' => (int) $g['visitors']], $stmt->fetchAll(PDO::FETCH_ASSOC));
-
-            // Values that did not occur in the previous period are flagged as new
-            $stmt = $db->prepare("SELECT DISTINCT {$valueExpr} FROM events WHERE event_name = ? AND created_at >= ? AND created_at < ? {$siteFilter} AND {$valueExpr} IS NOT NULL");
-            $stmt->execute(array_merge($valueParams, [$eventName, $prevSince, $since], $siteParams, $valueParams));
-            $seenBefore = array_fill_keys(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)), true);
-            foreach ($eventGroup as &$g) {
-                $g['new'] = !isset($seenBefore[(string) $g['value']]);
-                if ($g['new']) $eventGroupNew++;
-            }
-            unset($g);
+            [$eventGroup, $eventGroupNew] = event_group($db, $eventName, $groupKey, $dateFilter, $dateParams, $siteFilter, $siteParams, $prevSince, $since, 200);
         }
 
         // CSV of every row in the period, one column per data key
@@ -1344,6 +1353,26 @@ function get_api_data(array $config, array $user): string
         }
     }
 
+    // Saved breakdowns, each computed on its own site
+    $breakdowns = [];
+    if (!$path && !$channel) {
+        $stmt = $db->prepare("SELECT id, site, label, event_name, group_key FROM breakdowns WHERE 1 {$siteFilter} ORDER BY created_at, id");
+        $stmt->execute($siteParams);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $bd) {
+            [$rows, $new] = event_group($db, $bd['event_name'], $bd['group_key'], $dateFilter, $dateParams, 'AND site = ?', [$bd['site']], $prevSince, $since, 200);
+            $breakdowns[] = [
+                'id' => (int) $bd['id'],
+                'site' => $bd['site'],
+                'label' => $bd['label'] ?: $bd['event_name'],
+                'event' => $bd['event_name'],
+                'group' => $bd['group_key'],
+                'rows' => array_slice($rows, 0, 10),
+                'total' => count($rows),
+                'new' => $new,
+            ];
+        }
+    }
+
     return json_encode([
         'site'      => $site ?: 'All sites',
         'path'      => $path ?: null,
@@ -1381,6 +1410,7 @@ function get_api_data(array $config, array $user): string
         'botActivity' => $botActivity,
         'summary'   => $summary,
         'goals'     => $goals,
+        'breakdowns' => $breakdowns,
         'versions'  => $versions,
         'siteOverview' => $siteOverview ?? [],
         'brokenLinks' => $brokenLinks,
@@ -1423,6 +1453,34 @@ function record_app_version(PDO $db, string $site, ?string $version): void
     if ($version === null) return;
     $db->prepare('INSERT OR IGNORE INTO app_versions (site, version, first_seen) VALUES (?, ?, ?)')
         ->execute([$site, $version, date('Y-m-d')]);
+}
+
+/**
+ * Group one event on a data key (or "@version" for the app_version column) and
+ * flag values absent from the previous period. Returns [rows, newCount].
+ * The key is bound as a quoted JSON path parameter, never interpolated into SQL.
+ */
+function event_group(PDO $db, string $eventName, string $groupKey, string $dateFilter, array $dateParams, string $siteFilter, array $siteParams, string $prevSince, string $since, int $limit): array
+{
+    $isVersion = $groupKey === '@version';
+    $valueExpr = $isVersion ? 'app_version' : 'json_extract(event_data, ?)';
+    $valueParams = $isVersion ? [] : ['$."' . $groupKey . '"'];
+
+    $stmt = $db->prepare("SELECT {$valueExpr} as value, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND {$valueExpr} IS NOT NULL GROUP BY value ORDER BY count DESC, value LIMIT {$limit}");
+    $stmt->execute(array_merge($valueParams, [$eventName], $dateParams, $siteParams, $valueParams));
+    $rows = array_map(fn ($g) => ['value' => $g['value'], 'count' => (int) $g['count'], 'visitors' => (int) $g['visitors']], $stmt->fetchAll(PDO::FETCH_ASSOC));
+
+    $stmt = $db->prepare("SELECT DISTINCT {$valueExpr} FROM events WHERE event_name = ? AND created_at >= ? AND created_at < ? {$siteFilter} AND {$valueExpr} IS NOT NULL");
+    $stmt->execute(array_merge($valueParams, [$eventName, $prevSince, $since], $siteParams, $valueParams));
+    $seenBefore = array_fill_keys(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)), true);
+
+    $new = 0;
+    foreach ($rows as &$row) {
+        $row['new'] = !isset($seenBefore[(string) $row['value']]);
+        if ($row['new']) $new++;
+    }
+    unset($row);
+    return [$rows, $new];
 }
 
 function fill_days(array $rows, string $start, int $days): array
@@ -1712,7 +1770,7 @@ function normalize_path(string $path): string
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 17; // Bump this when adding new migrations
+    $currentVersion = 18; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -2054,6 +2112,19 @@ function run_migrations(PDO $db): void
             first_seen TEXT NOT NULL,
             PRIMARY KEY (site, version)
         )');
+    }
+
+    // v18: saved breakdowns (event + group key shown as a dashboard card)
+    if ($version < 18) {
+        $db->exec('CREATE TABLE IF NOT EXISTS breakdowns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            label TEXT,
+            event_name TEXT NOT NULL,
+            group_key TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_breakdowns_unique ON breakdowns (site, event_name, group_key)');
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);

@@ -235,6 +235,14 @@
   .goal-list-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--light); padding: 8px 8px 2px; }
   .goal-rate { font-size: 20px; font-weight: 700; color: var(--accent); white-space: nowrap; }
   .goal-meta { font-size: 11px; color: var(--light); white-space: nowrap; text-align: right; }
+  .breakdown-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .breakdown-card .card-title[contenteditable] { cursor: text; border-radius: 4px; outline: none; }
+  .breakdown-card .card-title[contenteditable]:hover, .breakdown-card .card-title[contenteditable]:focus { box-shadow: 0 0 0 1px var(--border); }
+  .breakdown-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .breakdown-foot { font-size: 11px; color: var(--light); margin-top: 8px; }
+  .event-save { margin-left: auto; }
+  .event-chips-label[style*="margin-left:auto"] + .event-save { margin-left: 6px; }
+  .event-save:disabled { cursor: default; opacity: 0.6; }
   .goal-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; }
   .goal-remove:hover { color: var(--red); background: var(--subtle); }
   .goal-toggle { background: none; border: none; color: var(--border); cursor: pointer; font-size: 14px; padding: 0; flex-shrink: 0; opacity: 0.25; transition: opacity 0.15s; }
@@ -1017,7 +1025,7 @@
     var domainEdited = domain && domain.value !== utmDomain();
     return (utmState && utmState.source) || (path && path.value) || (campaign && campaign.value) || domainEdited;
   }
-  setInterval(function() { if (!utmWizardActive()) load(currentDays); }, 60000);
+  setInterval(function() { if (!utmWizardActive() && !(document.activeElement && document.activeElement.isContentEditable)) load(currentDays); }, 60000);
 
   // --- Render ---
   var lastData = null;
@@ -1107,6 +1115,7 @@
     html += renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend) +
       renderSummary(d.summary) +
       renderGoals(d.goals) +
+      renderBreakdowns(d.breakdowns) +
       renderSiteOverview(d.siteOverview) +
       renderChart(d);
 
@@ -1155,6 +1164,76 @@
       });
     }
   }
+
+  // Saved breakdowns: one card each, top values of an event grouped on a key
+  function renderBreakdowns(list) {
+    if (!list || !list.length) return '';
+    var html = '<div class="grid-2">';
+    list.forEach(function(b) {
+      var key = b.group === '@version' ? 'version' : b.group;
+      var auto = b.event.replace(/_/g, ' ') + ' by ' + key;
+      var sub = (b.label !== auto ? [auto] : []).concat(currentSite ? [] : [b.site]).join(' · ');
+      var max = Math.max.apply(null, b.rows.map(function(r) { return r.count; }).concat([1]));
+      html += '<div class="card breakdown-card">' +
+        '<div class="breakdown-head">' +
+          '<div style="min-width:0"><span class="card-title"' + (isShared ? '' : ' contenteditable="plaintext-only" spellcheck="false" title="Click to rename" data-bd-site="' + esc(b.site) + '" data-bd-event="' + esc(b.event) + '" data-bd-group="' + esc(b.group) + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}" onblur="renameBreakdown(this)"') + '>' + esc(b.label) + '</span>' +
+            (sub ? '<div class="breakdown-sub">' + esc(sub) + '</div>' : '') + '</div>' +
+          (isShared ? '' : '<button class="goal-remove" onclick="removeBreakdown(' + b.id + ', \'' + esc(b.site) + '\')" title="Remove card" aria-label="Remove card">&times;</button>') +
+        '</div>';
+      if (!b.rows.length) {
+        html += '<p style="color:var(--muted);font-size:13px;margin-top:12px">No values in this period</p>';
+      } else {
+        html += '<div style="margin-top:10px">';
+        b.rows.forEach(function(r) {
+          var value = String(r.value);
+          html += '<div class="trow">' +
+            '<span class="trow-label" title="' + esc(value) + '">' + esc(value) + ' <span style="color:var(--light);font-size:11px">' + num(r.visitors) + '</span>' + (r.new ? '<span class="event-new">new</span>' : '') + '</span>' +
+            '<div class="trow-bar"><div class="trow-fill" style="width:' + (r.count / max * 100) + '%;background:#f16272"></div></div>' +
+            '<span class="trow-val">' + num(r.count) + '</span>' +
+          '</div>';
+        });
+        html += '</div>';
+      }
+      var foot = [];
+      if (b.total > b.rows.length) foot.push(num(b.total) + ' values');
+      if (b.new) foot.push(num(b.new) + ' new vs previous period');
+      if (foot.length) html += '<div class="breakdown-foot">' + foot.join(' · ') + '</div>';
+      html += '</div>';
+    });
+    return html + '</div>';
+  }
+
+  window.renameBreakdown = function(el) {
+    var label = el.textContent.trim().slice(0, 100);
+    if (!label) { load(currentDays); return; }
+    fetch(apiUrl('?breakdown_add'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: el.getAttribute('data-bd-site'), event: el.getAttribute('data-bd-event'), group: el.getAttribute('data-bd-group'), label: label })
+    }).then(function() { load(currentDays); });
+  };
+
+  window.removeBreakdown = function(id, site) {
+    fetch(apiUrl('?breakdown_remove'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: site, id: id })
+    }).then(function() { load(currentDays); });
+  };
+
+  window.saveBreakdown = function(btn) {
+    var detail = btn.closest('.event-detail');
+    var st = detail._state, key = st.data.eventGroupKey;
+    var site = currentSite || (sites.length === 1 ? sites[0] : '');
+    if (!site || !key) return;
+    btn.disabled = true;
+    btn.textContent = 'Saved';
+    fetch(apiUrl('?breakdown_add'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: site, event: st.name, group: key, label: st.name.replace(/_/g, ' ') + ' by ' + (key === '@version' ? 'version' : key) })
+    }).then(function() { load(currentDays); });
+  };
 
   function renderGoals(goals) {
     if (!goals || !goals.length || isShared) return '';
@@ -2458,8 +2537,11 @@
       keys.forEach(function(k) {
         html += '<button class="event-chip' + (k.key === d.eventGroupKey ? ' active' : '') + '" data-key="' + esc(k.key) + '" onclick="setEventGroup(this)">' + esc(k.key === '@version' ? 'version' : k.key) + '</button>';
       });
+      var canSave = !isShared && d.eventGroupKey && (currentSite || sites.length === 1);
+      var saved = canSave && lastData && (lastData.breakdowns || []).some(function(b) { return b.event === st.name && b.group === d.eventGroupKey; });
       html += '<button class="event-chip' + (!d.eventGroupKey ? ' active' : '') + '" data-key="" onclick="setEventGroup(this)">Recent</button>' +
         (d.eventGroupKey && d.eventGroupNew ? '<span class="event-chips-label" style="margin-left:auto">' + num(d.eventGroupNew) + ' new vs previous period</span>' : '') +
+        (canSave ? '<button class="event-chip event-save"' + (saved ? ' disabled' : '') + ' onclick="saveBreakdown(this)" title="Show this grouping as its own card on the dashboard">' + (saved ? 'Saved' : 'Save as card') + '</button>' : '') +
       '</div>';
     }
 

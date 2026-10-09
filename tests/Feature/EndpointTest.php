@@ -835,6 +835,41 @@ test('js snippet sends data-version with pageviews and events', function () {
         ->and($body)->toContain('app_version');
 });
 
+test('api returns saved breakdowns grouped like the drill-down', function () {
+    $name = 'saved_bd_' . uniqid();
+    foreach ([['kale', 'Chrome/120.0'], ['kale', 'Firefox/130.0'], ['rhubarb', 'Safari/605.1']] as [$q, $ua]) {
+        http('POST', '/?event', [
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 {$ua}",
+            'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/', 'event_data' => ['query' => $q]]),
+        ]);
+    }
+    $db = getTestDb();
+    $db->prepare('INSERT INTO breakdowns (site, label, event_name, group_key, created_at) VALUES (?, ?, ?, ?, ?)')
+        ->execute(['test', 'Missed searches', $name, 'query', date('Y-m-d H:i:s')]);
+
+    try {
+        $token = createTestShareToken('test');
+        $data = json_decode(http('GET', '/?api&days=1&share=' . $token)['body'], true);
+        $bd = collect($data['breakdowns'])->first(fn ($b) => $b['event'] === $name);
+        expect($bd['label'])->toBe('Missed searches')
+            ->and($bd['group'])->toBe('query')
+            ->and($bd['id'])->toBeInt()
+            ->and(array_map(fn ($r) => [$r['value'], $r['count'], $r['new']], $bd['rows']))->toBe([['kale', 2, true], ['rhubarb', 1, true]])
+            ->and($bd['total'])->toBe(2);
+    } finally {
+        $db->prepare('DELETE FROM breakdowns WHERE event_name = ?')->execute([$name]);
+    }
+});
+
+test('breakdown add and remove require auth', function () {
+    $opts = [
+        'header' => "Content-Type: application/json",
+        'content' => json_encode(['site' => 'test', 'label' => 'x', 'event' => 'e', 'group' => 'k']),
+    ];
+    expect(http('POST', '/?breakdown_add', $opts)['status'])->toBe(401)
+        ->and(http('POST', '/?breakdown_remove', $opts)['status'])->toBe(401);
+});
+
 test('share API with path filter does not crash on events table', function () {
     // Regression: events table has page_path, not path — using $pathFilter caused SQL error
     $token = createTestShareToken('test');
