@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Event drill-down requests (`?api&event=<name>`) no longer run every dashboard query. The response carries only what the panel needs: totals, daily visitors for the rate, and the event fields.
 - Event drill-down chart for periods over 31 days drops per-bar values and shows about six date labels, so 90 days fit without horizontal scrolling. Hover still shows the detail per day.
 
+## [Unreleased]
+
+### Added
+
+- Event drill-down flags values that did not occur in the previous period with a `new` badge and shows how many are new. API: each `eventGroup` row carries `new`, plus `eventGroupNew`.
+- CSV download in the event drill-down: every row in the period with `created_at`, `page_path` and one column per data key. API: `?api&event=<name>&format=csv`, also through share tokens.
+
+### Changed
+
+- The `form_submit` auto-event listens in the bubble phase and is skipped when the page called `preventDefault()`, so JavaScript-handled forms and search boxes are not counted as submissions. It now records a `form` field from `data-puls-event`, `name` or `id` on the form.
+
 ## [1.14.0] — 2026-10-09
 
 ### Added
