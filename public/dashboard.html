@@ -1257,7 +1257,7 @@
         '</div>' +
         '<div style="text-align:right">' +
           '<div class="goal-rate">' + g.rate + '%</div>' +
-          '<div class="goal-meta">' + num(g.conversions) + ' of ' + num(lastData.totals.visitors) + ' visitors</div>' +
+          '<div class="goal-meta">' + (g.conversions ? num(g.conversions) + ' of ' + num(lastData.totals.visitors) + ' visitors' : 'No hits yet') + '</div>' +
         '</div>' +
         '<button class="goal-remove" onclick="removeGoal(\'' + esc(g.path) + '\')" title="Remove goal">&times;</button>' +
       '</div>';
@@ -2566,17 +2566,21 @@
   // Two-step funnel: of the visitors who did this event, how many did the chosen one after it
   function renderEventFunnel(st, d) {
     var names = d.eventNames || [];
-    if (!names.length) return '';
+    // Free text with suggestions, so an event not seen yet can be the second step
+    var listId = 'funnel-events-' + Math.random().toString(36).slice(2);
     var html = '<div class="event-chips"><span class="event-chips-label">Then</span>' +
-      '<select class="event-select" onchange="setEventFunnel(this)" aria-label="Second event for funnel">' +
-        '<option value="">Pick an event…</option>';
+      '<input class="event-select" list="' + listId + '" value="' + esc(st.then || '') + '" placeholder="Event name…" onchange="setEventFunnel(this)" aria-label="Second event for funnel" autocomplete="off" spellcheck="false">' +
+      '<datalist id="' + listId + '">';
     names.forEach(function(n) {
-      html += '<option value="' + esc(n) + '"' + (n === st.then ? ' selected' : '') + '>' + esc(n.replace(/_/g, ' ')) + '</option>';
+      html += '<option value="' + esc(n) + '">';
     });
-    html += '</select></div>';
+    html += '</datalist></div>';
 
     var f = d.funnel;
     if (!f) return html;
+    if (!f.started) {
+      return html + '<div class="event-funnel"><div class="event-funnel-head"><span>No visitors did <b>' + esc(st.name.replace(/_/g, ' ')) + '</b> in this period yet, so there is nothing to follow to <b>' + esc(f.then.replace(/_/g, ' ')) + '</b>.</span></div></div>';
+    }
     var delta = f.rate !== null && f.previousRate !== null ? Math.round((f.rate - f.previousRate) * 10) / 10 : null;
     html += '<div class="event-funnel">' +
       '<div class="event-funnel-head">' +
@@ -2823,6 +2827,18 @@
     events.forEach(function(e) {
       html += goalItemHtml(e.event_name, goalPaths.indexOf(e.event_name) >= 0, 'event');
     });
+    // Not seen yet: offer the typed text as a goal so it counts from the first hit
+    var typed = filter.trim();
+    var typedType = typed.charAt(0) === '/' ? 'page' : 'event';
+    var known = typedType === 'page'
+      ? pages.some(function(p) { return p.path === typed; })
+      : events.some(function(e) { return e.event_name === typed; });
+    if (typed && !known && goalPaths.indexOf(typed) < 0) {
+      html += '<div class="goal-list-label">Not seen yet</div>' +
+        '<button class="goal-item goal-item-new" data-type="' + typedType + '" onclick="menuToggleGoal(this.getAttribute(\'data-path\'), this.getAttribute(\'data-type\'))" data-path="' + esc(typed) + '">' +
+          '<span class="goal-item-path">+ Add ' + typedType + ' goal: ' + esc(typed) + '</span>' +
+        '</button>';
+    }
     goalList.innerHTML = html;
   }
 
