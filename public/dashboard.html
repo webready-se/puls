@@ -238,6 +238,11 @@
   .breakdown-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .breakdown-card .card-title[contenteditable] { cursor: text; border-radius: 4px; outline: none; }
   .breakdown-card .card-title[contenteditable]:hover, .breakdown-card .card-title[contenteditable]:focus { box-shadow: 0 0 0 1px var(--border); }
+  .breakdown-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .breakdown-card .event-detail { margin: 10px 0 0; }
+  /* The open panel already lists the grouped values; hide the card's own copy */
+  .breakdown-card .event-detail ~ * { display: none; }
+  .goal-item-new .goal-item-path { color: var(--accent); }
   .breakdown-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .breakdown-foot { font-size: 11px; color: var(--light); margin-top: 8px; }
   .event-save { margin-left: auto; }
@@ -1059,7 +1064,8 @@
     var activeTabs = [].map.call(document.querySelectorAll('#app .card-tab.active[data-tab]'), function(t) { return t.getAttribute('data-tab'); });
     var openDetail = document.querySelector('.event-detail');
     var openEvent = openDetail && openDetail._state
-      ? { name: openDetail._state.name, group: openDetail._state.data.eventGroupKey || '', showAll: openDetail._state.showAll, then: openDetail._state.then }
+      ? { name: openDetail._state.name, group: openDetail._state.data.eventGroupKey || '', showAll: openDetail._state.showAll, then: openDetail._state.then,
+          anchor: openDetail.previousElementSibling && openDetail.previousElementSibling.getAttribute('data-anchor') }
       : null;
 
     var totalViews = +d.totals.views;
@@ -1149,8 +1155,12 @@
       if (tab && !tab.classList.contains('active')) switchPageTab(tab);
     });
     if (openEvent) {
-      [].forEach.call(document.querySelectorAll('.trow[data-event]'), function(row) {
-        if (row.getAttribute('data-event') === openEvent.name) openEventDetail(row, openEvent.name, openEvent.group, openEvent.showAll, openEvent.then);
+      [].some.call(document.querySelectorAll('[data-anchor]'), function(el) {
+        if (el.getAttribute('data-anchor') !== openEvent.anchor) return false;
+        openEventDetail(el, openEvent.name, openEvent.group, openEvent.showAll, openEvent.then);
+        var btn = el.querySelector('.breakdown-open');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+        return true;
       });
     }
 
@@ -1176,10 +1186,13 @@
       var sub = (b.label !== auto ? [auto] : []).concat(currentSite ? [] : [b.site]).join(' · ');
       var max = Math.max.apply(null, b.rows.map(function(r) { return r.count; }).concat([1]));
       html += '<div class="card breakdown-card">' +
-        '<div class="breakdown-head">' +
+        '<div class="breakdown-head" data-anchor="bd:' + b.id + '">' +
           '<div style="min-width:0"><span class="card-title"' + (isShared ? '' : ' contenteditable="plaintext-only" spellcheck="false" title="Click to rename" data-bd-site="' + esc(b.site) + '" data-bd-event="' + esc(b.event) + '" data-bd-group="' + esc(b.group) + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}" onblur="renameBreakdown(this)"') + '>' + esc(b.label) + '</span>' +
             (sub ? '<div class="breakdown-sub">' + esc(sub) + '</div>' : '') + '</div>' +
-          (isShared ? '' : '<button class="goal-remove" onclick="removeBreakdown(' + b.id + ', \'' + esc(b.site) + '\')" title="Remove card" aria-label="Remove card">&times;</button>') +
+          '<div class="breakdown-actions">' +
+            '<button class="event-chip breakdown-open" aria-expanded="false" data-event="' + esc(b.event) + '" data-group="' + esc(b.group) + '" onclick="openBreakdownDetail(this)" title="Trend, funnel and CSV for this event">Details</button>' +
+            (isShared ? '' : '<button class="goal-remove" onclick="removeBreakdown(' + b.id + ', \'' + esc(b.site) + '\')" title="Remove card" aria-label="Remove card">&times;</button>') +
+          '</div>' +
         '</div>';
       if (!b.rows.length) {
         html += '<p style="color:var(--muted);font-size:13px;margin-top:12px">No values in this period</p>';
@@ -1212,6 +1225,16 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ site: el.getAttribute('data-bd-site'), event: el.getAttribute('data-bd-event'), group: el.getAttribute('data-bd-group'), label: label })
     }).then(function() { load(currentDays); });
+  };
+
+  window.openBreakdownDetail = function(btn) {
+    var head = btn.closest('.breakdown-head');
+    var open = head.nextElementSibling && head.nextElementSibling.classList.contains('event-detail');
+    document.querySelectorAll('.event-detail').forEach(function(d) { d.remove(); });
+    document.querySelectorAll('.breakdown-open').forEach(function(b) { b.setAttribute('aria-expanded', 'false'); });
+    if (open) return;
+    btn.setAttribute('aria-expanded', 'true');
+    openEventDetail(head, btn.getAttribute('data-event'), btn.getAttribute('data-group'), false, '');
   };
 
   window.removeBreakdown = function(id, site) {
