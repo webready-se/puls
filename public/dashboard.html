@@ -335,6 +335,7 @@
   .trow-val { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: var(--muted); }
   .trow-clickable { cursor: pointer; border-radius: 6px; padding: 7px 6px; margin: 0 -6px; transition: background 0.15s; }
   .trow-clickable:hover { background: var(--subtle); }
+  .trow-clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .event-detail { margin: 0 -6px 8px; padding: 8px 10px; background: var(--subtle); border-radius: 8px; font-size: 12px; }
   .event-detail-row { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); align-items: baseline; }
   .event-detail-row:last-child { border-bottom: none; }
@@ -780,7 +781,7 @@
 <div class="menu-panel" id="menu-panel">
   <div class="menu-header">
     <span>Settings</span>
-    <button class="menu-close" onclick="closeMenu()" aria-label="Close menu"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <button class="menu-close" onclick="closeMenu()" aria-label="Close settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
   </div>
   <div class="menu-section">
     <span class="menu-label">Appearance</span>
@@ -1234,6 +1235,15 @@
       body: JSON.stringify({ site: site, event: st.name, group: key, label: st.name.replace(/_/g, ' ') + ' by ' + (key === '@version' ? 'version' : key) })
     }).then(function() { load(currentDays); });
   };
+
+  // Keyboard: Enter and Space activate non-button elements that act as buttons
+  document.addEventListener('keydown', function(e) {
+    var t = e.target;
+    if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute && t.getAttribute('role') === 'button' && t.tagName !== 'BUTTON') {
+      e.preventDefault();
+      t.click();
+    }
+  });
 
   function renderGoals(goals) {
     if (!goals || !goals.length || isShared) return '';
@@ -1713,7 +1723,7 @@
       var pct = (+r.count / max) * 100;
       var name = r.event_name.replace(/_/g, ' ');
       var visitors = r.visitors !== undefined ? num(r.visitors) + ' visitor' + (+r.visitors === 1 ? '' : 's') : '';
-      html += '<div class="trow trow-clickable" data-event="' + esc(r.event_name) + '" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
+      html += '<div class="trow trow-clickable" role="button" tabindex="0" aria-label="' + esc(name) + ': ' + num(r.count) + ' events, show details" data-event="' + esc(r.event_name) + '" data-anchor="event:' + esc(r.event_name) + '" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
         '<span class="trow-label">' + esc(name) + (visitors ? ' <span style="color:var(--light);font-size:11px">' + visitors + '</span>' : '') + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#f16272"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
@@ -1731,7 +1741,7 @@
     rows.forEach(function(r) {
       var pct = (+r.clicks / max) * 100;
       var display = r.url ? r.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '(unknown)';
-      html += '<div class="trow trow-clickable" onclick="loadOutboundDetail(\'' + esc(r.url || '') + '\', this)">' +
+      html += '<div class="trow trow-clickable" role="button" tabindex="0" onclick="loadOutboundDetail(\'' + esc(r.url || '') + '\', this)">' +
         '<span class="trow-label" title="' + esc(r.url || '') + '">' + esc(display) + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#06b6d4"></div></div>' +
         '<span class="trow-val">' + num(r.clicks) + '</span>' +
@@ -1814,7 +1824,7 @@
       var pct = (+c.visitors / maxVisitors) * 100;
       var color = channelColors[c.channel] || '#f16272';
       var slug = channelSlugs[c.channel] || '';
-      html += '<div class="trow trow-clickable" onclick="filterChannel(\'' + slug + '\')">' +
+      html += '<div class="trow trow-clickable" role="button" tabindex="0" onclick="filterChannel(\'' + slug + '\')">' +
         '<span class="trow-label">' + esc(c.channel) +
           ' <span style="color:var(--light);font-size:11px">' + c.pages_per_visitor + ' p/v</span>' +
         '</span>' +
