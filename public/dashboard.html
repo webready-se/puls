@@ -340,6 +340,10 @@
   .event-chart.chart-scroll.compare { padding-top: 44px; }
   .event-chart .chart { height: 96px; gap: 4px; }
   .event-chart .chart-col { min-width: 26px; }
+  .event-chart.dense .chart { gap: 2px; }
+  .event-chart.dense .chart-col { min-width: 0; padding: 0; gap: 3px; }
+  .event-chart.dense .chart-bars { gap: 1px; }
+  .event-chart.dense .chart-bar { border-radius: 2px 2px 0 0; }
   .event-detail .trow { padding: 4px 0; }
   .event-detail .trow-bar { background: var(--border); }
   .event-detail .show-all { margin-top: 6px; }
@@ -2390,13 +2394,14 @@
 
     if (d.eventSeries && d.eventSeries.length) {
       var showCompare = compareMode && d.previousEventSeries && d.previousEventSeries.length > 0;
+      var dense = d.eventSeries.length > 31;
       html += '<div class="event-chips">' +
         '<button class="event-chip' + (eventChartMode === 'count' ? ' active' : '') + '" data-mode="count" onclick="setEventChartMode(this)">Count</button>' +
         '<button class="event-chip' + (eventChartMode === 'rate' ? ' active' : '') + '" data-mode="rate" onclick="setEventChartMode(this)">Per 100 visitors</button>' +
         (showCompare ? '<span class="event-chips-label" style="margin-left:auto">vs previous period</span>' : '') +
       '</div>' +
-      '<div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + '"><div class="chart">' +
-        buildEventBars(d.eventSeries, showCompare ? d.previousEventSeries : null, d.pageviews, d.previousPageviews) +
+      '<div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + (dense ? ' dense' : '') + '"><div class="chart">' +
+        buildEventBars(d.eventSeries, showCompare ? d.previousEventSeries : null, d.pageviews, d.previousPageviews, dense) +
       '</div></div>';
     }
 
@@ -2417,7 +2422,7 @@
     detail.innerHTML = html;
   }
 
-  function buildEventBars(series, prevSeries, pageviews, previousPageviews) {
+  function buildEventBars(series, prevSeries, pageviews, previousPageviews, dense) {
     var visitorsByDate = {};
     (pageviews || []).concat(previousPageviews || []).forEach(function(p) { visitorsByDate[p.date] = +p.visitors; });
     function val(row) {
@@ -2431,10 +2436,16 @@
     var vals = series.map(val);
     if (prevSeries) vals = vals.concat(prevSeries.map(val));
     var maxVal = Math.max.apply(null, vals.concat([1]));
+    // Labels sit mid-step so the first and last are not clipped by the chart edges
+    var labelStep = dense ? Math.ceil(series.length / 6) : 1;
+    var labelOffset = Math.floor(labelStep / 2);
     var bars = '';
     series.forEach(function(row, i) {
       var v = val(row), h = Math.max(3, (v / maxVal) * 60), label = formatDay(row.date);
       var tipBody = num(row.count) + ' events, ' + num(row.visitors) + ' visitors';
+      // Dense ranges: no per-bar values, about six date labels, tooltip keeps the detail
+      var valHtml = dense ? '' : '<span class="chart-val">' + fmt(v) + '</span>';
+      var dateHtml = '<span class="chart-date">' + (dense && i % labelStep !== labelOffset ? '&nbsp;' : label) + '</span>';
       if (prevSeries) {
         var p = prevSeries[i], pv = p ? val(p) : 0, ph = p ? Math.max(3, (pv / maxVal) * 60) : 0;
         var delta = pv > 0 ? Math.round(((v - pv) / pv) * 100) : null;
@@ -2445,16 +2456,16 @@
             (p ? '<div style="color:var(--light);margin-top:2px">vs ' + formatDay(p.date) + ': ' + num(p.count) + ' / ' + num(p.visitors) + '</div>' : '') +
           '</div>' +
           '<div class="chart-bars">' +
-            '<div class="chart-bar-wrap"><span class="chart-val">' + fmt(v) + '</span><div class="chart-bar" style="height:' + h + 'px"></div></div>' +
-            '<div class="chart-bar-wrap"><span class="chart-val-prev">' + fmt(pv) + '</span><div class="chart-bar chart-bar-prev" style="height:' + ph + 'px"></div></div>' +
+            '<div class="chart-bar-wrap">' + valHtml + '<div class="chart-bar" style="height:' + h + 'px"></div></div>' +
+            '<div class="chart-bar-wrap">' + (dense ? '' : '<span class="chart-val-prev">' + fmt(pv) + '</span>') + '<div class="chart-bar chart-bar-prev" style="height:' + ph + 'px"></div></div>' +
           '</div>' +
-          '<span class="chart-date">' + label + '</span>' +
+          dateHtml +
         '</div>';
       } else {
         bars += '<div class="chart-col">' +
-          '<span class="chart-val">' + fmt(v) + '</span>' +
+          valHtml +
           '<div class="chart-bar" style="height:' + h + 'px"><div class="tip">' + label + ': ' + tipBody + '</div></div>' +
-          '<span class="chart-date">' + label + '</span>' +
+          dateHtml +
         '</div>';
       }
     });
