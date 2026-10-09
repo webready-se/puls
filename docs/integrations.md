@@ -146,7 +146,13 @@ That's it. Works on any HTML page.
 
 ## Custom Events
 
-Track any interaction with `puls.track(name, data)`. Events appear in the dashboard under Traffic > Events.
+Track any interaction with `puls.track(name, data)`. Events appear in the dashboard under Traffic > Events. Click an event to open its drill-down:
+
+- **Trend** — one bar per day for the selected period, as count or per 100 visitors, with the previous period overlaid when Compare is on.
+- **Group by** — one chip per key found in the event's data. Pick `query` on a `search_miss` event and you get every searched value with count and unique visitors. The most common key is selected on open. **Recent** shows the raw rows instead.
+- **Totals** — events, visitors, rate per 100 visitors and the change versus the previous period.
+
+The same data is available as JSON: `?api&days=30&event=search_miss&group=query` returns `eventSeries`, `previousEventSeries`, `eventTotals`, `eventKeys` and `eventGroup`. Works with `&share=<token>` for read-only access.
 
 ```javascript
 // Form submission
