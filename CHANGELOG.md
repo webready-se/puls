@@ -7,27 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [1.15.0] — 2026-10-09
 
-### Fixed
-
-- The 60-second dashboard refresh reset every card to its first tab and closed any open event drill-down. Tab selection and the open drill-down (including its group-by choice) now survive a refresh and a period change.
-
-### Changed
-
-- Event drill-down requests (`?api&event=<name>`) no longer run every dashboard query. The response carries only what the panel needs: totals, daily visitors for the rate, and the event fields.
-- Event drill-down chart for periods over 31 days drops per-bar values and shows about six date labels, so 90 days fit without horizontal scrolling. Hover still shows the detail per day.
-
-## [Unreleased]
-
 ### Added
 
+- Goals can target an event name as well as a page path. The goal picker in the menu lists events under their own heading, and the Goals card marks event goals. Conversions count distinct visitors who triggered the event. Migration v16 adds a `type` column to `goals`.
 - Event drill-down flags values that did not occur in the previous period with a `new` badge and shows how many are new. API: each `eventGroup` row carries `new`, plus `eventGroupNew`.
 - CSV download in the event drill-down: every row in the period with `created_at`, `page_path` and one column per data key. API: `?api&event=<name>&format=csv`, also through share tokens.
-
-- Goals can target an event name as well as a page path. The goal picker in the menu lists events under their own heading, and the Goals card marks event goals. Conversions count distinct visitors who triggered the event. Migration v16 adds a `type` column to `goals`.
 
 ### Changed
 
 - The `form_submit` auto-event listens in the bubble phase and is skipped when the page called `preventDefault()`, so JavaScript-handled forms and search boxes are not counted as submissions. It now records a `form` field from `data-puls-event`, `name` or `id` on the form.
+- Event drill-down requests (`?api&event=<name>`) no longer run every dashboard query. The response carries only what the panel needs: totals, daily visitors for the rate, and the event fields.
+- Event drill-down chart for periods over 31 days drops per-bar values and shows about six date labels, so 90 days fit without horizontal scrolling. Hover still shows the detail per day.
+
+### Fixed
+
+- The 60-second dashboard refresh reset every card to its first tab and closed any open event drill-down. Tab selection and the open drill-down (including its group-by choice) now survive a refresh and a period change.
 
 ## [1.14.0] — 2026-10-09
 
