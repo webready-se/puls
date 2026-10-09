@@ -171,7 +171,64 @@ document.getElementById('cta').addEventListener('click', function() {
 });
 ```
 
-The `data` parameter is optional. When provided, it is stored as JSON and visible in the dashboard drill-down. Keep event names short and consistent — they are grouped by name.
+The `data` parameter is optional. When provided, it is stored as JSON and visible in the dashboard drill-down.
+
+### Naming and data conventions
+
+- **Event names:** `snake_case`, past tense verb, max 100 characters. `feedback_sent`, `plant_added`, `search_miss` — not `sendFeedback` or `Plant Added`. Events are grouped by exact name, so keep them consistent.
+- **Data keys:** short and stable (`query`, `crop`, `zone`), so the same key can be grouped across events over time.
+- **Data values:** short strings, numbers or booleans. Trim and lowercase free text before sending (a search query, for example) so the same value is counted once.
+- **No personal data.** Never send names, email addresses, phone numbers, user IDs or anything else that identifies a person. Puls stores no PII and events should not become the exception.
+- **Limits:** `event_data` is stored as JSON and silently truncated at 1,000 characters. Keep payloads small.
+- **Deduplication:** the same event name with the same data from the same visitor within 10 seconds is stored once. Different data within the window counts as separate events, so `search_miss {query: "kale"}` followed by `search_miss {query: "rhubarb"}` records both.
+
+### Calling `puls.track` before the script has loaded
+
+The script is loaded with `defer`, so `window.puls` does not exist until the page has parsed. Single-page apps often fire events earlier than that (reading settings from `localStorage` on first render, PWA launch). Add this stub before any code that tracks, and the script drains the queue when it initialises:
+
+```html
+<script>window.puls = window.puls || { q: [], track: function () { this.q.push(arguments) } }</script>
+<script src="https://your-puls-domain/?js" data-site="my-site" defer></script>
+```
+
+Queued events are sent in order with the same `site` and `page_path` the live call would have used.
+
+### Debug mode
+
+Add `data-debug` to the script tag to log every pageview and event to the browser console as it is sent:
+
+```html
+<script src="https://your-puls-domain/?js" data-site="my-site" data-debug defer></script>
+```
+
+```text
+[puls] pageview /guides/carrot
+[puls] draining 2 queued event(s)
+[puls] event zone_set {zone: 4}
+```
+
+Beacons are fire-and-forget, so this is the only way to see from the browser what Puls received. Remove the attribute in production.
+
+### TypeScript
+
+Puls ships no npm package. Declare the global once in your project:
+
+```typescript
+// puls.d.ts
+interface Puls {
+  track(name: string, data?: Record<string, string | number | boolean>): void;
+}
+
+declare global {
+  interface Window {
+    puls?: Puls;
+  }
+}
+
+export {};
+```
+
+Then call it as `window.puls?.track('plant_added', { crop: 'carrot' })`. The optional chaining keeps the call safe if the script is blocked; combine it with the queue stub above if you need early events to survive.
 
 ## Auto Event Tracking
 

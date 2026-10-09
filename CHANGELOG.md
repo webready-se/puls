@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `data-debug` on the tracking script logs every pageview and event to the browser console as it is sent. Beacons are fire-and-forget, so this is the first way to see from the browser what Puls received.
+- Queue stub for `puls.track` calls made before the script has loaded. Pages add `window.puls = window.puls || { q: [], track: function () { this.q.push(arguments) } }` and the script drains the queue on init. Documented in `docs/integrations.md`.
+- Event naming and data conventions, TypeScript declaration and payload limits in `docs/integrations.md`.
+
+### Fixed
+
+- Event deduplication ignored `event_data`, so two events with the same name but different data from one visitor within 10 seconds kept only the first. A search box sending `search_miss` for two different queries lost the second. The dedup key now includes the data.
+- Unique visitors per event were queried but never shown in the Events list.
+
 ## [1.12.0] — 2026-08-21
 
 ### Fixed

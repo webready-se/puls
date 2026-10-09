@@ -148,6 +148,7 @@ This tracks pageviews and outbound link clicks automatically. Works with Next.js
 | `data-site` | Yes | Site name used to separate data in multi-site setups |
 | `data-outbound` | No | Auto-track clicks on external links |
 | `data-auto-events` | No | Auto-track phone clicks, email clicks, downloads, form submissions |
+| `data-debug` | No | Log every pageview and event to the browser console |
 | `defer` | Recommended | Load script without blocking page render |
 
 ### Custom Events
@@ -160,7 +161,8 @@ puls.track('download', { file: 'brochure.pdf' });
 Full documentation in [docs/integrations.md](docs/integrations.md):
 
 - Framework examples (Next.js, Astro, Laravel, Statamic, React)
-- Custom events API and auto event tracking
+- Custom events API, naming conventions, queue stub for early calls, TypeScript types
+- Auto event tracking
 - Outbound link tracking
 - Bot tracking pixel (`<noscript>`)
 - Server-side bot tracking (Nginx mirror)

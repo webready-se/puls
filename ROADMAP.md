@@ -168,6 +168,32 @@ Lighthouse: Performance 100, A11y 71 → target 90+. No visual regressions.
 - [ ] **Webhooks** — HTTP callbacks on traffic spikes, new 404s, or threshold alerts
 - [x] **Auto-refresh** — dashboard refreshes every 60 seconds (paused during UTM wizard)
 
+## Epic 14: Event Analytics
+
+Feedback from the first SPA integration (ten named events with data). Today events answer "how many clicked"; this epic makes them answer "is it changing, and what are the values".
+
+**Patch (integration blockers)**
+- [x] **Dedup includes event_data** — same name + different data within 10 s are separate events
+- [x] **Queue stub** — `window.puls = window.puls || { q: [], track: ... }` drained by the script on init
+- [x] **Debug mode** — `data-debug` logs every pageview and event to the console
+- [x] **Visitors in Events list** — fetched by the API but never rendered
+- [x] **Docs** — naming conventions, data rules, 1000-char limit, TypeScript declaration
+
+**Next feature**
+- [ ] **Group by data key** — drill-down picks a key from `event_data` (auto-discovered from recent rows), shows value, count, unique visitors. Generalises the hardcoded outbound `url` grouping.
+- [ ] **Trend per event** — day-by-day chart on click with the same date range and compare mode as pageviews
+- [ ] **Rate, not just count** — events per 100 visitors next to the count, toggle in the trend
+
+**Later**
+- [ ] **Two-event funnel** — pick two event names, get ratio and trend (feedback_opened vs feedback_sent)
+- [ ] **Goals as events** — a goal is a path or an event name, same conversion view
+- [ ] **Event API via share token** — `?api&share=…&event=x&group=key` JSON + CSV with data keys as columns (Epic 13)
+- [ ] **App version on hits** — `data-version` stored on pageviews/events, release markers in charts, group by version
+- [ ] **Saved breakdowns** — name a grouping ("Missed searches" = search_miss by query), show as its own card
+- [ ] **New values highlighted** — values not seen before in a breakdown (also fits referrers)
+- [ ] **Daily rollups** — aggregate (day, site, event, key, value, count, visitors) before 90-day cleanup deletes raw rows
+- [ ] **form_submit auto-event** — skip when `defaultPrevented`, read `data-puls-event` on the form for identity
+
 ---
 
 ## Ideas

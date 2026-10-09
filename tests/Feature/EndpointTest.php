@@ -32,6 +32,18 @@ test('js endpoint returns javascript', function () {
     expect($contentType)->toContain('javascript');
 });
 
+test('js endpoint drains events queued before the script loaded', function () {
+    $r = http('GET', '/?js');
+    expect($r['body'])->toContain('prev.q')
+        ->and($r['body'])->toContain('puls.track.apply');
+});
+
+test('js endpoint supports data-debug console logging', function () {
+    $r = http('GET', '/?js');
+    expect($r['body'])->toContain('dataset.debug')
+        ->and($r['body'])->toContain('console.log');
+});
+
 test('pixel endpoint returns gif', function () {
     $r = http('GET', '/?pixel&s=test&p=/');
     expect($r['status'])->toBe(200);
@@ -497,20 +509,44 @@ test('event endpoint filters bots', function () {
     expect($r['status'])->toBe(204);
 });
 
-test('event endpoint deduplicates within 10 seconds', function () {
-    $payload = json_encode([
-        'event_name' => 'dedup_test_' . uniqid(),
-        'site' => 'test',
-        'page_path' => '/dedup',
-    ]);
+test('event endpoint deduplicates same event and data within 10 seconds', function () {
+    $name = 'dedup_test_' . uniqid();
     $opts = [
         'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
-        'content' => $payload,
+        'content' => json_encode([
+            'event_name' => $name,
+            'site' => 'test',
+            'page_path' => '/dedup',
+            'event_data' => ['query' => 'carrot'],
+        ]),
     ];
-    $r1 = http('POST', '/?event', $opts);
-    expect($r1['status'])->toBe(204);
-    $r2 = http('POST', '/?event', $opts);
-    expect($r2['status'])->toBe(204);
+    expect(http('POST', '/?event', $opts)['status'])->toBe(204);
+    expect(http('POST', '/?event', $opts)['status'])->toBe(204);
+
+    $stmt = getTestDb()->prepare('SELECT COUNT(*) FROM events WHERE event_name = ?');
+    $stmt->execute([$name]);
+    expect((int) $stmt->fetchColumn())->toBe(1);
+});
+
+test('event endpoint keeps same event with different data within 10 seconds', function () {
+    $name = 'dedup_data_test_' . uniqid();
+    $send = function (?array $data) use ($name) {
+        $payload = ['event_name' => $name, 'site' => 'test', 'page_path' => '/dedup'];
+        if ($data !== null) {
+            $payload['event_data'] = $data;
+        }
+        return http('POST', '/?event', [
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'content' => json_encode($payload),
+        ])['status'];
+    };
+    expect($send(['query' => 'sea kale']))->toBe(204);
+    expect($send(['query' => 'lungwort']))->toBe(204);
+    expect($send(null))->toBe(204);
+
+    $stmt = getTestDb()->prepare('SELECT COUNT(*) FROM events WHERE event_name = ?');
+    $stmt->execute([$name]);
+    expect((int) $stmt->fetchColumn())->toBe(3);
 });
 
 test('api includes events data', function () {
