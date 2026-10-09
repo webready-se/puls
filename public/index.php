@@ -633,9 +633,10 @@ function handle_event(array $config): void
     $salt = date('Y-m-d') . 'puls-' . $config['app_key'];
     $hash = hash('sha256', ($_SERVER['REMOTE_ADDR'] ?? '') . ($_SERVER['HTTP_USER_AGENT'] ?? '') . $salt);
 
-    // Dedup: skip same event from same visitor within 10 seconds
-    $stmt = $db->prepare('SELECT id FROM events WHERE site = ? AND event_name = ? AND visitor_hash = ? AND created_at > ? LIMIT 1');
-    $stmt->execute([$site, $eventName, $hash, date('Y-m-d H:i:s', time() - 10)]);
+    // Dedup: skip same event with same data from same visitor within 10 seconds.
+    // IS (not =) so two events without data also match each other (NULL IS NULL).
+    $stmt = $db->prepare('SELECT id FROM events WHERE site = ? AND event_name = ? AND visitor_hash = ? AND event_data IS ? AND created_at > ? LIMIT 1');
+    $stmt->execute([$site, $eventName, $hash, $eventData, date('Y-m-d H:i:s', time() - 10)]);
     if ($stmt->fetch()) return;
 
     $stmt = $db->prepare('INSERT INTO events (site, event_name, event_data, page_path, visitor_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)');
