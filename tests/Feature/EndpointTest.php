@@ -587,6 +587,10 @@ test('api event drill-down returns zero-filled daily series and totals', functio
         ->and($data['eventSeries'][0]['count'])->toBe(0)
         ->and($data['eventTotals'])->toBe(['count' => 1, 'visitors' => 1])
         ->and($data['previousEventTotals'])->toBe(['count' => 0, 'visitors' => 0]);
+
+    // The drill-down answers with what the panel needs and skips the rest of the dashboard
+    expect($data)->toHaveKeys(['totals', 'pageviews', 'previousPageviews'])
+        ->not->toHaveKeys(['pages', 'referrers', 'bots', 'events']);
 });
 
 test('api event drill-down discovers data keys and groups by key', function () {

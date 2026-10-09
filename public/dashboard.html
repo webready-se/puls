@@ -340,6 +340,10 @@
   .event-chart.chart-scroll.compare { padding-top: 44px; }
   .event-chart .chart { height: 96px; gap: 4px; }
   .event-chart .chart-col { min-width: 26px; }
+  .event-chart.dense .chart { gap: 2px; }
+  .event-chart.dense .chart-col { min-width: 0; padding: 0; gap: 3px; }
+  .event-chart.dense .chart-bars { gap: 1px; }
+  .event-chart.dense .chart-bar { border-radius: 2px 2px 0 0; }
   .event-detail .trow { padding: 4px 0; }
   .event-detail .trow-bar { background: var(--border); }
   .event-detail .show-all { margin-top: 6px; }
@@ -1026,6 +1030,13 @@
       return;
     }
 
+    // Keep tab selection and any open event drill-down across the 60 s refresh
+    var activeTabs = [].map.call(document.querySelectorAll('#app .card-tab.active[data-tab]'), function(t) { return t.getAttribute('data-tab'); });
+    var openDetail = document.querySelector('.event-detail');
+    var openEvent = openDetail && openDetail._state
+      ? { name: openDetail._state.name, group: openDetail._state.data.eventGroupKey || '', showAll: openDetail._state.showAll }
+      : null;
+
     var totalViews = +d.totals.views;
     var totalVisitors = +d.totals.visitors;
     var pagesPerVisitor = totalVisitors > 0 ? (totalViews / totalVisitors).toFixed(1) : '—';
@@ -1106,6 +1117,16 @@
 
     if (!isShared) html += renderTools(d.site);
     app.innerHTML = html;
+
+    activeTabs.forEach(function(id) {
+      var tab = document.querySelector('.card-tab[data-tab="' + id + '"]');
+      if (tab && !tab.classList.contains('active')) switchPageTab(tab);
+    });
+    if (openEvent) {
+      [].forEach.call(document.querySelectorAll('.trow[data-event]'), function(row) {
+        if (row.getAttribute('data-event') === openEvent.name) openEventDetail(row, openEvent.name, openEvent.group, openEvent.showAll);
+      });
+    }
 
     // Screenshot helper: switch tabs if requested (used by scripts/screenshots.sh)
     var screenshotTabs = localStorage.getItem('puls-screenshot-tabs');
@@ -1581,7 +1602,7 @@
       var pct = (+r.count / max) * 100;
       var name = r.event_name.replace(/_/g, ' ');
       var visitors = r.visitors !== undefined ? num(r.visitors) + ' visitor' + (+r.visitors === 1 ? '' : 's') : '';
-      html += '<div class="trow trow-clickable" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
+      html += '<div class="trow trow-clickable" data-event="' + esc(r.event_name) + '" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
         '<span class="trow-label">' + esc(name) + (visitors ? ' <span style="color:var(--light);font-size:11px">' + visitors + '</span>' : '') + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#f16272"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
@@ -2310,15 +2331,19 @@
     // Close any other open detail
     document.querySelectorAll('.event-detail').forEach(function(d) { d.remove(); });
 
+    openEventDetail(el, eventName, null, false);
+  };
+
+  function openEventDetail(row, eventName, group, showAll) {
     var detail = document.createElement('div');
     detail.className = 'event-detail';
     detail.innerHTML = '<span style="color:var(--muted)">Loading...</span>';
-    el.after(detail);
-    fetchEventDetail(detail, eventName, null);
-  };
+    row.after(detail);
+    fetchEventDetail(detail, eventName, group, showAll);
+  }
 
   // group: null = let the API pick the most common key, '' = recent rows, 'key' = group on it
-  function fetchEventDetail(detail, eventName, group) {
+  function fetchEventDetail(detail, eventName, group, showAll) {
     var base = currentFrom && currentTo ? '?api&from=' + currentFrom + '&to=' + currentTo : '?api&days=' + currentDays;
     var url = apiUrl(base + '&event=' + encodeURIComponent(eventName));
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
@@ -2327,7 +2352,7 @@
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        detail._state = { name: eventName, data: data, showAll: false };
+        detail._state = { name: eventName, data: data, showAll: !!showAll };
         renderEventDetail(detail);
       })
       .catch(function() { detail.innerHTML = '<span style="color:var(--muted)">Failed to load</span>'; });
@@ -2335,7 +2360,7 @@
 
   window.setEventGroup = function(btn) {
     var detail = btn.closest('.event-detail');
-    fetchEventDetail(detail, detail._state.name, btn.getAttribute('data-key'));
+    fetchEventDetail(detail, detail._state.name, btn.getAttribute('data-key'), false);
   };
 
   window.setEventChartMode = function(btn) {
@@ -2369,13 +2394,14 @@
 
     if (d.eventSeries && d.eventSeries.length) {
       var showCompare = compareMode && d.previousEventSeries && d.previousEventSeries.length > 0;
+      var dense = d.eventSeries.length > 31;
       html += '<div class="event-chips">' +
         '<button class="event-chip' + (eventChartMode === 'count' ? ' active' : '') + '" data-mode="count" onclick="setEventChartMode(this)">Count</button>' +
         '<button class="event-chip' + (eventChartMode === 'rate' ? ' active' : '') + '" data-mode="rate" onclick="setEventChartMode(this)">Per 100 visitors</button>' +
         (showCompare ? '<span class="event-chips-label" style="margin-left:auto">vs previous period</span>' : '') +
       '</div>' +
-      '<div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + '"><div class="chart">' +
-        buildEventBars(d.eventSeries, showCompare ? d.previousEventSeries : null, d.pageviews, d.previousPageviews) +
+      '<div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + (dense ? ' dense' : '') + '"><div class="chart">' +
+        buildEventBars(d.eventSeries, showCompare ? d.previousEventSeries : null, d.pageviews, d.previousPageviews, dense) +
       '</div></div>';
     }
 
@@ -2396,7 +2422,7 @@
     detail.innerHTML = html;
   }
 
-  function buildEventBars(series, prevSeries, pageviews, previousPageviews) {
+  function buildEventBars(series, prevSeries, pageviews, previousPageviews, dense) {
     var visitorsByDate = {};
     (pageviews || []).concat(previousPageviews || []).forEach(function(p) { visitorsByDate[p.date] = +p.visitors; });
     function val(row) {
@@ -2410,10 +2436,16 @@
     var vals = series.map(val);
     if (prevSeries) vals = vals.concat(prevSeries.map(val));
     var maxVal = Math.max.apply(null, vals.concat([1]));
+    // Labels sit mid-step so the first and last are not clipped by the chart edges
+    var labelStep = dense ? Math.ceil(series.length / 6) : 1;
+    var labelOffset = Math.floor(labelStep / 2);
     var bars = '';
     series.forEach(function(row, i) {
       var v = val(row), h = Math.max(3, (v / maxVal) * 60), label = formatDay(row.date);
       var tipBody = num(row.count) + ' events, ' + num(row.visitors) + ' visitors';
+      // Dense ranges: no per-bar values, about six date labels, tooltip keeps the detail
+      var valHtml = dense ? '' : '<span class="chart-val">' + fmt(v) + '</span>';
+      var dateHtml = '<span class="chart-date">' + (dense && i % labelStep !== labelOffset ? '&nbsp;' : label) + '</span>';
       if (prevSeries) {
         var p = prevSeries[i], pv = p ? val(p) : 0, ph = p ? Math.max(3, (pv / maxVal) * 60) : 0;
         var delta = pv > 0 ? Math.round(((v - pv) / pv) * 100) : null;
@@ -2424,16 +2456,16 @@
             (p ? '<div style="color:var(--light);margin-top:2px">vs ' + formatDay(p.date) + ': ' + num(p.count) + ' / ' + num(p.visitors) + '</div>' : '') +
           '</div>' +
           '<div class="chart-bars">' +
-            '<div class="chart-bar-wrap"><span class="chart-val">' + fmt(v) + '</span><div class="chart-bar" style="height:' + h + 'px"></div></div>' +
-            '<div class="chart-bar-wrap"><span class="chart-val-prev">' + fmt(pv) + '</span><div class="chart-bar chart-bar-prev" style="height:' + ph + 'px"></div></div>' +
+            '<div class="chart-bar-wrap">' + valHtml + '<div class="chart-bar" style="height:' + h + 'px"></div></div>' +
+            '<div class="chart-bar-wrap">' + (dense ? '' : '<span class="chart-val-prev">' + fmt(pv) + '</span>') + '<div class="chart-bar chart-bar-prev" style="height:' + ph + 'px"></div></div>' +
           '</div>' +
-          '<span class="chart-date">' + label + '</span>' +
+          dateHtml +
         '</div>';
       } else {
         bars += '<div class="chart-col">' +
-          '<span class="chart-val">' + fmt(v) + '</span>' +
+          valHtml +
           '<div class="chart-bar" style="height:' + h + 'px"><div class="tip">' + label + ': ' + tipBody + '</div></div>' +
-          '<span class="chart-date">' + label + '</span>' +
+          dateHtml +
         '</div>';
       }
     });

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The 60-second dashboard refresh reset every card to its first tab and closed any open event drill-down. Tab selection and the open drill-down (including its group-by choice) now survive a refresh and a period change.
+
+### Changed
+
+- Event drill-down requests (`?api&event=<name>`) no longer run every dashboard query. The response carries only what the panel needs: totals, daily visitors for the rate, and the event fields.
+- Event drill-down chart for periods over 31 days drops per-bar values and shows about six date labels, so 90 days fit without horizontal scrolling. Hover still shows the detail per day.
+
 ## [1.14.0] — 2026-10-09
 
 ### Added

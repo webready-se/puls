@@ -815,6 +815,89 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
     $previousPageviews = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Event drill-down (?event=<name>): answered here with only what the panel
+    // needs, so a click does not re-run every dashboard query.
+    $eventDetail = [];
+    $eventSeries = [];
+    $previousEventSeries = [];
+    $eventTotals = null;
+    $previousEventTotals = null;
+    $eventKeys = [];
+    $eventGroup = [];
+    $eventGroupKey = null;
+    $eventName = $_GET['event'] ?? '';
+    $eventUrl = $_GET['event_url'] ?? '';
+    if ($eventName) {
+        if ($eventUrl) {
+            $stmt = $db->prepare("SELECT event_data, page_path, created_at FROM events WHERE event_name = ? AND json_extract(event_data, '\$.url') = ? AND {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT 50");
+            $stmt->execute(array_merge([$eventName, $eventUrl], $dateParams, $siteParams));
+        } else {
+            $stmt = $db->prepare("SELECT event_data, page_path, created_at FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT 50");
+            $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
+        }
+        $eventDetail = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($eventDetail as &$ed) {
+            $ed['event_data'] = $ed['event_data'] ? json_decode($ed['event_data'], true) : null;
+        }
+        unset($ed);
+
+        // Daily series for the event, zero-filled so the chart has one bar per day,
+        // plus the previous period for the compare overlay.
+        $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} GROUP BY date");
+        $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
+        $eventSeries = fill_days($stmt->fetchAll(PDO::FETCH_ASSOC), $since, $days);
+
+        $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND created_at >= ? AND created_at < ? {$siteFilter} GROUP BY date");
+        $stmt->execute(array_merge([$eventName, $prevSince, $since], $siteParams));
+        $previousEventSeries = fill_days($stmt->fetchAll(PDO::FETCH_ASSOC), $prevSince, $days);
+
+        $stmt = $db->prepare("SELECT COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter}");
+        $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
+        $eventTotals = array_map('intval', $stmt->fetch(PDO::FETCH_ASSOC));
+
+        $stmt = $db->prepare("SELECT COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND created_at >= ? AND created_at < ? {$siteFilter}");
+        $stmt->execute(array_merge([$eventName, $prevSince, $since], $siteParams));
+        $previousEventTotals = array_map('intval', $stmt->fetch(PDO::FETCH_ASSOC));
+
+        // Data keys seen in the most recent rows, so the dashboard can offer "group by".
+        // Nested objects and arrays are skipped: they cannot be grouped on.
+        $stmt = $db->prepare("SELECT j.key as key, COUNT(*) as count FROM (SELECT event_data FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND event_data IS NOT NULL ORDER BY created_at DESC LIMIT 500) e, json_each(e.event_data) j WHERE j.type NOT IN ('object', 'array') GROUP BY j.key ORDER BY count DESC, j.key");
+        $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
+        $eventKeys = array_map(fn ($k) => ['key' => $k['key'], 'count' => (int) $k['count']], $stmt->fetchAll(PDO::FETCH_ASSOC));
+
+        // Group by one data key: value, count, unique visitors. The key is bound
+        // as a quoted JSON path parameter, never interpolated into SQL.
+        // ?group=key groups on that key, ?group= (empty) disables grouping, and no
+        // ?group at all defaults to the most common key so the first open is useful.
+        $groupKey = isset($_GET['group'])
+            ? str_replace(['"', "\\"], '', mb_substr(trim($_GET['group']), 0, 50))
+            : ($eventKeys[0]['key'] ?? '');
+        if ($groupKey !== '') {
+            $eventGroupKey = $groupKey;
+            $jsonPath = '$."' . $groupKey . '"';
+            $stmt = $db->prepare("SELECT json_extract(event_data, ?) as value, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND json_extract(event_data, ?) IS NOT NULL GROUP BY value ORDER BY count DESC, value LIMIT 200");
+            $stmt->execute(array_merge([$jsonPath, $eventName], $dateParams, $siteParams, [$jsonPath]));
+            $eventGroup = array_map(fn ($g) => ['value' => $g['value'], 'count' => (int) $g['count'], 'visitors' => (int) $g['visitors']], $stmt->fetchAll(PDO::FETCH_ASSOC));
+        }
+    }
+    if ($eventName) {
+        return json_encode([
+            'days' => $days,
+            'site' => $site,
+            'totals' => $totals,
+            'pageviews' => $byDay,
+            'previousPageviews' => $previousPageviews,
+            'eventDetail' => $eventDetail,
+            'eventSeries' => $eventSeries,
+            'previousEventSeries' => $previousEventSeries,
+            'eventTotals' => $eventTotals,
+            'previousEventTotals' => $previousEventTotals,
+            'eventKeys' => $eventKeys,
+            'eventGroup' => $eventGroup,
+            'eventGroupKey' => $eventGroupKey,
+        ], JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
     // Bounce rate and session length (skip when filtered to a single path — not meaningful)
     $bounceRate = 0;
     $previousBounceRate = null;
@@ -1021,71 +1104,6 @@ function get_api_data(array $config, array $user): string
     $stmt = $db->prepare("SELECT event_name, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE {$dateFilter} {$siteFilter} {$eventsPathFilter} GROUP BY event_name ORDER BY count DESC LIMIT {$eventsLimit}");
     $stmt->execute(array_merge($dateParams, $siteParams, $pathParams));
     $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Event detail drill-down: recent occurrences of a specific event
-    $eventDetail = [];
-    $eventSeries = [];
-    $previousEventSeries = [];
-    $eventTotals = null;
-    $previousEventTotals = null;
-    $eventKeys = [];
-    $eventGroup = [];
-    $eventGroupKey = null;
-    $eventName = $_GET['event'] ?? '';
-    $eventUrl = $_GET['event_url'] ?? '';
-    if ($eventName) {
-        if ($eventUrl) {
-            $stmt = $db->prepare("SELECT event_data, page_path, created_at FROM events WHERE event_name = ? AND json_extract(event_data, '\$.url') = ? AND {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT 50");
-            $stmt->execute(array_merge([$eventName, $eventUrl], $dateParams, $siteParams));
-        } else {
-            $stmt = $db->prepare("SELECT event_data, page_path, created_at FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT 50");
-            $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
-        }
-        $eventDetail = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($eventDetail as &$ed) {
-            $ed['event_data'] = $ed['event_data'] ? json_decode($ed['event_data'], true) : null;
-        }
-        unset($ed);
-
-        // Daily series for the event, zero-filled so the chart has one bar per day,
-        // plus the previous period for the compare overlay.
-        $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} GROUP BY date");
-        $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
-        $eventSeries = fill_days($stmt->fetchAll(PDO::FETCH_ASSOC), $since, $days);
-
-        $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND created_at >= ? AND created_at < ? {$siteFilter} GROUP BY date");
-        $stmt->execute(array_merge([$eventName, $prevSince, $since], $siteParams));
-        $previousEventSeries = fill_days($stmt->fetchAll(PDO::FETCH_ASSOC), $prevSince, $days);
-
-        $stmt = $db->prepare("SELECT COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter}");
-        $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
-        $eventTotals = array_map('intval', $stmt->fetch(PDO::FETCH_ASSOC));
-
-        $stmt = $db->prepare("SELECT COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND created_at >= ? AND created_at < ? {$siteFilter}");
-        $stmt->execute(array_merge([$eventName, $prevSince, $since], $siteParams));
-        $previousEventTotals = array_map('intval', $stmt->fetch(PDO::FETCH_ASSOC));
-
-        // Data keys seen in the most recent rows, so the dashboard can offer "group by".
-        // Nested objects and arrays are skipped: they cannot be grouped on.
-        $stmt = $db->prepare("SELECT j.key as key, COUNT(*) as count FROM (SELECT event_data FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND event_data IS NOT NULL ORDER BY created_at DESC LIMIT 500) e, json_each(e.event_data) j WHERE j.type NOT IN ('object', 'array') GROUP BY j.key ORDER BY count DESC, j.key");
-        $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
-        $eventKeys = array_map(fn ($k) => ['key' => $k['key'], 'count' => (int) $k['count']], $stmt->fetchAll(PDO::FETCH_ASSOC));
-
-        // Group by one data key: value, count, unique visitors. The key is bound
-        // as a quoted JSON path parameter, never interpolated into SQL.
-        // ?group=key groups on that key, ?group= (empty) disables grouping, and no
-        // ?group at all defaults to the most common key so the first open is useful.
-        $groupKey = isset($_GET['group'])
-            ? str_replace(['"', "\\"], '', mb_substr(trim($_GET['group']), 0, 50))
-            : ($eventKeys[0]['key'] ?? '');
-        if ($groupKey !== '') {
-            $eventGroupKey = $groupKey;
-            $jsonPath = '$."' . $groupKey . '"';
-            $stmt = $db->prepare("SELECT json_extract(event_data, ?) as value, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND json_extract(event_data, ?) IS NOT NULL GROUP BY value ORDER BY count DESC, value LIMIT 200");
-            $stmt->execute(array_merge([$jsonPath, $eventName], $dateParams, $siteParams, [$jsonPath]));
-            $eventGroup = array_map(fn ($g) => ['value' => $g['value'], 'count' => (int) $g['count'], 'visitors' => (int) $g['visitors']], $stmt->fetchAll(PDO::FETCH_ASSOC));
-        }
-    }
 
     $stmt = $db->prepare("SELECT COUNT(DISTINCT event_name) FROM events WHERE {$dateFilter} {$siteFilter}");
     $stmt->execute(array_merge($dateParams, $siteParams));
