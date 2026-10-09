@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Accessibility (completes Epic 12). Card tabs follow the ARIA tabs pattern with arrow keys, Home and End. Show all, search and Settings are modal dialogs: focus moves in, Tab stays inside, Escape closes and focus returns to where it was. Every clickable element is reachable and operable from the keyboard. A screen reader status line announces period and site changes and opened drill-downs, but not the 60-second refresh. No visual change.
+
 ### Fixed
 
 - Release markers on charts covered the bar's value when the bar was among the tallest, and the marker line ran through the date label. The label now sits above the value with a short stem down to the line, the value gets a background over the line, and the line stops above the date.

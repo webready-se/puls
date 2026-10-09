@@ -155,12 +155,12 @@ Lighthouse: Performance 100, A11y 71 → target 90+. No visual regressions.
 
 **Medium risk (test visually)**
 - [x] **Color contrast** — darken muted text (#64748b → #475569) to meet WCAG AA 4.5:1
-- [ ] **Semantic buttons** — convert onclick divs to `<button>` with CSS reset (28 instances)
-- [ ] **Tab ARIA pattern** — role="tab", aria-selected on card tabs
+- [x] **Semantic buttons** — every clickable div gets role=button and tabindex, Enter/Space activate (applied to all rendered markup, no visual change)
+- [x] **Tab ARIA pattern** — tablist/tab/tabpanel, aria-selected, roving tabindex, arrow keys and Home/End
 
 **Larger effort**
-- [ ] **Modal focus trap** — prevent Tab from escaping overlays
-- [ ] **Screen reader live regions** — aria-live on #app for dynamic content updates
+- [x] **Modal focus trap** — Show all, search and Settings are modal dialogs: focus moves in, Tab is trapped, Escape closes, focus returns
+- [x] **Screen reader live regions** — a polite status region announces period/site changes and drill-downs the user opened (not the 60 s refresh)
 
 ## Epic 13: Automation
 
