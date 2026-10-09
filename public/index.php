@@ -691,16 +691,21 @@ function handle_event(array $config): void
         date('Y-m-d H:i:s'),
     ]);
 
-    cleanup_events($db);
+    cleanup_events($db, $config['events_retention_days']);
 }
 
-function cleanup_events(PDO $db): void
+/**
+ * Delete events older than $days (once per day). 0 keeps events forever.
+ * The default of 400 days keeps a full year for year-over-year comparison.
+ */
+function cleanup_events(PDO $db, int $days): void
 {
+    if ($days <= 0) return;
     $marker = dirname($db->query("PRAGMA database_list")->fetch()['file'] ?? __DIR__) . '/.events_cleanup';
     if (file_exists($marker) && file_get_contents($marker) === date('Y-m-d')) return;
 
     $stmt = $db->prepare('DELETE FROM events WHERE created_at < ?');
-    $stmt->execute([date('Y-m-d H:i:s', strtotime('-90 days'))]);
+    $stmt->execute([date('Y-m-d H:i:s', strtotime("-{$days} days"))]);
     file_put_contents($marker, date('Y-m-d'));
 }
 

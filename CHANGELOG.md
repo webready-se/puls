@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Custom events are kept for 400 days instead of 90, so a season can be compared with the same season a year later. Set `EVENTS_RETENTION_DAYS` in `.env` to change it, or `0` to keep events forever. Existing installs keep more history from the next daily cleanup on; nothing already deleted comes back.
+
 ## [1.18.0] — 2026-10-09
 
 ### Added

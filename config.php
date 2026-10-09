@@ -58,5 +58,8 @@ return [
 
     'lockout_minutes' => (int) ($_ENV['LOCKOUT_MINUTES'] ?? 15),
 
+    // Days to keep custom events; 0 keeps them forever
+    'events_retention_days' => max(0, (int) ($_ENV['EVENTS_RETENTION_DAYS'] ?? 400)),
+
     'ignored_bots' => array_filter(array_map('trim', explode(',', $_ENV['IGNORED_BOTS'] ?? ''))),
 ];
