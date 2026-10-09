@@ -191,7 +191,7 @@ Feedback from the first SPA integration (ten named events with data). Today even
 - [x] **App version on hits** — `data-version` stored on pageviews/events, release markers in charts, group by version
 - [x] **Saved breakdowns** — name a grouping ("Missed searches" = search_miss by query), show as its own card
 - [x] **New values highlighted** — values not seen before in a breakdown (also fits referrers)
-- [ ] **Daily rollups** — aggregate (day, site, event, key, value, count, visitors) before 90-day cleanup deletes raw rows
+- [x] **Longer event history** — `EVENTS_RETENTION_DAYS`, default 400 (0 = forever). Chosen over daily rollups: history does not slow queries and events are small, so keeping raw rows is simpler and keeps every detail
 - [x] **form_submit auto-event** — skip when `defaultPrevented`, read `data-puls-event` on the form for identity
 
 ---

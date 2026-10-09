@@ -206,6 +206,7 @@ SESSION_LIFETIME=2592000    # 30 days
 MAX_LOGIN_ATTEMPTS=5
 LOCKOUT_MINUTES=15
 IGNORED_BOTS=               # Bot UA patterns to exclude (comma-separated)
+EVENTS_RETENTION_DAYS=400   # Days to keep custom events, 0 = forever
 ```
 
 ### Allowed Origins
