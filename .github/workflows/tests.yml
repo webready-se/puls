@@ -30,3 +30,24 @@ jobs:
 
       - name: Run tests
         run: ./vendor/bin/pest
+
+  smoke:
+    runs-on: ubuntu-latest
+    name: Dashboard smoke test
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run dashboard smoke test
+        run: node scripts/smoke.mjs
