@@ -1,0 +1,91 @@
+date: 2026-08-21-122826
+phase: "Dependency/toolchain refresh, endpoint test coverage, sites-query perf, v1.12.0 release"
+notes: |
+  Session started as a "has anything gone stale?" check after a gap since
+  2026-05-22. Turned into four PRs and a release. All merged, branches
+  cleaned up (local + remote via `gh api`), no open PRs.
+
+  PR #25 - toolchain and the PHP 8.3 floor:
+  The 8.3 floor set back in #23 was never actually enforced. Two holes:
+  - Dockerfile still built on php:8.2-cli-alpine, below the floor and below
+    every version in the CI matrix.
+  - composer.lock had been resolved on a newer PHP and pulled symfony/console,
+    finder, process and string v8.0.x, all requiring >= 8.4. So
+    `composer install` failed on PHP 8.3, the version running in production.
+    CI never caught it because the workflows run `composer update`, which
+    re-resolves per matrix entry.
+  Fixed by pinning config.platform.php to 8.3 and re-resolving. Symfony
+  dropped to the 7.4 LTS line, Pest went 4.4.2 -> 4.7.8. Also added
+  .github/dependabot.yml and dropped the obsolete
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 flag from both workflows.
+
+  PR #26 - test coverage for `?csrf` and `?logout`, the only two endpoints
+  in the routing table with none, despite CLAUDE.md requiring a test per
+  endpoint. Assertions were mutation-checked (static csrf token, wrong
+  redirect target) to confirm they actually bite.
+
+  PR #27 - `SELECT DISTINCT site FROM pageviews` was a full scan of
+  idx_site_date, and dashboard.html:940 calls `?api&sites` on every load.
+  Replaced with a recursive loose index scan in both call sites (API +
+  getTrackedSites() in the CLI). 92.35 ms -> 0.01 ms on a 2M-row table.
+  Equivalence proven by running the same four new tests against the old
+  query with the change stashed.
+
+  PR #28 - Dependabot's first PR, within a minute of the config landing:
+  actions/checkout v5 -> v7. Merged after the release.
+
+  Released v1.12.0. Suite is 165 tests / 323 assertions.
+
+decisions:
+  - "Keep the PHP 8.3 floor rather than moving to 8.4. The Forge server runs
+     8.3, so the floor is the real production runtime, not a theoretical
+     minimum. Consequence: Pest stays on 4.x, since Pest 5 requires ^8.4 and
+     PHPUnit 13 requires >= 8.4.1. Pest 5 was tested and the suite passes on
+     it, so the upgrade is available whenever the floor moves."
+  - "config.platform.php pinned to 8.3 so composer.lock always resolves
+     against the floor. Side effect: the whole CI matrix now runs Pest 4
+     rather than 8.4/8.5 resolving Pest 5 independently. The application is
+     still tested on 8.3, 8.4 and 8.5; only the test runner is now uniform.
+     Documented in CONTRIBUTING.md so nobody removes the pin by mistake."
+  - "Dockerfile ships PHP 8.4 while the floor stays 8.3. The image is a
+     distribution artifact for other users, so it should run actively
+     supported PHP; the floor governs file-drop installs. Added a comment
+     header to the Dockerfile and a README note, since an image above the
+     declared floor reads as an inconsistency without explanation."
+  - "Released as 1.12.0 (minor) rather than 1.11.1 (patch). User's call -
+     the sites-query perf work plus Dependabot were judged notable enough."
+
+discussed_not_done:
+  - "Retention for the pageviews table: investigated and deliberately
+     dropped. Measured with traffic held constant, a 30-day dashboard query
+     took 38.7 ms against 30 days of history and 47.9 ms against 5 years, so
+     the range index already does its job and history does not slow the
+     dashboard. Storage is 266 bytes per pageview including indexes, so 5
+     years at 1500 pv/day is under 600 MB. Deleting data would cost the
+     product's value for a saving that does not matter. The measurement is
+     what surfaced the sites-query scan, which retention would have masked
+     rather than fixed."
+  - "Smoke-testing dashboard.html (2901 lines, the largest untested surface
+     in the project). scripts/screenshots.sh already runs headless Chrome, so
+     the infrastructure exists to load the dashboard against the demo DB and
+     fail on JS errors. Sized as its own epic, not started."
+  - "ROADMAP Epic 12 (accessibility) still has four open items: semantic
+     buttons, tab ARIA pattern, modal focus trap, screen reader live regions."
+
+next:
+  - "release.yml's two actions/checkout@v7 bumps are unvalidated - that
+     workflow only runs on tag push, so only tests.yml exercised v7. Low
+     risk (same action, same version, green in tests.yml), but check there
+     first if the next release misbehaves."
+  - "Consider the dashboard.html smoke test epic - biggest remaining
+     coverage gap."
+
+issues:
+  - "History contains both `docs: changelog for 1.11.1` and `docs: bump
+     unreleased changelog section to 1.12.0`. The first was already pushed
+     when the version changed, and amending would have required a force-push
+     to main, which was declined. Cosmetic only - nothing was overwritten."
+  - "Claimed during the session that actions/checkout@v5 was the current
+     major. It was not; v7 exists. Dependabot caught it immediately. Worth
+     remembering that action versions were not verified against upstream,
+     only read from the workflow files."
