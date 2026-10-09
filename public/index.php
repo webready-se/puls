@@ -915,6 +915,47 @@ function get_api_data(array $config, array $user): string
             respond(stream_get_contents($out), 200, 'text/csv; charset=utf-8', ['Content-Disposition' => 'attachment; filename="' . $filename . '"']);
         }
     }
+    // Funnel (?event=a&then=b): of the visitors who did A, how many did B at or
+    // after their first A. visitor_hash rotates daily, so a funnel spans one day.
+    $funnel = null;
+    $eventNames = [];
+    if ($eventName) {
+        $stmt = $db->prepare("SELECT DISTINCT event_name FROM events WHERE {$dateFilter} {$siteFilter} AND event_name != ? ORDER BY event_name LIMIT 200");
+        $stmt->execute(array_merge($dateParams, $siteParams, [$eventName]));
+        $eventNames = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $then = mb_substr(trim($_GET['then'] ?? ''), 0, 100);
+        if ($then !== '' && $then !== $eventName) {
+            $funnelSql = fn (string $range) => "SELECT DATE(a.first_at) as date, COUNT(*) as count,
+                    SUM(EXISTS (SELECT 1 FROM events b WHERE b.event_name = ? AND b.site = a.site AND b.visitor_hash = a.visitor_hash AND b.created_at >= a.first_at)) as visitors
+                FROM (SELECT site, visitor_hash, MIN(created_at) as first_at FROM events WHERE event_name = ? AND {$range} {$siteFilter} GROUP BY site, visitor_hash) a
+                GROUP BY date";
+
+            $stmt = $db->prepare($funnelSql($dateFilter));
+            $stmt->execute(array_merge([$then, $eventName], $dateParams, $siteParams));
+            $series = fill_days($stmt->fetchAll(PDO::FETCH_ASSOC), $since, $days);
+
+            $stmt = $db->prepare($funnelSql('created_at >= ? AND created_at < ?'));
+            $stmt->execute(array_merge([$then, $eventName, $prevSince, $since], $siteParams));
+            $prevSeries = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $started = array_sum(array_column($series, 'count'));
+            $converted = array_sum(array_column($series, 'visitors'));
+            $prevStarted = (int) array_sum(array_column($prevSeries, 'count'));
+            $prevConverted = (int) array_sum(array_column($prevSeries, 'visitors'));
+            $funnel = [
+                'then' => $then,
+                'started' => $started,
+                'converted' => $converted,
+                'rate' => $started > 0 ? round(100 * $converted / $started, 1) : null,
+                'previousStarted' => $prevStarted,
+                'previousConverted' => $prevConverted,
+                'previousRate' => $prevStarted > 0 ? round(100 * $prevConverted / $prevStarted, 1) : null,
+                'series' => array_map(fn ($d) => ['date' => $d['date'], 'started' => $d['count'], 'converted' => $d['visitors']], $series),
+            ];
+        }
+    }
+
     if ($eventName) {
         return json_encode([
             'days' => $days,
@@ -931,6 +972,8 @@ function get_api_data(array $config, array $user): string
             'eventGroup' => $eventGroup,
             'eventGroupKey' => $eventGroupKey,
             'eventGroupNew' => $eventGroupNew,
+            'eventNames' => $eventNames,
+            'funnel' => $funnel,
         ], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
