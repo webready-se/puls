@@ -1026,6 +1026,13 @@
       return;
     }
 
+    // Keep tab selection and any open event drill-down across the 60 s refresh
+    var activeTabs = [].map.call(document.querySelectorAll('#app .card-tab.active[data-tab]'), function(t) { return t.getAttribute('data-tab'); });
+    var openDetail = document.querySelector('.event-detail');
+    var openEvent = openDetail && openDetail._state
+      ? { name: openDetail._state.name, group: openDetail._state.data.eventGroupKey || '', showAll: openDetail._state.showAll }
+      : null;
+
     var totalViews = +d.totals.views;
     var totalVisitors = +d.totals.visitors;
     var pagesPerVisitor = totalVisitors > 0 ? (totalViews / totalVisitors).toFixed(1) : '—';
@@ -1106,6 +1113,16 @@
 
     if (!isShared) html += renderTools(d.site);
     app.innerHTML = html;
+
+    activeTabs.forEach(function(id) {
+      var tab = document.querySelector('.card-tab[data-tab="' + id + '"]');
+      if (tab && !tab.classList.contains('active')) switchPageTab(tab);
+    });
+    if (openEvent) {
+      [].forEach.call(document.querySelectorAll('.trow[data-event]'), function(row) {
+        if (row.getAttribute('data-event') === openEvent.name) openEventDetail(row, openEvent.name, openEvent.group, openEvent.showAll);
+      });
+    }
 
     // Screenshot helper: switch tabs if requested (used by scripts/screenshots.sh)
     var screenshotTabs = localStorage.getItem('puls-screenshot-tabs');
@@ -1581,7 +1598,7 @@
       var pct = (+r.count / max) * 100;
       var name = r.event_name.replace(/_/g, ' ');
       var visitors = r.visitors !== undefined ? num(r.visitors) + ' visitor' + (+r.visitors === 1 ? '' : 's') : '';
-      html += '<div class="trow trow-clickable" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
+      html += '<div class="trow trow-clickable" data-event="' + esc(r.event_name) + '" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
         '<span class="trow-label">' + esc(name) + (visitors ? ' <span style="color:var(--light);font-size:11px">' + visitors + '</span>' : '') + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#f16272"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
@@ -2310,15 +2327,19 @@
     // Close any other open detail
     document.querySelectorAll('.event-detail').forEach(function(d) { d.remove(); });
 
+    openEventDetail(el, eventName, null, false);
+  };
+
+  function openEventDetail(row, eventName, group, showAll) {
     var detail = document.createElement('div');
     detail.className = 'event-detail';
     detail.innerHTML = '<span style="color:var(--muted)">Loading...</span>';
-    el.after(detail);
-    fetchEventDetail(detail, eventName, null);
-  };
+    row.after(detail);
+    fetchEventDetail(detail, eventName, group, showAll);
+  }
 
   // group: null = let the API pick the most common key, '' = recent rows, 'key' = group on it
-  function fetchEventDetail(detail, eventName, group) {
+  function fetchEventDetail(detail, eventName, group, showAll) {
     var base = currentFrom && currentTo ? '?api&from=' + currentFrom + '&to=' + currentTo : '?api&days=' + currentDays;
     var url = apiUrl(base + '&event=' + encodeURIComponent(eventName));
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
@@ -2327,7 +2348,7 @@
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        detail._state = { name: eventName, data: data, showAll: false };
+        detail._state = { name: eventName, data: data, showAll: !!showAll };
         renderEventDetail(detail);
       })
       .catch(function() { detail.innerHTML = '<span style="color:var(--muted)">Failed to load</span>'; });
@@ -2335,7 +2356,7 @@
 
   window.setEventGroup = function(btn) {
     var detail = btn.closest('.event-detail');
-    fetchEventDetail(detail, detail._state.name, btn.getAttribute('data-key'));
+    fetchEventDetail(detail, detail._state.name, btn.getAttribute('data-key'), false);
   };
 
   window.setEventChartMode = function(btn) {
