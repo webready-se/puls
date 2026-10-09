@@ -305,8 +305,11 @@
   }
   .chart-col-compare:hover > .tip { display: block; }
   .chart-date { font-size: 10px; color: var(--light); white-space: nowrap; }
-  .chart-col.has-release { position: relative; background: linear-gradient(var(--accent), var(--accent)) center top / 1px 100% no-repeat; background-clip: content-box; }
-  .chart-release { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 9px; font-weight: 600; line-height: 14px; color: var(--accent); background: var(--card); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+  /* Release marker: line stops above the date label, label sits above the bar value */
+  .chart-col.has-release { position: relative; background: linear-gradient(var(--accent), var(--accent)) center top / 1px calc(100% - 18px) no-repeat; background-clip: content-box; }
+  .chart-col.has-release .chart-val { position: relative; z-index: 1; background: var(--card); padding: 0 3px; border-radius: 3px; }
+  .chart-release::after { content: ''; position: absolute; left: 50%; top: 100%; height: 16px; border-left: 1px solid var(--accent); }
+  .chart-release { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 9px; font-weight: 600; line-height: 14px; color: var(--accent); background: var(--card); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
   .chart-bars { display: flex; align-items: flex-end; gap: 3px; width: 100%; height: 100%; }
   .chart-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: flex-end; height: 100%; min-width: 0; }
   .chart-bar-wrap .chart-bar { width: 100%; }
@@ -366,7 +369,7 @@
   .event-chip { background: none; border: 1px solid var(--border); color: var(--muted); padding: 3px 9px; border-radius: 999px; font-size: 11px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
   .event-chip:hover { color: var(--text); border-color: var(--accent); }
   .event-chip.active { color: var(--accent); border-color: var(--accent); background: var(--card); }
-  .event-chart.chart-scroll { padding-top: 26px; }
+  .event-chart.chart-scroll { padding-top: 34px; }
   .event-chart.chart-scroll.compare { padding-top: 44px; }
   .event-chart .chart { height: 96px; gap: 4px; }
   .event-chart .chart-col { min-width: 26px; }

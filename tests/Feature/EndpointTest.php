@@ -2,17 +2,21 @@
 
 beforeAll(function () {
     require_once __DIR__ . '/../Support/helpers.php';
-    $GLOBALS['server_pid'] = startServer();
+    // Every run gets its own database and users file, so tests never touch the
+    // database configured in .env and never see rows left by an earlier run.
+    $GLOBALS['test_dir'] = sys_get_temp_dir() . '/puls-feature-' . getmypid() . '-' . uniqid();
+    mkdir($GLOBALS['test_dir']);
+    $GLOBALS['test_env'] = [
+        'DB_PATH' => $GLOBALS['test_dir'] . '/puls.sqlite',
+        'USERS_FILE' => $GLOBALS['test_dir'] . '/users.json',
+    ];
+    $GLOBALS['server_pid'] = startServer(8089, $GLOBALS['test_env']);
 });
 
 afterAll(function () {
     stopServer($GLOBALS['server_pid']);
     if (isset($GLOBALS['restricted_server'])) stopServer($GLOBALS['restricted_server']);
-    // Clean up test share tokens from the real database
-    try {
-        $db = getTestDb();
-        $db->exec("DELETE FROM share_tokens WHERE label = 'test'");
-    } catch (Throwable $e) {}
+    exec('rm -rf ' . escapeshellarg($GLOBALS['test_dir']));
 });
 
 test('health endpoint returns 200', function () {
@@ -351,34 +355,12 @@ test('collect accepts any origin when ALLOWED_ORIGINS is empty', function () {
 
 function getTestDb(): PDO
 {
-    // Read DB_PATH from .env without requiring config.php (which exits on missing APP_KEY)
-    $dbPath = 'data/puls.sqlite';
-    $envFile = __DIR__ . '/../../.env';
-    if (file_exists($envFile)) {
-        foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-            if (str_starts_with($line, 'DB_PATH=')) {
-                $dbPath = trim(substr($line, 8));
-                break;
-            }
-        }
-    }
-    // Resolve relative path from project root
-    if ($dbPath[0] !== '/') {
-        $dbPath = __DIR__ . '/../../' . $dbPath;
-    }
+    $dbPath = $GLOBALS['test_env']['DB_PATH'];
+    // The dev server creates the database on its first request
+    if (!file_exists($dbPath)) http('GET', '/?health');
 
     $db = new PDO('sqlite:' . $dbPath);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // Ensure share_tokens table exists (migration may not have run yet)
-    $db->exec('CREATE TABLE IF NOT EXISTS share_tokens (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        token TEXT NOT NULL UNIQUE,
-        site TEXT NOT NULL,
-        label TEXT,
-        expires_at TEXT,
-        created_at TEXT NOT NULL
-    )');
 
     return $db;
 }
@@ -880,12 +862,12 @@ test('breakdown add and remove require auth', function () {
 function restrictedSession(): string
 {
     if (!isset($GLOBALS['restricted_server'])) {
-        $file = sys_get_temp_dir() . '/puls-users-' . uniqid() . '.json';
+        $file = $GLOBALS['test_dir'] . '/restricted-users.json';
         file_put_contents($file, json_encode(['limited' => [
             'password' => password_hash('limited-pass', PASSWORD_BCRYPT, ['cost' => 4]),
             'sites' => ['test'],
         ]]));
-        $GLOBALS['restricted_server'] = startServer(8090, ['USERS_FILE' => $file]);
+        $GLOBALS['restricted_server'] = startServer(8090, ['USERS_FILE' => $file, 'DB_PATH' => $GLOBALS['test_env']['DB_PATH']]);
     }
     $cookieFrom = function (array $headers): ?string {
         $cookie = null;
