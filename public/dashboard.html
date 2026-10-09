@@ -329,6 +329,20 @@
   .event-detail-data { color: var(--text); font-family: monospace; font-size: 11px; word-break: break-all; }
   .event-detail-page { color: var(--light); font-size: 11px; min-width: 80px; }
   .event-detail-time { color: var(--muted); font-size: 11px; white-space: nowrap; margin-left: auto; }
+  .event-summary { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+  .event-summary b { color: var(--text); font-weight: 600; }
+  .event-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 6px; }
+  .event-chips-label { font-size: 11px; color: var(--light); margin-right: 2px; }
+  .event-chip { background: none; border: 1px solid var(--border); color: var(--muted); padding: 3px 9px; border-radius: 999px; font-size: 11px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .event-chip:hover { color: var(--text); border-color: var(--accent); }
+  .event-chip.active { color: var(--accent); border-color: var(--accent); background: var(--card); }
+  .event-chart.chart-scroll { padding-top: 26px; }
+  .event-chart.chart-scroll.compare { padding-top: 44px; }
+  .event-chart .chart { height: 96px; gap: 4px; }
+  .event-chart .chart-col { min-width: 26px; }
+  .event-detail .trow { padding: 4px 0; }
+  .event-detail .trow-bar { background: var(--border); }
+  .event-detail .show-all { margin-top: 6px; }
 
   /* Card tabs */
   .card-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: -22px -22px 16px; padding: 0 22px; }
@@ -1322,6 +1336,8 @@
     var wrapper = document.createElement('div');
     wrapper.innerHTML = renderChart(lastData);
     card.replaceWith(wrapper.firstChild);
+    // An open event drill-down follows the same compare setting
+    document.querySelectorAll('.event-detail').forEach(function(d) { if (d._state) renderEventDetail(d); });
   };
 
   function renderTable(title, rows, labelKey, valKey, color) {
@@ -2282,6 +2298,8 @@
     }
   });
 
+  var eventChartMode = localStorage.getItem('puls-event-mode') === 'rate' ? 'rate' : 'count';
+
   window.loadEventDetail = function(eventName, el) {
     // Toggle: close if already open
     var existing = el.nextElementSibling;
@@ -2292,46 +2310,178 @@
     // Close any other open detail
     document.querySelectorAll('.event-detail').forEach(function(d) { d.remove(); });
 
-    var url = apiUrl('?api&days=' + currentDays + '&event=' + encodeURIComponent(eventName));
-    if (currentFrom && currentTo) url = apiUrl('?api&from=' + currentFrom + '&to=' + currentTo + '&event=' + encodeURIComponent(eventName));
-    if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
-
     var detail = document.createElement('div');
     detail.className = 'event-detail';
     detail.innerHTML = '<span style="color:var(--muted)">Loading...</span>';
     el.after(detail);
+    fetchEventDetail(detail, eventName, null);
+  };
+
+  // group: null = let the API pick the most common key, '' = recent rows, 'key' = group on it
+  function fetchEventDetail(detail, eventName, group) {
+    var base = currentFrom && currentTo ? '?api&from=' + currentFrom + '&to=' + currentTo : '?api&days=' + currentDays;
+    var url = apiUrl(base + '&event=' + encodeURIComponent(eventName));
+    if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+    if (group !== null) url += '&group=' + encodeURIComponent(group);
 
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        var items = data.eventDetail || [];
-        if (!items.length) {
-          detail.innerHTML = '<span style="color:var(--muted)">No detail data</span>';
-          return;
-        }
-        var html = '';
-        items.slice(0, 20).forEach(function(item) {
-          var dataStr = '';
-          if (item.event_data) {
-            var parts = [];
-            for (var k in item.event_data) {
-              parts.push(k + ': ' + item.event_data[k]);
-            }
-            dataStr = parts.join(', ');
-          }
-          html += '<div class="event-detail-row">' +
-            (dataStr ? '<span class="event-detail-data">' + esc(dataStr) + '</span>' : '') +
-            '<span class="event-detail-page">' + esc(item.page_path) + '</span>' +
-            '<span class="event-detail-time">' + formatTime(item.created_at) + '</span>' +
-          '</div>';
-        });
-        if (items.length > 20) {
-          html += '<div style="padding:4px 0;color:var(--muted);font-size:11px">+ ' + (items.length - 20) + ' more</div>';
-        }
-        detail.innerHTML = html;
+        detail._state = { name: eventName, data: data, showAll: false };
+        renderEventDetail(detail);
       })
       .catch(function() { detail.innerHTML = '<span style="color:var(--muted)">Failed to load</span>'; });
+  }
+
+  window.setEventGroup = function(btn) {
+    var detail = btn.closest('.event-detail');
+    fetchEventDetail(detail, detail._state.name, btn.getAttribute('data-key'));
   };
+
+  window.setEventChartMode = function(btn) {
+    eventChartMode = btn.getAttribute('data-mode');
+    localStorage.setItem('puls-event-mode', eventChartMode);
+    renderEventDetail(btn.closest('.event-detail'));
+  };
+
+  window.showAllEventGroup = function(btn) {
+    var detail = btn.closest('.event-detail');
+    detail._state.showAll = true;
+    renderEventDetail(detail);
+  };
+
+  function renderEventDetail(detail) {
+    var st = detail._state, d = st.data;
+    var tot = d.eventTotals || { count: 0, visitors: 0 };
+    var prev = d.previousEventTotals || { count: 0, visitors: 0 };
+    var siteVisitors = d.totals ? +d.totals.visitors : 0;
+    var rate = siteVisitors ? (tot.count / siteVisitors * 100) : 0;
+    var delta = prev.count > 0 ? Math.round(((tot.count - prev.count) / prev.count) * 100) : null;
+    var deltaHtml = delta === null ? '' :
+      '<span style="color:var(--' + (delta >= 0 ? 'green' : 'red') + ')">' + (delta >= 0 ? '\u25B2' : '\u25BC') + Math.abs(delta) + '% vs previous</span>';
+
+    var html = '<div class="event-summary">' +
+      '<span><b>' + num(tot.count) + '</b> events</span>' +
+      '<span><b>' + num(tot.visitors) + '</b> visitors</span>' +
+      (siteVisitors ? '<span><b>' + rate.toFixed(1) + '</b> per 100 visitors</span>' : '') +
+      deltaHtml +
+    '</div>';
+
+    if (d.eventSeries && d.eventSeries.length) {
+      var showCompare = compareMode && d.previousEventSeries && d.previousEventSeries.length > 0;
+      html += '<div class="event-chips">' +
+        '<button class="event-chip' + (eventChartMode === 'count' ? ' active' : '') + '" data-mode="count" onclick="setEventChartMode(this)">Count</button>' +
+        '<button class="event-chip' + (eventChartMode === 'rate' ? ' active' : '') + '" data-mode="rate" onclick="setEventChartMode(this)">Per 100 visitors</button>' +
+        (showCompare ? '<span class="event-chips-label" style="margin-left:auto">vs previous period</span>' : '') +
+      '</div>' +
+      '<div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + '"><div class="chart">' +
+        buildEventBars(d.eventSeries, showCompare ? d.previousEventSeries : null, d.pageviews, d.previousPageviews) +
+      '</div></div>';
+    }
+
+    var keys = d.eventKeys || [];
+    if (keys.length) {
+      html += '<div class="event-chips"><span class="event-chips-label">Group by</span>';
+      keys.forEach(function(k) {
+        html += '<button class="event-chip' + (k.key === d.eventGroupKey ? ' active' : '') + '" data-key="' + esc(k.key) + '" onclick="setEventGroup(this)">' + esc(k.key) + '</button>';
+      });
+      html += '<button class="event-chip' + (!d.eventGroupKey ? ' active' : '') + '" data-key="" onclick="setEventGroup(this)">Recent</button></div>';
+    }
+
+    if (d.eventGroupKey && d.eventGroup) {
+      html += renderEventGroup(d.eventGroup, st.showAll);
+    } else {
+      html += renderEventRecent(d.eventDetail || []);
+    }
+    detail.innerHTML = html;
+  }
+
+  function buildEventBars(series, prevSeries, pageviews, previousPageviews) {
+    var visitorsByDate = {};
+    (pageviews || []).concat(previousPageviews || []).forEach(function(p) { visitorsByDate[p.date] = +p.visitors; });
+    function val(row) {
+      if (eventChartMode === 'rate') {
+        var v = visitorsByDate[row.date] || 0;
+        return v ? Math.round(row.count / v * 1000) / 10 : 0;
+      }
+      return +row.count;
+    }
+    function fmt(v) { return eventChartMode === 'rate' ? v.toFixed(1) : num(v); }
+    var vals = series.map(val);
+    if (prevSeries) vals = vals.concat(prevSeries.map(val));
+    var maxVal = Math.max.apply(null, vals.concat([1]));
+    var bars = '';
+    series.forEach(function(row, i) {
+      var v = val(row), h = Math.max(3, (v / maxVal) * 60), label = formatDay(row.date);
+      var tipBody = num(row.count) + ' events, ' + num(row.visitors) + ' visitors';
+      if (prevSeries) {
+        var p = prevSeries[i], pv = p ? val(p) : 0, ph = p ? Math.max(3, (pv / maxVal) * 60) : 0;
+        var delta = pv > 0 ? Math.round(((v - pv) / pv) * 100) : null;
+        var deltaStr = delta === null ? '' : (delta >= 0 ? ' (+' + delta + '%)' : ' (' + delta + '%)');
+        bars += '<div class="chart-col chart-col-compare">' +
+          '<div class="tip" style="text-align:left"><div style="font-weight:600;margin-bottom:4px">' + label + '<span style="color:' + (delta === null ? '#64748b' : (delta >= 0 ? '#059669' : '#dc2626')) + ';font-weight:500">' + deltaStr + '</span></div>' +
+            '<div>' + tipBody + '</div>' +
+            (p ? '<div style="color:var(--light);margin-top:2px">vs ' + formatDay(p.date) + ': ' + num(p.count) + ' / ' + num(p.visitors) + '</div>' : '') +
+          '</div>' +
+          '<div class="chart-bars">' +
+            '<div class="chart-bar-wrap"><span class="chart-val">' + fmt(v) + '</span><div class="chart-bar" style="height:' + h + 'px"></div></div>' +
+            '<div class="chart-bar-wrap"><span class="chart-val-prev">' + fmt(pv) + '</span><div class="chart-bar chart-bar-prev" style="height:' + ph + 'px"></div></div>' +
+          '</div>' +
+          '<span class="chart-date">' + label + '</span>' +
+        '</div>';
+      } else {
+        bars += '<div class="chart-col">' +
+          '<span class="chart-val">' + fmt(v) + '</span>' +
+          '<div class="chart-bar" style="height:' + h + 'px"><div class="tip">' + label + ': ' + tipBody + '</div></div>' +
+          '<span class="chart-date">' + label + '</span>' +
+        '</div>';
+      }
+    });
+    return bars;
+  }
+
+  function renderEventGroup(rows, showAll) {
+    if (!rows.length) return '<span style="color:var(--muted)">No values for this key in the period</span>';
+    var limit = showAll ? rows.length : 20;
+    var max = Math.max.apply(null, rows.map(function(r) { return +r.count; }));
+    var html = '';
+    rows.slice(0, limit).forEach(function(r) {
+      var value = String(r.value);
+      html += '<div class="trow">' +
+        '<span class="trow-label" title="' + esc(value) + '">' + esc(value) + ' <span style="color:var(--light);font-size:11px">' + num(r.visitors) + '</span></span>' +
+        '<div class="trow-bar"><div class="trow-fill" style="width:' + (+r.count / max * 100) + '%;background:#f16272"></div></div>' +
+        '<span class="trow-val">' + num(r.count) + '</span>' +
+      '</div>';
+    });
+    if (rows.length > limit) {
+      html += '<button class="show-all" onclick="showAllEventGroup(this)">Show all (' + rows.length + ')</button>';
+    }
+    return html;
+  }
+
+  function renderEventRecent(items) {
+    if (!items.length) return '<span style="color:var(--muted)">No detail data</span>';
+    var html = '';
+    items.slice(0, 20).forEach(function(item) {
+      var dataStr = '';
+      if (item.event_data) {
+        var parts = [];
+        for (var k in item.event_data) {
+          parts.push(k + ': ' + item.event_data[k]);
+        }
+        dataStr = parts.join(', ');
+      }
+      html += '<div class="event-detail-row">' +
+        (dataStr ? '<span class="event-detail-data">' + esc(dataStr) + '</span>' : '') +
+        '<span class="event-detail-page">' + esc(item.page_path) + '</span>' +
+        '<span class="event-detail-time">' + formatTime(item.created_at) + '</span>' +
+      '</div>';
+    });
+    if (items.length > 20) {
+      html += '<div style="padding:4px 0;color:var(--muted);font-size:11px">+ ' + (items.length - 20) + ' more</div>';
+    }
+    return html;
+  }
 
   window.toggleGoal = function(path) {
     var goalPaths = (lastData && lastData.goals) ? lastData.goals.map(function(g) { return g.path; }) : [];

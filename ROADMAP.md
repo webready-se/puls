@@ -180,9 +180,9 @@ Feedback from the first SPA integration (ten named events with data). Today even
 - [x] **Docs** — naming conventions, data rules, 1000-char limit, TypeScript declaration
 
 **Next feature**
-- [ ] **Group by data key** — drill-down picks a key from `event_data` (auto-discovered from recent rows), shows value, count, unique visitors. Generalises the hardcoded outbound `url` grouping.
-- [ ] **Trend per event** — day-by-day chart on click with the same date range and compare mode as pageviews
-- [ ] **Rate, not just count** — events per 100 visitors next to the count, toggle in the trend
+- [x] **Group by data key** — drill-down picks a key from `event_data` (auto-discovered from recent rows), shows value, count, unique visitors. Generalises the hardcoded outbound `url` grouping.
+- [x] **Trend per event** — day-by-day chart on click with the same date range and compare mode as pageviews
+- [x] **Rate, not just count** — events per 100 visitors next to the count, toggle in the trend
 
 **Later**
 - [ ] **Two-event funnel** — pick two event names, get ratio and trend (feedback_opened vs feedback_sent)

@@ -51,7 +51,7 @@ Puls is designed to be GDPR-friendly without consent banners:
 - **PWA** — installable, pull-to-refresh
 
 **Tracking**
-- **Custom events** — `puls.track('signup', { plan: 'pro' })` JS API
+- **Custom events** — `puls.track('signup', { plan: 'pro' })` JS API, with per-event trend, rate per 100 visitors and group-by on any data key
 - **Auto events** — zero-config tracking of phone clicks, email clicks, downloads, form submissions
 - **Outbound links** — auto-track clicks on external links
 - **UTM campaigns** — full UTM support with guided link wizard

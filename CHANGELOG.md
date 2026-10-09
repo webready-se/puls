@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Event drill-down shows a day-by-day trend for the event, as count or per 100 visitors, with the previous period overlaid when Compare is on. Totals, unique visitors, rate and change versus the previous period sit above the chart.
+- Group by any data key in the event drill-down. Keys are discovered from the event's recent rows and offered as chips; the most common key is selected on open. Each value is listed with count and unique visitors. The raw recent rows remain available under Recent.
+- API: `?api&event=<name>` now returns `eventSeries`, `previousEventSeries`, `eventTotals`, `previousEventTotals`, `eventKeys`, `eventGroup` and `eventGroupKey`. `&group=<key>` picks the key, `&group=` disables grouping. Available through share tokens.
+
 ## [1.13.0] — 2026-10-09
 
 ### Added
