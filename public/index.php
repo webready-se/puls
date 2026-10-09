@@ -509,10 +509,12 @@ function get_tracking_script(): string
           else{var ext=h.split('?')[0].split('.').pop().toLowerCase();if(['pdf','doc','docx','xls','xlsx','csv','zip','rar'].indexOf(ext)>=0){puls.track('download',{file:h.split('/').pop().split('?')[0],url:h,page:location.pathname})}}
         },true);
         document.addEventListener('submit',function(e){
+          if(e.defaultPrevented)return;
           var f=e.target.closest('form');if(!f)return;
-          var action=f.getAttribute('action')||location.pathname;
-          puls.track('form_submit',{action:action,page:location.pathname})
-        },true);
+          var d={action:f.getAttribute('action')||location.pathname,page:location.pathname};
+          var id=f.dataset.pulsEvent||f.getAttribute('name')||f.id;if(id)d.form=id;
+          puls.track('form_submit',d)
+        });
       }
     })();
     JS;
