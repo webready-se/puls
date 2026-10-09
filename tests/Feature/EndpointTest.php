@@ -766,15 +766,17 @@ test('api event funnel does not count the second event when it came first', func
 });
 
 test('api event drill-down lists other event names for the funnel picker', function () {
-    $a = 'picker_a_' . uniqid();
-    $b = 'picker_b_' . uniqid();
+    // Own site: the shared test DB accumulates event names across runs
+    $site = 'picker-' . uniqid();
+    $a = 'picker_a';
+    $b = 'picker_b';
     foreach ([$a, $b] as $name) {
         http('POST', '/?event', [
             'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
-            'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
+            'content' => json_encode(['event_name' => $name, 'site' => $site, 'page_path' => '/']),
         ]);
     }
-    $token = createTestShareToken('test');
+    $token = createTestShareToken($site);
     $data = json_decode(http('GET', '/?api&days=1&share=' . $token . '&event=' . $a)['body'], true);
     expect($data['eventNames'])->toContain($b)
         ->not->toContain($a)
