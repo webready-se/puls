@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Two-step funnel in the event drill-down: pick a second event under "Then" to see how many visitors who did the first went on to the second the same day, with the rate, change vs previous period and a per-day bar. API: `?api&event=a&then=b` returns `funnel`, and the drill-down lists `eventNames` for the picker.
+
 ## [1.15.0] — 2026-10-09
 
 ### Added

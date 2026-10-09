@@ -717,6 +717,70 @@ test('goals table has a type column after migration', function () {
     expect($cols)->toContain('type');
 });
 
+test('api event funnel counts visitors who did the second event after the first', function () {
+    $a = 'funnel_open_' . uniqid();
+    $b = 'funnel_sent_' . uniqid();
+    $send = function (string $name, string $ua) {
+        http('POST', '/?event', [
+            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+            'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
+        ]);
+    };
+    // Chrome opens then sends, Firefox only opens, Safari sends without opening
+    $send($a, 'Mozilla/5.0 Chrome/120.0');
+    $send($a, 'Mozilla/5.0 Firefox/130.0');
+    sleep(1);
+    $send($b, 'Mozilla/5.0 Chrome/120.0');
+    $send($b, 'Mozilla/5.0 Safari/605.1');
+
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&days=2&share=' . $token . '&event=' . $a . '&then=' . $b);
+    expect($r['status'])->toBe(200);
+    $f = json_decode($r['body'], true)['funnel'];
+
+    expect($f['then'])->toBe($b)
+        ->and($f['started'])->toBe(2)
+        ->and($f['converted'])->toBe(1)
+        ->and($f['rate'])->toEqual(50)
+        ->and($f['previousStarted'])->toBe(0)
+        ->and($f['previousRate'])->toBeNull()
+        ->and($f['series'])->toHaveCount(2)
+        ->and($f['series'][1])->toBe(['date' => date('Y-m-d'), 'started' => 2, 'converted' => 1]);
+});
+
+test('api event funnel does not count the second event when it came first', function () {
+    $a = 'funnel_a_' . uniqid();
+    $b = 'funnel_b_' . uniqid();
+    $opts = fn (string $name) => [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
+    ];
+    http('POST', '/?event', $opts($b));
+    sleep(1);
+    http('POST', '/?event', $opts($a));
+
+    $token = createTestShareToken('test');
+    $f = json_decode(http('GET', '/?api&days=1&share=' . $token . '&event=' . $a . '&then=' . $b)['body'], true)['funnel'];
+    expect($f['started'])->toBe(1)
+        ->and($f['converted'])->toBe(0);
+});
+
+test('api event drill-down lists other event names for the funnel picker', function () {
+    $a = 'picker_a_' . uniqid();
+    $b = 'picker_b_' . uniqid();
+    foreach ([$a, $b] as $name) {
+        http('POST', '/?event', [
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
+        ]);
+    }
+    $token = createTestShareToken('test');
+    $data = json_decode(http('GET', '/?api&days=1&share=' . $token . '&event=' . $a)['body'], true);
+    expect($data['eventNames'])->toContain($b)
+        ->not->toContain($a)
+        ->and($data['funnel'])->toBeNull();
+});
+
 test('share API with path filter does not crash on events table', function () {
     // Regression: events table has page_path, not path — using $pathFilter caused SQL error
     $token = createTestShareToken('test');

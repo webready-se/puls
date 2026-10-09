@@ -335,6 +335,15 @@
   .event-summary b { color: var(--text); font-weight: 600; }
   .event-csv { margin-left: auto; font-size: 11px; color: var(--muted); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; }
   .event-csv:hover { color: var(--accent); border-color: var(--accent); }
+  .event-select { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; font-family: inherit; padding: 3px 6px; max-width: 220px; }
+  .event-funnel { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 2px 0 8px; }
+  .event-funnel-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12px; color: var(--muted); }
+  .event-funnel-head b { color: var(--text); font-weight: 600; }
+  .event-funnel-rate { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .event-funnel-days { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin-top: 8px; }
+  .event-funnel-day { flex: 1; display: flex; align-items: flex-end; height: 100%; }
+  .event-funnel-bar { width: 100%; background: var(--border); border-radius: 2px 2px 0 0; display: flex; align-items: flex-end; overflow: hidden; }
+  .event-funnel-fill { width: 100%; background: var(--accent); }
   .event-new { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--green); border: 1px solid var(--green); border-radius: 999px; padding: 0 5px; margin-left: 5px; vertical-align: 1px; }
   .event-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 6px; }
   .event-chips-label { font-size: 11px; color: var(--light); margin-right: 2px; }
@@ -1039,7 +1048,7 @@
     var activeTabs = [].map.call(document.querySelectorAll('#app .card-tab.active[data-tab]'), function(t) { return t.getAttribute('data-tab'); });
     var openDetail = document.querySelector('.event-detail');
     var openEvent = openDetail && openDetail._state
-      ? { name: openDetail._state.name, group: openDetail._state.data.eventGroupKey || '', showAll: openDetail._state.showAll }
+      ? { name: openDetail._state.name, group: openDetail._state.data.eventGroupKey || '', showAll: openDetail._state.showAll, then: openDetail._state.then }
       : null;
 
     var totalViews = +d.totals.views;
@@ -1129,7 +1138,7 @@
     });
     if (openEvent) {
       [].forEach.call(document.querySelectorAll('.trow[data-event]'), function(row) {
-        if (row.getAttribute('data-event') === openEvent.name) openEventDetail(row, openEvent.name, openEvent.group, openEvent.showAll);
+        if (row.getAttribute('data-event') === openEvent.name) openEventDetail(row, openEvent.name, openEvent.group, openEvent.showAll, openEvent.then);
       });
     }
 
@@ -2340,12 +2349,12 @@
     openEventDetail(el, eventName, null, false);
   };
 
-  function openEventDetail(row, eventName, group, showAll) {
+  function openEventDetail(row, eventName, group, showAll, then) {
     var detail = document.createElement('div');
     detail.className = 'event-detail';
     detail.innerHTML = '<span style="color:var(--muted)">Loading...</span>';
     row.after(detail);
-    fetchEventDetail(detail, eventName, group, showAll);
+    fetchEventDetail(detail, eventName, group, showAll, then);
   }
 
   // group: null = let the API pick the most common key, '' = recent rows, 'key' = group on it
@@ -2356,14 +2365,15 @@
     return url;
   }
 
-  function fetchEventDetail(detail, eventName, group, showAll) {
+  function fetchEventDetail(detail, eventName, group, showAll, then) {
     var url = eventApiUrl(eventName);
     if (group !== null) url += '&group=' + encodeURIComponent(group);
+    if (then) url += '&then=' + encodeURIComponent(then);
 
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        detail._state = { name: eventName, data: data, showAll: !!showAll };
+        detail._state = { name: eventName, data: data, showAll: !!showAll, then: then || '' };
         renderEventDetail(detail);
       })
       .catch(function() { detail.innerHTML = '<span style="color:var(--muted)">Failed to load</span>'; });
@@ -2371,7 +2381,13 @@
 
   window.setEventGroup = function(btn) {
     var detail = btn.closest('.event-detail');
-    fetchEventDetail(detail, detail._state.name, btn.getAttribute('data-key'), false);
+    fetchEventDetail(detail, detail._state.name, btn.getAttribute('data-key'), false, detail._state.then);
+  };
+
+  window.setEventFunnel = function(sel) {
+    var detail = sel.closest('.event-detail');
+    var st = detail._state;
+    fetchEventDetail(detail, st.name, st.data.eventGroupKey || '', st.showAll, sel.value);
   };
 
   window.setEventChartMode = function(btn) {
@@ -2417,6 +2433,8 @@
       '</div></div>';
     }
 
+    html += renderEventFunnel(st, d);
+
     var keys = d.eventKeys || [];
     if (keys.length) {
       html += '<div class="event-chips"><span class="event-chips-label">Group by</span>';
@@ -2434,6 +2452,41 @@
       html += renderEventRecent(d.eventDetail || []);
     }
     detail.innerHTML = html;
+  }
+
+  // Two-step funnel: of the visitors who did this event, how many did the chosen one after it
+  function renderEventFunnel(st, d) {
+    var names = d.eventNames || [];
+    if (!names.length) return '';
+    var html = '<div class="event-chips"><span class="event-chips-label">Then</span>' +
+      '<select class="event-select" onchange="setEventFunnel(this)" aria-label="Second event for funnel">' +
+        '<option value="">Pick an event…</option>';
+    names.forEach(function(n) {
+      html += '<option value="' + esc(n) + '"' + (n === st.then ? ' selected' : '') + '>' + esc(n.replace(/_/g, ' ')) + '</option>';
+    });
+    html += '</select></div>';
+
+    var f = d.funnel;
+    if (!f) return html;
+    var delta = f.rate !== null && f.previousRate !== null ? Math.round((f.rate - f.previousRate) * 10) / 10 : null;
+    html += '<div class="event-funnel">' +
+      '<div class="event-funnel-head">' +
+        '<span class="event-funnel-rate">' + (f.rate === null ? '–' : f.rate.toFixed(1) + '%') + '</span>' +
+        '<span>' + num(f.converted) + ' of ' + num(f.started) + ' visitors went on to <b>' + esc(f.then.replace(/_/g, ' ')) + '</b> the same day</span>' +
+        (delta === null ? '' : '<span style="color:var(--' + (delta >= 0 ? 'green' : 'red') + ')">' + (delta >= 0 ? '\u25B2' : '\u25BC') + Math.abs(delta) + ' pts vs previous</span>') +
+      '</div>' +
+      '<div class="event-funnel-days">';
+    var maxStarted = Math.max.apply(null, f.series.map(function(r) { return r.started; }).concat([1]));
+    f.series.forEach(function(r) {
+      var h = Math.max(2, r.started / maxStarted * 36);
+      var ch = r.started ? h * r.converted / r.started : 0;
+      var pct = r.started ? Math.round(100 * r.converted / r.started) + '%' : 'no starts';
+      html += '<div class="event-funnel-day" title="' + formatDay(r.date) + ': ' + num(r.converted) + ' of ' + num(r.started) + ' (' + pct + ')">' +
+        '<div class="event-funnel-bar" style="height:' + h + 'px"><div class="event-funnel-fill" style="height:' + ch + 'px"></div></div>' +
+      '</div>';
+    });
+    html += '</div></div>';
+    return html;
   }
 
   function buildEventBars(series, prevSeries, pageviews, previousPageviews, dense) {
