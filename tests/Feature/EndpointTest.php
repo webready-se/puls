@@ -7,6 +7,7 @@ beforeAll(function () {
 
 afterAll(function () {
     stopServer($GLOBALS['server_pid']);
+    if (isset($GLOBALS['restricted_server'])) stopServer($GLOBALS['restricted_server']);
     // Clean up test share tokens from the real database
     try {
         $db = getTestDb();
@@ -870,6 +871,62 @@ test('breakdown add and remove require auth', function () {
     ];
     expect(http('POST', '/?breakdown_add', $opts)['status'])->toBe(401)
         ->and(http('POST', '/?breakdown_remove', $opts)['status'])->toBe(401);
+});
+
+/**
+ * Log in as a user restricted to the "test" site on a second dev server that
+ * reads a throwaway users file. Returns the session cookie header line.
+ */
+function restrictedSession(): string
+{
+    if (!isset($GLOBALS['restricted_server'])) {
+        $file = sys_get_temp_dir() . '/puls-users-' . uniqid() . '.json';
+        file_put_contents($file, json_encode(['limited' => [
+            'password' => password_hash('limited-pass', PASSWORD_BCRYPT, ['cost' => 4]),
+            'sites' => ['test'],
+        ]]));
+        $GLOBALS['restricted_server'] = startServer(8090, ['USERS_FILE' => $file]);
+    }
+    $cookieFrom = function (array $headers): ?string {
+        $cookie = null;
+        foreach ($headers as $h) {
+            if (preg_match('/^Set-Cookie:\s*([^=]+=[^;]+)/i', $h, $m)) $cookie = $m[1];
+        }
+        return $cookie;
+    };
+    $r = http('GET', '/?csrf', [], 8090);
+    $cookie = $cookieFrom($r['headers']);
+    $token = json_decode($r['body'], true)['token'];
+    $r = http('POST', '/?login', [
+        'header' => "Content-Type: application/x-www-form-urlencoded\r\nCookie: {$cookie}",
+        'content' => http_build_query(['_login' => 1, '_token' => $token, 'username' => 'limited', 'password' => 'limited-pass']),
+    ], 8090);
+    return 'Cookie: ' . ($cookieFrom($r['headers']) ?? $cookie);
+}
+
+test('goal add and remove are limited to the user\'s sites', function () {
+    $cookie = restrictedSession();
+    $post = fn (string $endpoint, string $site) => http('POST', $endpoint, [
+        'header' => "Content-Type: application/json\r\n{$cookie}",
+        'content' => json_encode(['site' => $site, 'path' => '/restricted-goal-test']),
+    ], 8090)['status'];
+
+    try {
+        expect($post('/?goal_add', 'not-my-site'))->toBe(403)
+            ->and($post('/?goal_remove', 'not-my-site'))->toBe(403)
+            ->and($post('/?goal_add', 'test'))->toBe(200);
+    } finally {
+        getTestDb()->prepare('DELETE FROM goals WHERE path = ?')->execute(['/restricted-goal-test']);
+    }
+});
+
+test('breakdown endpoints are limited to the user\'s sites', function () {
+    $cookie = restrictedSession();
+    $status = http('POST', '/?breakdown_add', [
+        'header' => "Content-Type: application/json\r\n{$cookie}",
+        'content' => json_encode(['site' => 'not-my-site', 'event' => 'e', 'group' => 'k']),
+    ], 8090)['status'];
+    expect($status)->toBe(403);
 });
 
 test('share API with path filter does not crash on events table', function () {
