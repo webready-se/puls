@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Release markers on charts covered the bar's value when the bar was among the tallest, and the marker line ran through the date label. The label now sits above the value with a short stem down to the line, the value gets a background over the line, and the line stops above the date.
+
 ### Changed
+
+- README screenshots regenerated. `scripts/screenshots.sh` runs the migrations on the seeded demo database and adds app versions and a saved card, so release markers and breakdown cards show.
 
 - Feature tests run against a fresh database and users file in a temp directory per run, instead of the database configured in `.env`. Tests no longer leave rows in a local database or depend on rows from earlier runs, and test temp files are removed afterwards.
 

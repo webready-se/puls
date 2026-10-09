@@ -36,6 +36,21 @@ DB_PATH=data/demo.sqlite php -S localhost:$PORT -t public > /dev/null 2>&1 &
 SERVER_PID=$!
 sleep 1
 
+# First request runs the migrations on the seeded schema, then add what newer
+# features need to be visible: app versions (release markers) and a saved card.
+curl -s -o /dev/null "http://localhost:$PORT/?health"
+php -r '
+$db = new PDO("sqlite:data/demo.sqlite");
+$site = "demo.example.com";
+foreach ([["2.4.0", 20], ["2.5.0", 4], ["2.6.0", 0]] as [$v, $ago]) {
+    $db->prepare("INSERT OR IGNORE INTO app_versions (site, version, first_seen) VALUES (?, ?, ?)")
+        ->execute([$site, $v, date("Y-m-d", strtotime("-$ago days"))]);
+}
+$db->exec("UPDATE events SET app_version = CASE WHEN created_at >= date(\"now\", \"-4 days\") THEN \"2.5.0\" ELSE \"2.4.0\" END");
+$db->prepare("INSERT OR IGNORE INTO breakdowns (site, label, event_name, group_key, created_at) VALUES (?, ?, ?, ?, datetime(\"now\"))")
+    ->execute([$site, "CTA placement", "cta_click", "location"]);
+'
+
 cleanup() {
     kill $SERVER_PID 2>/dev/null || true
 }
