@@ -944,7 +944,8 @@ function get_api_data(array $config, array $user): string
     $funnel = null;
     $eventNames = [];
     if ($eventName) {
-        $stmt = $db->prepare("SELECT DISTINCT event_name FROM events WHERE {$dateFilter} {$siteFilter} AND event_name != ? ORDER BY event_name LIMIT 200");
+        // Most used first, then most recent, so the picker stays useful past 200 names
+        $stmt = $db->prepare("SELECT event_name FROM events WHERE {$dateFilter} {$siteFilter} AND event_name != ? GROUP BY event_name ORDER BY COUNT(*) DESC, MAX(created_at) DESC LIMIT 200");
         $stmt->execute(array_merge($dateParams, $siteParams, [$eventName]));
         $eventNames = $stmt->fetchAll(PDO::FETCH_COLUMN);
 

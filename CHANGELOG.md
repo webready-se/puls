@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Migration v17 adds `app_version` to `pageviews` and `events` and a small `app_versions` table with the first-seen date per site and version.
+- The funnel picker lists events by use, most used first, instead of alphabetically. A site with more than 200 event names no longer drops recent ones from the list.
 - `sites:rename` and `sites:remove` include `app_versions` and skip tables a not-yet-migrated database does not have.
 
 ## [1.16.0] — 2026-10-09
