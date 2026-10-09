@@ -28,6 +28,8 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `GET /?api&sites` | Yes | List tracked sites |
 | `GET /` | Yes | Dashboard |
 | `POST /?login` | No | Login form submission |
+| `POST /?breakdown_add` | Yes | Save or rename an event breakdown card |
+| `POST /?breakdown_remove` | Yes | Remove a breakdown card |
 | `GET /?logout` | Yes | End session |
 
 Static file requests (anything with `.` in path) return 404 early to prevent routing conflicts (e.g. favicon.ico triggering CSRF token regeneration).
@@ -45,7 +47,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (185 tests, unit + feature)
+tests/                  — Pest test suite (187 tests, unit + feature)
 scripts/hooks/pre-push  — Git hook: runs Pest before allowing push
 scripts/build-release.sh — Builds release zip with runtime files only
 scripts/screenshots.sh  — Generates all README screenshots (headless Chrome + demo DB)
