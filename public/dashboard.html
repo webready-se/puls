@@ -331,6 +331,9 @@
   .event-detail-time { color: var(--muted); font-size: 11px; white-space: nowrap; margin-left: auto; }
   .event-summary { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
   .event-summary b { color: var(--text); font-weight: 600; }
+  .event-csv { margin-left: auto; font-size: 11px; color: var(--muted); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; }
+  .event-csv:hover { color: var(--accent); border-color: var(--accent); }
+  .event-new { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--green); border: 1px solid var(--green); border-radius: 999px; padding: 0 5px; margin-left: 5px; vertical-align: 1px; }
   .event-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 6px; }
   .event-chips-label { font-size: 11px; color: var(--light); margin-right: 2px; }
   .event-chip { background: none; border: 1px solid var(--border); color: var(--muted); padding: 3px 9px; border-radius: 999px; font-size: 11px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
@@ -2343,10 +2346,15 @@
   }
 
   // group: null = let the API pick the most common key, '' = recent rows, 'key' = group on it
-  function fetchEventDetail(detail, eventName, group, showAll) {
+  function eventApiUrl(eventName) {
     var base = currentFrom && currentTo ? '?api&from=' + currentFrom + '&to=' + currentTo : '?api&days=' + currentDays;
     var url = apiUrl(base + '&event=' + encodeURIComponent(eventName));
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+    return url;
+  }
+
+  function fetchEventDetail(detail, eventName, group, showAll) {
+    var url = eventApiUrl(eventName);
     if (group !== null) url += '&group=' + encodeURIComponent(group);
 
     fetch(url)
@@ -2390,6 +2398,7 @@
       '<span><b>' + num(tot.visitors) + '</b> visitors</span>' +
       (siteVisitors ? '<span><b>' + rate.toFixed(1) + '</b> per 100 visitors</span>' : '') +
       deltaHtml +
+      '<a class="event-csv" href="' + eventApiUrl(st.name) + '&format=csv" title="Every row in the period, one column per data key">CSV</a>' +
     '</div>';
 
     if (d.eventSeries && d.eventSeries.length) {
@@ -2411,7 +2420,9 @@
       keys.forEach(function(k) {
         html += '<button class="event-chip' + (k.key === d.eventGroupKey ? ' active' : '') + '" data-key="' + esc(k.key) + '" onclick="setEventGroup(this)">' + esc(k.key) + '</button>';
       });
-      html += '<button class="event-chip' + (!d.eventGroupKey ? ' active' : '') + '" data-key="" onclick="setEventGroup(this)">Recent</button></div>';
+      html += '<button class="event-chip' + (!d.eventGroupKey ? ' active' : '') + '" data-key="" onclick="setEventGroup(this)">Recent</button>' +
+        (d.eventGroupKey && d.eventGroupNew ? '<span class="event-chips-label" style="margin-left:auto">' + num(d.eventGroupNew) + ' new vs previous period</span>' : '') +
+      '</div>';
     }
 
     if (d.eventGroupKey && d.eventGroup) {
@@ -2480,7 +2491,7 @@
     rows.slice(0, limit).forEach(function(r) {
       var value = String(r.value);
       html += '<div class="trow">' +
-        '<span class="trow-label" title="' + esc(value) + '">' + esc(value) + ' <span style="color:var(--light);font-size:11px">' + num(r.visitors) + '</span></span>' +
+        '<span class="trow-label" title="' + esc(value) + '">' + esc(value) + ' <span style="color:var(--light);font-size:11px">' + num(r.visitors) + '</span>' + (r.new ? '<span class="event-new">new</span>' : '') + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + (+r.count / max * 100) + '%;background:#f16272"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
       '</div>';

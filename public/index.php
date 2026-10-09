@@ -827,6 +827,7 @@ function get_api_data(array $config, array $user): string
     $eventKeys = [];
     $eventGroup = [];
     $eventGroupKey = null;
+    $eventGroupNew = 0;
     $eventName = $_GET['event'] ?? '';
     $eventUrl = $_GET['event_url'] ?? '';
     if ($eventName) {
@@ -880,6 +881,37 @@ function get_api_data(array $config, array $user): string
             $stmt = $db->prepare("SELECT json_extract(event_data, ?) as value, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND json_extract(event_data, ?) IS NOT NULL GROUP BY value ORDER BY count DESC, value LIMIT 200");
             $stmt->execute(array_merge([$jsonPath, $eventName], $dateParams, $siteParams, [$jsonPath]));
             $eventGroup = array_map(fn ($g) => ['value' => $g['value'], 'count' => (int) $g['count'], 'visitors' => (int) $g['visitors']], $stmt->fetchAll(PDO::FETCH_ASSOC));
+
+            // Values that did not occur in the previous period are flagged as new
+            $stmt = $db->prepare("SELECT DISTINCT json_extract(event_data, ?) FROM events WHERE event_name = ? AND created_at >= ? AND created_at < ? {$siteFilter} AND json_extract(event_data, ?) IS NOT NULL");
+            $stmt->execute(array_merge([$jsonPath, $eventName, $prevSince, $since], $siteParams, [$jsonPath]));
+            $seenBefore = array_fill_keys(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)), true);
+            foreach ($eventGroup as &$g) {
+                $g['new'] = !isset($seenBefore[(string) $g['value']]);
+                if ($g['new']) $eventGroupNew++;
+            }
+            unset($g);
+        }
+
+        // CSV of every row in the period, one column per data key
+        if (($_GET['format'] ?? '') === 'csv') {
+            $stmt = $db->prepare("SELECT created_at, page_path, event_data FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT 10000");
+            $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
+            $keys = array_column($eventKeys, 'key');
+            $out = fopen('php://temp', 'r+');
+            fputcsv($out, array_merge(['created_at', 'page_path'], $keys), ',', '"', '', "\n");
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $data = $row['event_data'] ? (json_decode($row['event_data'], true) ?: []) : [];
+                $line = [$row['created_at'], $row['page_path']];
+                foreach ($keys as $k) {
+                    $v = $data[$k] ?? '';
+                    $line[] = is_bool($v) ? ($v ? 'true' : 'false') : (is_scalar($v) ? $v : json_encode($v));
+                }
+                fputcsv($out, $line, ',', '"', '', "\n");
+            }
+            rewind($out);
+            $filename = preg_replace('/[^a-z0-9_.-]+/i', '-', ($site ?: 'all-sites') . '-' . $eventName) . '.csv';
+            respond(stream_get_contents($out), 200, 'text/csv; charset=utf-8', ['Content-Disposition' => 'attachment; filename="' . $filename . '"']);
         }
     }
     if ($eventName) {
@@ -897,6 +929,7 @@ function get_api_data(array $config, array $user): string
             'eventKeys' => $eventKeys,
             'eventGroup' => $eventGroup,
             'eventGroupKey' => $eventGroupKey,
+            'eventGroupNew' => $eventGroupNew,
         ], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
