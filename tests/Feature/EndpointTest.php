@@ -568,6 +568,71 @@ test('api includes events data', function () {
     expect($data)->toHaveKeys(['events', 'eventsTotal', 'outbound', 'outboundTotal']);
 });
 
+test('api event drill-down returns zero-filled daily series and totals', function () {
+    $name = 'series_test_' . uniqid();
+    http('POST', '/?event', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
+    ]);
+
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&days=3&share=' . $token . '&event=' . $name);
+    expect($r['status'])->toBe(200);
+    $data = json_decode($r['body'], true);
+
+    expect($data['eventSeries'])->toHaveCount(3)
+        ->and($data['previousEventSeries'])->toHaveCount(3)
+        ->and($data['eventSeries'][2]['date'])->toBe(date('Y-m-d'))
+        ->and($data['eventSeries'][2]['count'])->toBe(1)
+        ->and($data['eventSeries'][0]['count'])->toBe(0)
+        ->and($data['eventTotals'])->toBe(['count' => 1, 'visitors' => 1])
+        ->and($data['previousEventTotals'])->toBe(['count' => 0, 'visitors' => 0]);
+});
+
+test('api event drill-down discovers data keys and groups by key', function () {
+    $name = 'group_test_' . uniqid();
+    $send = function (array $data, string $ua) use ($name) {
+        http('POST', '/?event', [
+            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+            'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/', 'event_data' => $data]),
+        ]);
+    };
+    $send(['query' => 'kale', 'meta' => ['nested' => true]], 'Mozilla/5.0 Chrome/120.0');
+    $send(['query' => 'kale'], 'Mozilla/5.0 Firefox/130.0');
+    $send(['query' => 'rhubarb', 'zone' => 4], 'Mozilla/5.0 Chrome/120.0');
+
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&days=1&share=' . $token . '&event=' . $name);
+    $data = json_decode($r['body'], true);
+    $keys = array_column($data['eventKeys'], 'count', 'key');
+    expect($keys)->toBe(['query' => 3, 'zone' => 1])
+        ->and($data['eventGroupKey'])->toBe('query')
+        ->and($data['eventGroup'])->toHaveCount(2);
+
+    $r = http('GET', '/?api&days=1&share=' . $token . '&event=' . $name . '&group=');
+    $data = json_decode($r['body'], true);
+    expect($data['eventGroupKey'])->toBeNull()
+        ->and($data['eventGroup'])->toBe([]);
+
+    $r = http('GET', '/?api&days=1&share=' . $token . '&event=' . $name . '&group=query');
+    expect($r['status'])->toBe(200);
+    $data = json_decode($r['body'], true);
+    expect($data['eventGroup'])->toBe([
+        ['value' => 'kale', 'count' => 2, 'visitors' => 2],
+        ['value' => 'rhubarb', 'count' => 1, 'visitors' => 1],
+    ]);
+});
+
+test('api event group ignores keys that are not present', function () {
+    $token = createTestShareToken('test');
+    $r = http('GET', '/?api&days=1&share=' . $token . '&event=nothing&group=' . urlencode('no"such.key'));
+    expect($r['status'])->toBe(200);
+    $data = json_decode($r['body'], true);
+    expect($data['eventGroup'])->toBe([])
+        ->and($data['eventGroupKey'])->toBe('nosuch.key')
+        ->and($data['eventKeys'])->toBe([]);
+});
+
 test('share API with path filter does not crash on events table', function () {
     // Regression: events table has page_path, not path — using $pathFilter caused SQL error
     $token = createTestShareToken('test');
