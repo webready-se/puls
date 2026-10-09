@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - On a brand-new install the first request could fail: the fresh schema lacked the `app_versions` and `breakdowns` tables (added in 1.17.0 and 1.18.0 as migrations only), and migrations did not run until the second request. Migrations now always run after the schema is created, so a new database starts on the current version with every table.
 
+### Changed
+
+- Funnel query joins a per-visitor aggregate of the second event instead of running a correlated lookup per visitor. Same results (verified row for row on a 500,000-event database), but a 30-day funnel there went from 25 s to no measurable cost on top of the drill-down.
+
 ### Added
 
 - Dashboard smoke test (`node scripts/smoke.mjs`): seeds a demo database with the old schema, serves it, drives headless Chrome over the DevTools protocol through load, release markers, breakdown cards, event drill-down, group by version, funnel, compare and the 90-day view, and fails on any JavaScript error or missing element. Runs in CI as its own job. No npm dependencies.
