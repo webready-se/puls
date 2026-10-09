@@ -1564,8 +1564,9 @@
     rows.forEach(function(r) {
       var pct = (+r.count / max) * 100;
       var name = r.event_name.replace(/_/g, ' ');
+      var visitors = r.visitors !== undefined ? num(r.visitors) + ' visitor' + (+r.visitors === 1 ? '' : 's') : '';
       html += '<div class="trow trow-clickable" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
-        '<span class="trow-label">' + esc(name) + '</span>' +
+        '<span class="trow-label">' + esc(name) + (visitors ? ' <span style="color:var(--light);font-size:11px">' + visitors + '</span>' : '') + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#f16272"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
       '</div>';
