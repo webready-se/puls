@@ -292,6 +292,8 @@
   }
   .chart-col-compare:hover > .tip { display: block; }
   .chart-date { font-size: 10px; color: var(--light); white-space: nowrap; }
+  .chart-col.has-release { position: relative; background: linear-gradient(var(--accent), var(--accent)) center top / 1px 100% no-repeat; background-clip: content-box; }
+  .chart-release { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 9px; font-weight: 600; line-height: 14px; color: var(--accent); background: var(--card); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
   .chart-bars { display: flex; align-items: flex-end; gap: 3px; width: 100%; height: 100%; }
   .chart-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: flex-end; height: 100%; min-width: 0; }
   .chart-bar-wrap .chart-bar { width: 100%; }
@@ -1298,8 +1300,21 @@
     '</div>';
   }
 
+  // date -> release marker html for app versions first seen that day
+  function releaseMarkers(versions) {
+    var byDate = {};
+    (versions || []).forEach(function(v) { (byDate[v.first_seen] = byDate[v.first_seen] || []).push(v.version); });
+    var out = {};
+    Object.keys(byDate).forEach(function(date) {
+      var list = byDate[date];
+      out[date] = '<span class="chart-release" title="First seen: ' + esc(list.join(', ')) + '">' + esc(list[list.length - 1]) + (list.length > 1 ? ' +' + (list.length - 1) : '') + '</span>';
+    });
+    return out;
+  }
+
   function buildBars(pageviews, previousPageviews) {
     var key = chartMode === 'visitors' ? 'visitors' : 'views';
+    var releases = releaseMarkers(lastData && lastData.versions);
     var showCompare = compareMode && previousPageviews && previousPageviews.length > 0;
     var allVals = pageviews.map(function(p) { return +p[key]; });
     if (showCompare) {
@@ -1328,7 +1343,8 @@
           (prev ? '<div style="color:var(--light);margin-top:2px">vs ' + prevLabel + ': ' + num(prev.views) + ' / ' + num(prev.visitors) + '</div>' : '') +
         '</div>';
 
-        bars += '<div class="chart-col chart-col-compare">' +
+        bars += '<div class="chart-col chart-col-compare' + (releases[p.date] ? ' has-release' : '') + '">' +
+          (releases[p.date] || '') +
           combinedTip +
           '<div class="chart-bars">' +
             '<div class="chart-bar-wrap">' +
@@ -1343,7 +1359,8 @@
           '<span class="chart-date">' + label + '</span>' +
         '</div>';
       } else {
-        bars += '<div class="chart-col">' +
+        bars += '<div class="chart-col' + (releases[p.date] ? ' has-release' : '') + '">' +
+          (releases[p.date] || '') +
           '<span class="chart-val">' + num(p[key]) + '</span>' +
           '<div class="chart-bar" style="height:' + h + 'px">' +
             '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
@@ -2429,7 +2446,7 @@
         (showCompare ? '<span class="event-chips-label" style="margin-left:auto">vs previous period</span>' : '') +
       '</div>' +
       '<div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + (dense ? ' dense' : '') + '"><div class="chart">' +
-        buildEventBars(d.eventSeries, showCompare ? d.previousEventSeries : null, d.pageviews, d.previousPageviews, dense) +
+        buildEventBars(d.eventSeries, showCompare ? d.previousEventSeries : null, d.pageviews, d.previousPageviews, dense, d.versions) +
       '</div></div>';
     }
 
@@ -2439,7 +2456,7 @@
     if (keys.length) {
       html += '<div class="event-chips"><span class="event-chips-label">Group by</span>';
       keys.forEach(function(k) {
-        html += '<button class="event-chip' + (k.key === d.eventGroupKey ? ' active' : '') + '" data-key="' + esc(k.key) + '" onclick="setEventGroup(this)">' + esc(k.key) + '</button>';
+        html += '<button class="event-chip' + (k.key === d.eventGroupKey ? ' active' : '') + '" data-key="' + esc(k.key) + '" onclick="setEventGroup(this)">' + esc(k.key === '@version' ? 'version' : k.key) + '</button>';
       });
       html += '<button class="event-chip' + (!d.eventGroupKey ? ' active' : '') + '" data-key="" onclick="setEventGroup(this)">Recent</button>' +
         (d.eventGroupKey && d.eventGroupNew ? '<span class="event-chips-label" style="margin-left:auto">' + num(d.eventGroupNew) + ' new vs previous period</span>' : '') +
@@ -2489,7 +2506,8 @@
     return html;
   }
 
-  function buildEventBars(series, prevSeries, pageviews, previousPageviews, dense) {
+  function buildEventBars(series, prevSeries, pageviews, previousPageviews, dense, versions) {
+    var releases = releaseMarkers(versions);
     var visitorsByDate = {};
     (pageviews || []).concat(previousPageviews || []).forEach(function(p) { visitorsByDate[p.date] = +p.visitors; });
     function val(row) {
@@ -2517,7 +2535,8 @@
         var p = prevSeries[i], pv = p ? val(p) : 0, ph = p ? Math.max(3, (pv / maxVal) * 60) : 0;
         var delta = pv > 0 ? Math.round(((v - pv) / pv) * 100) : null;
         var deltaStr = delta === null ? '' : (delta >= 0 ? ' (+' + delta + '%)' : ' (' + delta + '%)');
-        bars += '<div class="chart-col chart-col-compare">' +
+        bars += '<div class="chart-col chart-col-compare' + (releases[row.date] ? ' has-release' : '') + '">' +
+          (releases[row.date] || '') +
           '<div class="tip" style="text-align:left"><div style="font-weight:600;margin-bottom:4px">' + label + '<span style="color:' + (delta === null ? '#64748b' : (delta >= 0 ? '#059669' : '#dc2626')) + ';font-weight:500">' + deltaStr + '</span></div>' +
             '<div>' + tipBody + '</div>' +
             (p ? '<div style="color:var(--light);margin-top:2px">vs ' + formatDay(p.date) + ': ' + num(p.count) + ' / ' + num(p.visitors) + '</div>' : '') +
@@ -2529,7 +2548,8 @@
           dateHtml +
         '</div>';
       } else {
-        bars += '<div class="chart-col">' +
+        bars += '<div class="chart-col' + (releases[row.date] ? ' has-release' : '') + '">' +
+          (releases[row.date] || '') +
           valHtml +
           '<div class="chart-bar" style="height:' + h + 'px"><div class="tip">' + label + ': ' + tipBody + '</div></div>' +
           dateHtml +
