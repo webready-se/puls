@@ -32,6 +32,18 @@ test('js endpoint returns javascript', function () {
     expect($contentType)->toContain('javascript');
 });
 
+test('js endpoint drains events queued before the script loaded', function () {
+    $r = http('GET', '/?js');
+    expect($r['body'])->toContain('prev.q')
+        ->and($r['body'])->toContain('puls.track.apply');
+});
+
+test('js endpoint supports data-debug console logging', function () {
+    $r = http('GET', '/?js');
+    expect($r['body'])->toContain('dataset.debug')
+        ->and($r['body'])->toContain('console.log');
+});
+
 test('pixel endpoint returns gif', function () {
     $r = http('GET', '/?pixel&s=test&p=/');
     expect($r['status'])->toBe(200);
