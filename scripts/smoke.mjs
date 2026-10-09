@@ -83,11 +83,19 @@ async function main() {
   `, dbPath]);
 
   // 4. Headless Chrome with remote debugging
-  children.push(spawn(findChrome(), [
+  const chrome = spawn(findChrome(), [
     '--headless=new', `--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${join(tmp, 'chrome')}`,
     '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--window-size=1400,1900', 'about:blank',
-  ], { stdio: 'ignore' }));
-  await waitForHttp(`http://127.0.0.1:${CDP_PORT}/json/version`);
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  children.push(chrome);
+  let chromeLog = '';
+  chrome.stderr.on('data', (d) => { chromeLog = (chromeLog + d).slice(-4000); });
+  // A cold Chrome start on a CI runner can take well over five seconds
+  try {
+    await waitForHttp(`http://127.0.0.1:${CDP_PORT}/json/version`, 300);
+  } catch (e) {
+    throw new Error(`${e.message}\nChrome stderr (tail):\n${chromeLog}`);
+  }
   const targets = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json();
   const page = targets.find((t) => t.type === 'page');
 

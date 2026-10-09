@@ -973,17 +973,23 @@ function get_api_data(array $config, array $user): string
 
         $then = mb_substr(trim($_GET['then'] ?? ''), 0, 100);
         if ($then !== '' && $then !== $eventName) {
+            // B is aggregated once per visitor (latest occurrence) and joined, instead of a
+            // correlated lookup per A visitor: linear instead of A x B. visitor_hash rotates
+            // daily, so B "at or after" A only ever happens within the same period.
             $funnelSql = fn (string $range) => "SELECT DATE(a.first_at) as date, COUNT(*) as count,
-                    SUM(EXISTS (SELECT 1 FROM events b WHERE b.event_name = ? AND b.site = a.site AND b.visitor_hash = a.visitor_hash AND b.created_at >= a.first_at)) as visitors
+                    SUM(COALESCE(b.last_at >= a.first_at, 0)) as visitors
                 FROM (SELECT site, visitor_hash, MIN(created_at) as first_at FROM events WHERE event_name = ? AND {$range} {$siteFilter} GROUP BY site, visitor_hash) a
+                LEFT JOIN (SELECT site, visitor_hash, MAX(created_at) as last_at FROM events WHERE event_name = ? AND {$range} {$siteFilter} GROUP BY site, visitor_hash) b
+                    ON b.site = a.site AND b.visitor_hash = a.visitor_hash
                 GROUP BY date";
 
             $stmt = $db->prepare($funnelSql($dateFilter));
-            $stmt->execute(array_merge([$then, $eventName], $dateParams, $siteParams));
+            $stmt->execute(array_merge([$eventName], $dateParams, $siteParams, [$then], $dateParams, $siteParams));
             $series = fill_days($stmt->fetchAll(PDO::FETCH_ASSOC), $since, $days);
 
+            $prevRange = [$prevSince, $since];
             $stmt = $db->prepare($funnelSql('created_at >= ? AND created_at < ?'));
-            $stmt->execute(array_merge([$then, $eventName, $prevSince, $since], $siteParams));
+            $stmt->execute(array_merge([$eventName], $prevRange, $siteParams, [$then], $prevRange, $siteParams));
             $prevSeries = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $started = array_sum(array_column($series, 'count'));
@@ -1619,9 +1625,11 @@ function get_db(string $path): PDO
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE UNIQUE INDEX idx_goals_unique ON goals (site, path)');
-    } else {
-        run_migrations($db);
     }
+
+    // Always run: a fresh schema gets the tables added by later migrations and
+    // the current user_version, an existing one is brought up to date.
+    run_migrations($db);
 
     return $db;
 }
