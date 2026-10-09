@@ -781,6 +781,60 @@ test('api event drill-down lists other event names for the funnel picker', funct
         ->and($data['funnel'])->toBeNull();
 });
 
+test('collect and event store a sanitized app version', function () {
+    $tag = uniqid();
+    $ua = "Mozilla/5.0 VersionTest/{$tag}";
+    http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+        'content' => json_encode(['u' => '/v-' . $tag, 'r' => '', 'w' => 1200, 'site' => 'test', 'v' => "2.6.0<script>"]),
+    ]);
+    http('POST', '/?event', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+        'content' => json_encode(['event_name' => 'v_' . $tag, 'site' => 'test', 'page_path' => '/', 'app_version' => 'v2.6.0-beta+1']),
+    ]);
+
+    $db = getTestDb();
+    $pv = $db->prepare('SELECT app_version FROM pageviews WHERE path = ?');
+    $pv->execute(['/v-' . $tag]);
+    $ev = $db->prepare('SELECT app_version FROM events WHERE event_name = ?');
+    $ev->execute(['v_' . $tag]);
+    expect($pv->fetchColumn())->toBe('2.6.0script')
+        ->and($ev->fetchColumn())->toBe('v2.6.0-beta+1');
+});
+
+test('api lists app versions first seen in the period for release markers', function () {
+    $version = 'rel-' . uniqid();
+    http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'content' => json_encode(['u' => '/', 'r' => '', 'w' => 1200, 'site' => 'test', 'v' => $version]),
+    ]);
+    $token = createTestShareToken('test');
+    $data = json_decode(http('GET', '/?api&days=7&share=' . $token)['body'], true);
+    $found = collect($data['versions'])->first(fn ($v) => $v['version'] === $version);
+    expect($found)->toBe(['version' => $version, 'first_seen' => date('Y-m-d')]);
+});
+
+test('api event drill-down groups by app version', function () {
+    $name = 'vgroup_' . uniqid();
+    foreach ([['1.0.0', 'Chrome/120.0'], ['1.0.0', 'Firefox/130.0'], ['1.1.0', 'Safari/605.1']] as [$v, $ua]) {
+        http('POST', '/?event', [
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 {$ua}",
+            'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/', 'app_version' => $v]),
+        ]);
+    }
+    $token = createTestShareToken('test');
+    $data = json_decode(http('GET', '/?api&days=1&share=' . $token . '&event=' . $name . '&group=@version')['body'], true);
+    expect(array_column($data['eventKeys'], 'key'))->toContain('@version')
+        ->and($data['eventGroupKey'])->toBe('@version')
+        ->and(array_map(fn ($g) => [$g['value'], $g['count']], $data['eventGroup']))->toBe([['1.0.0', 2], ['1.1.0', 1]]);
+});
+
+test('js snippet sends data-version with pageviews and events', function () {
+    $body = http('GET', '/?js')['body'];
+    expect($body)->toContain('dataset.version')
+        ->and($body)->toContain('app_version');
+});
+
 test('share API with path filter does not crash on events table', function () {
     // Regression: events table has page_path, not path — using $pathFilter caused SQL error
     $token = createTestShareToken('test');
