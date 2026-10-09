@@ -4,6 +4,7 @@ function eventsRetentionDb(): PDO
 {
     $dir = sys_get_temp_dir() . '/puls-retention-' . uniqid();
     mkdir($dir);
+    register_shutdown_function(fn () => exec('rm -rf ' . escapeshellarg($dir)));
     $db = new PDO('sqlite:' . $dir . '/puls.sqlite');
     $db->exec('CREATE TABLE events (id INTEGER PRIMARY KEY, created_at TEXT NOT NULL)');
     foreach ([100, 500] as $age) {

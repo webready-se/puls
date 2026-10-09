@@ -1,8 +1,9 @@
 <?php
 
 test('a fresh database has every table and the current schema version', function () {
-    $path = sys_get_temp_dir() . '/puls-fresh-' . uniqid() . '/puls.sqlite';
-    $db = get_db($path);
+    $dir = sys_get_temp_dir() . '/puls-fresh-' . uniqid();
+    register_shutdown_function(fn () => exec('rm -rf ' . escapeshellarg($dir)));
+    $db = get_db($dir . '/puls.sqlite');
 
     $tables = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
     expect($tables)->toContain('pageviews', 'events', 'goals', 'share_tokens', 'app_versions', 'breakdowns');

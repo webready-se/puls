@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Feature tests run against a fresh database and users file in a temp directory per run, instead of the database configured in `.env`. Tests no longer leave rows in a local database or depend on rows from earlier runs, and test temp files are removed afterwards.
+
 ## [1.20.0] — 2026-10-09
 
 ### Added
