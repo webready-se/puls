@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `data-version` on the tracking script sends an app version with every pageview and event. The day a version is first seen is marked on the pageview chart and on event trends, and the event drill-down can group by version. API: `versions` (version, first_seen) in the dashboard and drill-down responses, and `@version` as a group key.
+
+### Changed
+
+- Migration v17 adds `app_version` to `pageviews` and `events` and a small `app_versions` table with the first-seen date per site and version.
+- The funnel picker lists events by use, most used first, instead of alphabetically. A site with more than 200 event names no longer drops recent ones from the list.
+- `sites:rename` and `sites:remove` include `app_versions` and skip tables a not-yet-migrated database does not have.
+
 ## [1.16.0] — 2026-10-09
 
 ### Added

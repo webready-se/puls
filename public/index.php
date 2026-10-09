@@ -486,11 +486,12 @@ function get_tracking_script(): string
       var ep=base+'?collect';
       var evEp=base+'?event';
       var site=sc.dataset.site||location.hostname;
+      var ver=sc.dataset.version||null;
       var dbg=sc.dataset.debug!==undefined;
       function log(){if(dbg&&window.console)console.log.apply(console,['[puls]'].concat([].slice.call(arguments)))}
       function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});if(!o.source&&p.get('gad_source')){o.source='google';o.medium='cpc';var c=p.get('gad_campaignid');if(c)o.campaign=c}return Object.keys(o).length?o:null}
       function s(){
-        var d=JSON.stringify({u:location.pathname+location.search,r:document.referrer,w:innerWidth,site:site,utm:utm()});
+        var d=JSON.stringify({u:location.pathname+location.search,r:document.referrer,w:innerWidth,site:site,utm:utm(),v:ver});
         log('pageview',location.pathname+location.search);
         navigator.sendBeacon?navigator.sendBeacon(ep,d):0;
       }
@@ -498,7 +499,7 @@ function get_tracking_script(): string
       q();
       if(history.pushState){var o=history.pushState;history.pushState=function(){o.apply(this,arguments);q()};addEventListener('popstate',q)}
       var prev=window.puls;
-      window.puls={track:function(name,data){if(!name)return;var p={event_name:name,site:site,page_path:location.pathname};if(data&&typeof data==='object')p.event_data=data;log('event',name,data||'');navigator.sendBeacon?navigator.sendBeacon(evEp,JSON.stringify(p)):0}};
+      window.puls={track:function(name,data){if(!name)return;var p={event_name:name,site:site,page_path:location.pathname};if(ver)p.app_version=ver;if(data&&typeof data==='object')p.event_data=data;log('event',name,data||'');navigator.sendBeacon?navigator.sendBeacon(evEp,JSON.stringify(p)):0}};
       if(prev&&prev.q&&prev.q.length){log('draining',prev.q.length,'queued event(s)');for(var i=0;i<prev.q.length;i++)puls.track.apply(null,prev.q[i])}
       if(sc.dataset.outbound!==undefined){document.addEventListener('click',function(e){var a=e.target.closest('a[href]');if(!a)return;try{var u=new URL(a.href,location.origin);if(u.hostname===location.hostname||u.protocol!=='http:'&&u.protocol!=='https:')return;puls.track('outbound_click',{url:u.href,text:(a.textContent||'').trim().substring(0,200)})}catch(ex){}},true)}
       if(sc.dataset.autoEvents!==undefined){
@@ -593,7 +594,10 @@ function handle_collect(array $config): void
 
     $path = normalize_path(urldecode(substr($input['u'], 0, 500)));
 
-    $stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, utm_term, utm_content, language, country, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $appVersion = normalize_version($input['v'] ?? null);
+    record_app_version($db, $site, $appVersion);
+
+    $stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, utm_term, utm_content, language, country, app_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $stmt->execute([
         $site,
         $path,
@@ -608,6 +612,7 @@ function handle_collect(array $config): void
         $utmContent,
         $lang,
         $country,
+        $appVersion,
         date('Y-m-d H:i:s'),
     ]);
 }
@@ -647,13 +652,17 @@ function handle_event(array $config): void
     $stmt->execute([$site, $eventName, $hash, $eventData, date('Y-m-d H:i:s', time() - 10)]);
     if ($stmt->fetch()) return;
 
-    $stmt = $db->prepare('INSERT INTO events (site, event_name, event_data, page_path, visitor_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    $appVersion = normalize_version($input['app_version'] ?? null);
+    record_app_version($db, $site, $appVersion);
+
+    $stmt = $db->prepare('INSERT INTO events (site, event_name, event_data, page_path, visitor_hash, app_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     $stmt->execute([
         $site,
         $eventName,
         $eventData,
         $pagePath,
         $hash,
+        $appVersion,
         date('Y-m-d H:i:s'),
     ]);
 
@@ -869,6 +878,12 @@ function get_api_data(array $config, array $user): string
         $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
         $eventKeys = array_map(fn ($k) => ['key' => $k['key'], 'count' => (int) $k['count']], $stmt->fetchAll(PDO::FETCH_ASSOC));
 
+        // App version is a column, not a data key; offered as the pseudo-key "@version"
+        $stmt = $db->prepare("SELECT COUNT(*) FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND app_version IS NOT NULL");
+        $stmt->execute(array_merge([$eventName], $dateParams, $siteParams));
+        $versionCount = (int) $stmt->fetchColumn();
+        if ($versionCount > 0) $eventKeys[] = ['key' => '@version', 'count' => $versionCount];
+
         // Group by one data key: value, count, unique visitors. The key is bound
         // as a quoted JSON path parameter, never interpolated into SQL.
         // ?group=key groups on that key, ?group= (empty) disables grouping, and no
@@ -878,14 +893,17 @@ function get_api_data(array $config, array $user): string
             : ($eventKeys[0]['key'] ?? '');
         if ($groupKey !== '') {
             $eventGroupKey = $groupKey;
-            $jsonPath = '$."' . $groupKey . '"';
-            $stmt = $db->prepare("SELECT json_extract(event_data, ?) as value, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND json_extract(event_data, ?) IS NOT NULL GROUP BY value ORDER BY count DESC, value LIMIT 200");
-            $stmt->execute(array_merge([$jsonPath, $eventName], $dateParams, $siteParams, [$jsonPath]));
+            // "@version" groups on the app_version column, anything else on a JSON data key
+            $isVersion = $groupKey === '@version';
+            $valueExpr = $isVersion ? 'app_version' : 'json_extract(event_data, ?)';
+            $valueParams = $isVersion ? [] : ['$."' . $groupKey . '"'];
+            $stmt = $db->prepare("SELECT {$valueExpr} as value, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors FROM events WHERE event_name = ? AND {$dateFilter} {$siteFilter} AND {$valueExpr} IS NOT NULL GROUP BY value ORDER BY count DESC, value LIMIT 200");
+            $stmt->execute(array_merge($valueParams, [$eventName], $dateParams, $siteParams, $valueParams));
             $eventGroup = array_map(fn ($g) => ['value' => $g['value'], 'count' => (int) $g['count'], 'visitors' => (int) $g['visitors']], $stmt->fetchAll(PDO::FETCH_ASSOC));
 
             // Values that did not occur in the previous period are flagged as new
-            $stmt = $db->prepare("SELECT DISTINCT json_extract(event_data, ?) FROM events WHERE event_name = ? AND created_at >= ? AND created_at < ? {$siteFilter} AND json_extract(event_data, ?) IS NOT NULL");
-            $stmt->execute(array_merge([$jsonPath, $eventName, $prevSince, $since], $siteParams, [$jsonPath]));
+            $stmt = $db->prepare("SELECT DISTINCT {$valueExpr} FROM events WHERE event_name = ? AND created_at >= ? AND created_at < ? {$siteFilter} AND {$valueExpr} IS NOT NULL");
+            $stmt->execute(array_merge($valueParams, [$eventName, $prevSince, $since], $siteParams, $valueParams));
             $seenBefore = array_fill_keys(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)), true);
             foreach ($eventGroup as &$g) {
                 $g['new'] = !isset($seenBefore[(string) $g['value']]);
@@ -915,12 +933,19 @@ function get_api_data(array $config, array $user): string
             respond(stream_get_contents($out), 200, 'text/csv; charset=utf-8', ['Content-Disposition' => 'attachment; filename="' . $filename . '"']);
         }
     }
+    // App versions first seen within the period, for release markers on charts
+    $versionsUntil = $until ? 'AND first_seen < ?' : '';
+    $stmt = $db->prepare("SELECT version, MIN(first_seen) as first_seen FROM app_versions WHERE first_seen >= ? {$versionsUntil} {$siteFilter} GROUP BY version ORDER BY first_seen, version LIMIT 50");
+    $stmt->execute(array_merge([$since], $until ? [$until] : [], $siteParams));
+    $versions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     // Funnel (?event=a&then=b): of the visitors who did A, how many did B at or
     // after their first A. visitor_hash rotates daily, so a funnel spans one day.
     $funnel = null;
     $eventNames = [];
     if ($eventName) {
-        $stmt = $db->prepare("SELECT DISTINCT event_name FROM events WHERE {$dateFilter} {$siteFilter} AND event_name != ? ORDER BY event_name LIMIT 200");
+        // Most used first, then most recent, so the picker stays useful past 200 names
+        $stmt = $db->prepare("SELECT event_name FROM events WHERE {$dateFilter} {$siteFilter} AND event_name != ? GROUP BY event_name ORDER BY COUNT(*) DESC, MAX(created_at) DESC LIMIT 200");
         $stmt->execute(array_merge($dateParams, $siteParams, [$eventName]));
         $eventNames = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -974,6 +999,7 @@ function get_api_data(array $config, array $user): string
             'eventGroupNew' => $eventGroupNew,
             'eventNames' => $eventNames,
             'funnel' => $funnel,
+            'versions' => $versions,
         ], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
@@ -1355,6 +1381,7 @@ function get_api_data(array $config, array $user): string
         'botActivity' => $botActivity,
         'summary'   => $summary,
         'goals'     => $goals,
+        'versions'  => $versions,
         'siteOverview' => $siteOverview ?? [],
         'brokenLinks' => $brokenLinks,
         'events'    => $events,
@@ -1380,6 +1407,24 @@ function get_api_data(array $config, array $user): string
  * Expand sparse per-day rows into one entry per day over a period, with
  * zero counts for missing days. Rows carry a 'date' (Y-m-d) plus count columns.
  */
+/**
+ * Clean a client-supplied app version: max 50 chars of letters, digits and . - + _
+ * Returns null when nothing usable is left.
+ */
+function normalize_version(mixed $v): ?string
+{
+    if (!is_string($v) && !is_int($v) && !is_float($v)) return null;
+    $clean = preg_replace('/[^A-Za-z0-9.+_-]/', '', mb_substr((string) $v, 0, 50));
+    return $clean === '' ? null : $clean;
+}
+
+function record_app_version(PDO $db, string $site, ?string $version): void
+{
+    if ($version === null) return;
+    $db->prepare('INSERT OR IGNORE INTO app_versions (site, version, first_seen) VALUES (?, ?, ?)')
+        ->execute([$site, $version, date('Y-m-d')]);
+}
+
 function fill_days(array $rows, string $start, int $days): array
 {
     $byDate = [];
@@ -1446,6 +1491,7 @@ function get_db(string $path): PDO
             utm_content TEXT,
             language TEXT,
             country TEXT,
+            app_version TEXT,
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE INDEX idx_site_date ON pageviews (site, created_at)');
@@ -1488,6 +1534,7 @@ function get_db(string $path): PDO
             event_data TEXT,
             page_path TEXT,
             visitor_hash TEXT NOT NULL,
+            app_version TEXT,
             created_at TEXT NOT NULL
         )');
         $db->exec('CREATE INDEX idx_events_site_date ON events (site, created_at)');
@@ -1665,7 +1712,7 @@ function normalize_path(string $path): string
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 16; // Bump this when adding new migrations
+    $currentVersion = 17; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -1990,6 +2037,23 @@ function run_migrations(PDO $db): void
         if ($goalCols && !in_array('type', $goalCols, true)) {
             $db->exec("ALTER TABLE goals ADD COLUMN type TEXT NOT NULL DEFAULT 'page'");
         }
+    }
+
+    // v17: app version on pageviews and events, plus first-seen date per version
+    // so release markers are a small lookup instead of a scan of pageviews.
+    if ($version < 17) {
+        foreach (['pageviews', 'events'] as $table) {
+            $cols = array_column($db->query("PRAGMA table_info({$table})")->fetchAll(PDO::FETCH_ASSOC), 'name');
+            if ($cols && !in_array('app_version', $cols, true)) {
+                $db->exec("ALTER TABLE {$table} ADD COLUMN app_version TEXT");
+            }
+        }
+        $db->exec('CREATE TABLE IF NOT EXISTS app_versions (
+            site TEXT NOT NULL,
+            version TEXT NOT NULL,
+            first_seen TEXT NOT NULL,
+            PRIMARY KEY (site, version)
+        )');
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);

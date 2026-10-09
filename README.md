@@ -149,6 +149,7 @@ This tracks pageviews and outbound link clicks automatically. Works with Next.js
 | `data-outbound` | No | Auto-track clicks on external links |
 | `data-auto-events` | No | Auto-track phone clicks, email clicks, downloads, form submissions |
 | `data-debug` | No | Log every pageview and event to the browser console |
+| `data-version` | No | App version sent with every pageview and event, shown as release markers in charts |
 | `defer` | Recommended | Load script without blocking page render |
 
 ### Custom Events

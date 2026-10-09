@@ -223,6 +223,16 @@ Add `data-debug` to the script tag to log every pageview and event to the browse
 
 Beacons are fire-and-forget, so this is the only way to see from the browser what Puls received. Remove the attribute in production.
 
+### App version
+
+Add `data-version` to the script tag and every pageview and event carries it:
+
+```html
+<script src="https://your-puls-domain/?js" data-site="my-site" data-version="2.6.0" defer></script>
+```
+
+The day a version is first seen shows as a marker on the pageview chart and on each event's trend, so "before and after 2.6.0" is visible without looking up release dates. In an event drill-down, **Group by version** splits counts per version. Versions are cleaned to letters, digits and `. - + _`, max 50 characters. With Vite, `data-version="%npm_package_version%"` or an injected `import.meta.env` value keeps it in sync with `package.json`.
+
 ### TypeScript
 
 Puls ships no npm package. Declare the global once in your project:
