@@ -159,6 +159,7 @@ if (isset($_GET['goal_add']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     require_auth();
     $input = json_decode(file_get_contents('php://input'), true);
     if (empty($input['site']) || empty($input['path'])) respond('', 400);
+    require_site_access($config, (string) $input['site']);
     $type = ($input['type'] ?? 'page') === 'event' ? 'event' : 'page';
     $db = get_db($config['db_path']);
     $stmt = $db->prepare('INSERT OR IGNORE INTO goals (site, path, label, type, created_at) VALUES (?, ?, ?, ?, ?)');
@@ -170,6 +171,7 @@ if (isset($_GET['goal_remove']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     require_auth();
     $input = json_decode(file_get_contents('php://input'), true);
     if (empty($input['site']) || empty($input['path'])) respond('', 400);
+    require_site_access($config, (string) $input['site']);
     $db = get_db($config['db_path']);
     $stmt = $db->prepare('DELETE FROM goals WHERE site = ? AND path = ?');
     $stmt->execute([$input['site'], $input['path']]);
@@ -182,10 +184,7 @@ if ((isset($_GET['breakdown_add']) || isset($_GET['breakdown_remove'])) && $_SER
     $input = json_decode(file_get_contents('php://input'), true) ?: [];
     $bdSite = substr((string) ($input['site'] ?? ''), 0, 200);
     if ($bdSite === '') respond('', 400);
-    $allowed = get_current_user_data($config)['sites'] ?? [];
-    if (!empty($allowed) && !in_array($bdSite, $allowed, true)) {
-        respond(json_encode(['error' => 'Access denied']), 403, 'application/json');
-    }
+    require_site_access($config, $bdSite);
     $db = get_db($config['db_path']);
     if (isset($_GET['breakdown_add'])) {
         $event = substr(trim((string) ($input['event'] ?? '')), 0, 100);
@@ -341,6 +340,15 @@ function require_auth(): void
 {
     if (!is_authenticated()) {
         respond(json_encode(['error' => 'Unauthorized']), 401, 'application/json');
+    }
+}
+
+/** 403 unless the logged-in user may manage $site (empty site list = all sites). */
+function require_site_access(array $config, string $site): void
+{
+    $allowed = get_current_user_data($config)['sites'] ?? [];
+    if (!empty($allowed) && !in_array($site, $allowed, true)) {
+        respond(json_encode(['error' => 'Access denied']), 403, 'application/json');
     }
 }
 
