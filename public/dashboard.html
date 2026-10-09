@@ -716,6 +716,8 @@
     animation: spin 0.8s linear infinite; margin: 0 auto 12px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  [role="tab"]:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .skip-link {
     position: absolute; left: -9999px; top: 0; z-index: 999;
     padding: 8px 16px; background: var(--accent); color: #fff;
@@ -778,6 +780,7 @@
   <span class="ptr-text" id="ptr-text">Refresh</span>
 </div>
 
+<div class="sr-only" id="sr-status" role="status" aria-live="polite" aria-atomic="true"></div>
 <main class="wrap" id="app">
   <div class="loading">
     <div class="loading-spinner" aria-hidden="true"></div>
@@ -786,9 +789,9 @@
 </main>
 
 <div class="menu-overlay" id="menu-overlay" onclick="closeMenu()"></div>
-<div class="menu-panel" id="menu-panel">
+<div class="menu-panel" id="menu-panel" role="dialog" aria-modal="true" aria-labelledby="menu-title">
   <div class="menu-header">
-    <span>Settings</span>
+    <span id="menu-title">Settings</span>
     <button class="menu-close" onclick="closeMenu()" aria-label="Close settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
   </div>
   <div class="menu-section">
@@ -825,7 +828,7 @@
 </div>
 
 <div class="cmd-overlay" id="cmd-overlay" onclick="if(event.target===this)closeSearch()">
-  <div class="cmd-dialog">
+  <div class="cmd-dialog" role="dialog" aria-modal="true" aria-label="Search pages">
     <div class="cmd-input-wrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input class="cmd-input" id="cmd-input" type="text" placeholder="Search pages..." aria-label="Search pages" autocomplete="off" spellcheck="false">
@@ -923,12 +926,14 @@
     currentChannel = '';
     currentPath = '';
     if (!isShared) localStorage.setItem('puls-site', currentSite);
+    pendingAnnouncement = 'site';
     load(currentDays);
   });
 
   periodGroup.addEventListener('click', function(e) {
     const btn = e.target.closest('.period-btn');
     if (!btn || btn.id === 'custom-range-btn') return;
+    pendingAnnouncement = 'period';
     periodGroup.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentFrom = '';
@@ -1040,6 +1045,11 @@
   var lastData = null;
   function render(d) {
     lastData = d;
+    if (pendingAnnouncement && d && d.totals) {
+      var period = currentFrom && currentTo ? currentFrom + ' to ' + currentTo : 'last ' + currentDays + ' days';
+      announce('Showing ' + (currentSite || 'all sites') + ', ' + period + ': ' + num(d.totals.views) + ' pageviews, ' + num(d.totals.visitors) + ' visitors');
+      pendingAnnouncement = '';
+    }
     if (d.error) {
       app.innerHTML = '<div class="empty"><p>' + esc(d.error) + '</p></div>';
       return;
@@ -1160,7 +1170,7 @@
     if (openEvent) {
       [].some.call(document.querySelectorAll('[data-anchor]'), function(el) {
         if (el.getAttribute('data-anchor') !== openEvent.anchor) return false;
-        openEventDetail(el, openEvent.name, openEvent.group, openEvent.showAll, openEvent.then);
+        openEventDetail(el, openEvent.name, openEvent.group, openEvent.showAll, openEvent.then, true);
         var btn = el.querySelector('.breakdown-open');
         if (btn) btn.setAttribute('aria-expanded', 'true');
         return true;
@@ -1262,14 +1272,104 @@
     }).then(function() { load(currentDays); });
   };
 
-  // Keyboard: Enter and Space activate non-button elements that act as buttons
+  // ---------- Accessibility ----------
+
+  // Keyboard: Enter and Space activate non-button elements acting as buttons or tabs;
+  // arrow keys move between tabs in a tablist (ARIA tabs pattern).
   document.addEventListener('keydown', function(e) {
     var t = e.target;
-    if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute && t.getAttribute('role') === 'button' && t.tagName !== 'BUTTON') {
+    var role = t.getAttribute && t.getAttribute('role');
+    if ((e.key === 'Enter' || e.key === ' ') && (role === 'button' || role === 'tab') && t.tagName !== 'BUTTON') {
       e.preventDefault();
       t.click();
+      return;
+    }
+    if (role === 'tab' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End')) {
+      var tabs = [].slice.call(t.parentNode.querySelectorAll('[role="tab"]'));
+      var i = tabs.indexOf(t);
+      var next = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1
+        : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      e.preventDefault();
+      tabs[next].click();
+      tabs[next].focus();
     }
   });
+
+  // Dialogs: remember what had focus, move focus in, trap Tab, restore on close
+  var dialogReturnFocus = [];
+  function openDialogPanel() {
+    var candidates = [
+      document.querySelector('#cmd-overlay.open .cmd-dialog'),
+      document.querySelector('#overlay.open .overlay-panel'),
+      document.querySelector('#menu-panel.open'),
+    ];
+    return candidates.filter(Boolean)[0] || null;
+  }
+  function focusables(el) {
+    return [].filter.call(el.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'), function(n) {
+      return n.offsetParent !== null;
+    });
+  }
+  function dialogOpened(panel) {
+    dialogReturnFocus.push(document.activeElement);
+    if (!panel) return;
+    setTimeout(function() {
+      var f = focusables(panel);
+      (f[0] || panel).focus();
+    }, 30);
+  }
+  function dialogClosed() {
+    var el = dialogReturnFocus.pop();
+    if (el && el.focus && document.contains(el)) el.focus();
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Tab') return;
+    var panel = openDialogPanel();
+    if (!panel) return;
+    var f = focusables(panel);
+    if (!f.length) { e.preventDefault(); return; }
+    var first = f[0], last = f[f.length - 1];
+    if (!panel.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  // Semantics for markup built as strings: clickable divs become buttons, card tabs
+  // follow the tabs pattern. Runs on every DOM change, so re-rendered parts are covered.
+  function enhanceA11y(root) {
+    [].forEach.call(root.querySelectorAll('div[onclick], span[onclick]'), function(el) {
+      if (el.hasAttribute('role') || /overlay/.test(el.className)) return;
+      if (el.classList.contains('card-tab')) return;
+      el.setAttribute('role', 'button');
+      el.setAttribute('tabindex', '0');
+    });
+    [].forEach.call(root.querySelectorAll('.card-tabs'), function(list) {
+      list.setAttribute('role', 'tablist');
+      [].forEach.call(list.querySelectorAll('.card-tab'), function(tab) {
+        var active = tab.classList.contains('active');
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        tab.setAttribute('tabindex', active ? '0' : '-1');
+      });
+    });
+    [].forEach.call(root.querySelectorAll('.tab-panel'), function(p) { p.setAttribute('role', 'tabpanel'); });
+  }
+  var a11yQueued = false;
+  new MutationObserver(function() {
+    if (a11yQueued) return;
+    a11yQueued = true;
+    Promise.resolve().then(function() { a11yQueued = false; enhanceA11y(document); });
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  enhanceA11y(document);
+
+  // Screen reader announcements for changes the user asked for (not the 60 s refresh)
+  var pendingAnnouncement = '';
+  function announce(msg) {
+    var el = document.getElementById('sr-status');
+    if (!el) return;
+    el.textContent = '';
+    setTimeout(function() { el.textContent = msg; }, 50);
+  }
 
   function renderGoals(goals) {
     if (!goals || !goals.length || isShared) return '';
@@ -2366,6 +2466,7 @@
     overlayContent.innerHTML = '<p style="color:var(--muted);font-size:13px">Loading...</p>';
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
+    dialogOpened(overlay.querySelector('.overlay-panel'));
 
     var url = API + '?api&days=' + currentDays + '&expand=' + type;
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
@@ -2377,8 +2478,11 @@
   };
 
   window.closeOverlay = function() {
-    document.getElementById('overlay').classList.remove('open');
+    var overlay = document.getElementById('overlay');
+    if (!overlay.classList.contains('open')) return;
+    overlay.classList.remove('open');
     document.body.style.overflow = '';
+    dialogClosed();
   };
 
   window.showBrokenAll = function(title, color, showStatus) {
@@ -2394,6 +2498,7 @@
     overlayContent.innerHTML = renderBrokenGroup(filtered, color, showStatus);
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
+    dialogOpened(overlay.querySelector('.overlay-panel'));
   };
 
   document.addEventListener('keydown', function(e) {
@@ -2481,12 +2586,13 @@
     openEventDetail(el, eventName, null, false);
   };
 
-  function openEventDetail(row, eventName, group, showAll, then) {
+  // quiet: reopened after a refresh, so do not announce it again
+  function openEventDetail(row, eventName, group, showAll, then, quiet) {
     var detail = document.createElement('div');
     detail.className = 'event-detail';
     detail.innerHTML = '<span style="color:var(--muted)">Loading...</span>';
     row.after(detail);
-    fetchEventDetail(detail, eventName, group, showAll, then);
+    fetchEventDetail(detail, eventName, group, showAll, then, quiet);
   }
 
   // group: null = let the API pick the most common key, '' = recent rows, 'key' = group on it
@@ -2497,7 +2603,7 @@
     return url;
   }
 
-  function fetchEventDetail(detail, eventName, group, showAll, then) {
+  function fetchEventDetail(detail, eventName, group, showAll, then, quiet) {
     var url = eventApiUrl(eventName);
     if (group !== null) url += '&group=' + encodeURIComponent(group);
     if (then) url += '&then=' + encodeURIComponent(then);
@@ -2507,6 +2613,8 @@
       .then(function(data) {
         detail._state = { name: eventName, data: data, showAll: !!showAll, then: then || '' };
         renderEventDetail(detail);
+        var tot = data.eventTotals || { count: 0, visitors: 0 };
+        if (!quiet) announce(eventName.replace(/_/g, ' ') + ': ' + num(tot.count) + ' events from ' + num(tot.visitors) + ' visitors' + (data.funnel && data.funnel.rate !== null ? ', ' + data.funnel.rate + '% went on to ' + data.funnel.then.replace(/_/g, ' ') : ''));
       })
       .catch(function() { detail.innerHTML = '<span style="color:var(--muted)">Failed to load</span>'; });
   }
@@ -2800,12 +2908,19 @@
     menuOverlay.classList.add('open');
     menuPanel.classList.add('open');
     populateGoalPicker();
+    dialogOpened(menuPanel);
   };
 
   window.closeMenu = function() {
+    if (!menuPanel.classList.contains('open')) return;
     menuOverlay.classList.remove('open');
     menuPanel.classList.remove('open');
+    dialogClosed();
   };
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && menuPanel.classList.contains('open')) closeMenu();
+  });
 
   // --- Goal picker in menu ---
   var goalSection = document.getElementById('goals-section');
@@ -3117,6 +3232,7 @@
   var cmdLastQuery = '';
 
   window.openSearch = function() {
+    dialogOpened(null);
     cmdOverlay.classList.add('open');
     cmdInput.value = '';
     cmdResults.innerHTML = '';
@@ -3126,8 +3242,10 @@
   };
 
   window.closeSearch = function() {
+    if (!cmdOverlay.classList.contains('open')) return;
     cmdOverlay.classList.remove('open');
     cmdActive = -1;
+    dialogClosed();
   };
 
   document.addEventListener('keydown', function(e) {
@@ -3304,10 +3422,10 @@
 })();
 </script>
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeOverlay()">
-  <div class="overlay-panel">
+  <div class="overlay-panel" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
     <div class="overlay-header">
       <span class="card-title" id="overlay-title"></span>
-      <button class="overlay-close" onclick="closeOverlay()">&times;</button>
+      <button class="overlay-close" onclick="closeOverlay()" aria-label="Close">&times;</button>
     </div>
     <div id="overlay-content"></div>
   </div>

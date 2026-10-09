@@ -159,6 +159,35 @@ async function main() {
     expect(q('.breakdown-card'), 'saved breakdown card');
     expect(q('.breakdown-card .event-new'), 'NEW badge on breakdown card');
 
+    // Accessibility: tabs pattern, dialog focus handling
+    const tablist = q('.card-tabs[role="tablist"]');
+    expect(tablist, 'card tabs are a tablist');
+    if (tablist) {
+      const tabs = [...tablist.querySelectorAll('[role="tab"]')];
+      expect(tabs.length > 1 && tabs.filter((t) => t.getAttribute('aria-selected') === 'true').length === 1, 'exactly one selected tab');
+      tabs[0].focus();
+      tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      await sleep(50);
+      expect(tabs[1].getAttribute('aria-selected') === 'true' && document.activeElement === tabs[1], 'ArrowRight moves to and selects the next tab');
+      tabs[0].click();
+    }
+    expect(!document.querySelector('div[onclick]:not([role]):not([class*="overlay"])'), 'every clickable div has a role');
+    const showAllBtn = q('.show-all');
+    if (showAllBtn) {
+      showAllBtn.focus();
+      showAllBtn.click();
+      await waitFor(() => q('#overlay.open') && q('.overlay-panel').contains(document.activeElement), 'focus moves into Show all dialog');
+      const panel = q('.overlay-panel');
+      expect(panel.getAttribute('role') === 'dialog' && panel.getAttribute('aria-modal') === 'true', 'Show all is a modal dialog');
+      const close = q('.overlay-close');
+      close.focus();
+      close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+      expect(panel.contains(document.activeElement), 'Tab stays inside the dialog');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await sleep(50);
+      expect(!q('#overlay.open') && document.activeElement === showAllBtn, 'Escape closes and returns focus');
+    }
+
     // Event drill-down
     q('.card-tab[data-tab="events"]').click();
     const row = q('.trow[data-event="cta_click"]');
@@ -199,7 +228,9 @@ async function main() {
     }
 
     // Long period: panel survives the reload and the chart turns dense
+    q('#sr-status').textContent = '';
     q('.period-btn[data-days="90"]').click();
+    await waitFor(() => /last 90 days/.test(q('#sr-status').textContent), 'screen reader status announces the period change');
     await waitFor(() => q('.event-detail .event-chart.dense'), 'dense 90-day chart with panel still open', 8000);
     expect(q('.event-detail') && q('.event-detail')._state && q('.event-detail')._state.then, 'funnel choice kept across period change');
 
@@ -267,7 +298,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, release markers, breakdown card and its details, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, light theme, logged-in goal for an unseen event. No JS errors.');
+    console.log('Dashboard smoke test passed: load, release markers, breakdown card and its details, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, light theme, logged-in goal for an unseen event, tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 
