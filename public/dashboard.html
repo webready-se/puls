@@ -238,6 +238,11 @@
   .breakdown-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .breakdown-card .card-title[contenteditable] { cursor: text; border-radius: 4px; outline: none; }
   .breakdown-card .card-title[contenteditable]:hover, .breakdown-card .card-title[contenteditable]:focus { box-shadow: 0 0 0 1px var(--border); }
+  .breakdown-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .breakdown-card .event-detail { margin: 10px 0 0; }
+  /* The open panel already lists the grouped values; hide the card's own copy */
+  .breakdown-card .event-detail ~ * { display: none; }
+  .goal-item-new .goal-item-path { color: var(--accent); }
   .breakdown-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .breakdown-foot { font-size: 11px; color: var(--light); margin-top: 8px; }
   .event-save { margin-left: auto; }
@@ -335,6 +340,7 @@
   .trow-val { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: var(--muted); }
   .trow-clickable { cursor: pointer; border-radius: 6px; padding: 7px 6px; margin: 0 -6px; transition: background 0.15s; }
   .trow-clickable:hover { background: var(--subtle); }
+  .trow-clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .event-detail { margin: 0 -6px 8px; padding: 8px 10px; background: var(--subtle); border-radius: 8px; font-size: 12px; }
   .event-detail-row { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); align-items: baseline; }
   .event-detail-row:last-child { border-bottom: none; }
@@ -780,7 +786,7 @@
 <div class="menu-panel" id="menu-panel">
   <div class="menu-header">
     <span>Settings</span>
-    <button class="menu-close" onclick="closeMenu()" aria-label="Close menu"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <button class="menu-close" onclick="closeMenu()" aria-label="Close settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
   </div>
   <div class="menu-section">
     <span class="menu-label">Appearance</span>
@@ -1058,7 +1064,8 @@
     var activeTabs = [].map.call(document.querySelectorAll('#app .card-tab.active[data-tab]'), function(t) { return t.getAttribute('data-tab'); });
     var openDetail = document.querySelector('.event-detail');
     var openEvent = openDetail && openDetail._state
-      ? { name: openDetail._state.name, group: openDetail._state.data.eventGroupKey || '', showAll: openDetail._state.showAll, then: openDetail._state.then }
+      ? { name: openDetail._state.name, group: openDetail._state.data.eventGroupKey || '', showAll: openDetail._state.showAll, then: openDetail._state.then,
+          anchor: openDetail.previousElementSibling && openDetail.previousElementSibling.getAttribute('data-anchor') }
       : null;
 
     var totalViews = +d.totals.views;
@@ -1148,8 +1155,12 @@
       if (tab && !tab.classList.contains('active')) switchPageTab(tab);
     });
     if (openEvent) {
-      [].forEach.call(document.querySelectorAll('.trow[data-event]'), function(row) {
-        if (row.getAttribute('data-event') === openEvent.name) openEventDetail(row, openEvent.name, openEvent.group, openEvent.showAll, openEvent.then);
+      [].some.call(document.querySelectorAll('[data-anchor]'), function(el) {
+        if (el.getAttribute('data-anchor') !== openEvent.anchor) return false;
+        openEventDetail(el, openEvent.name, openEvent.group, openEvent.showAll, openEvent.then);
+        var btn = el.querySelector('.breakdown-open');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+        return true;
       });
     }
 
@@ -1175,10 +1186,13 @@
       var sub = (b.label !== auto ? [auto] : []).concat(currentSite ? [] : [b.site]).join(' · ');
       var max = Math.max.apply(null, b.rows.map(function(r) { return r.count; }).concat([1]));
       html += '<div class="card breakdown-card">' +
-        '<div class="breakdown-head">' +
+        '<div class="breakdown-head" data-anchor="bd:' + b.id + '">' +
           '<div style="min-width:0"><span class="card-title"' + (isShared ? '' : ' contenteditable="plaintext-only" spellcheck="false" title="Click to rename" data-bd-site="' + esc(b.site) + '" data-bd-event="' + esc(b.event) + '" data-bd-group="' + esc(b.group) + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}" onblur="renameBreakdown(this)"') + '>' + esc(b.label) + '</span>' +
             (sub ? '<div class="breakdown-sub">' + esc(sub) + '</div>' : '') + '</div>' +
-          (isShared ? '' : '<button class="goal-remove" onclick="removeBreakdown(' + b.id + ', \'' + esc(b.site) + '\')" title="Remove card" aria-label="Remove card">&times;</button>') +
+          '<div class="breakdown-actions">' +
+            '<button class="event-chip breakdown-open" aria-expanded="false" data-event="' + esc(b.event) + '" data-group="' + esc(b.group) + '" onclick="openBreakdownDetail(this)" title="Trend, funnel and CSV for this event">Details</button>' +
+            (isShared ? '' : '<button class="goal-remove" onclick="removeBreakdown(' + b.id + ', \'' + esc(b.site) + '\')" title="Remove card" aria-label="Remove card">&times;</button>') +
+          '</div>' +
         '</div>';
       if (!b.rows.length) {
         html += '<p style="color:var(--muted);font-size:13px;margin-top:12px">No values in this period</p>';
@@ -1213,6 +1227,16 @@
     }).then(function() { load(currentDays); });
   };
 
+  window.openBreakdownDetail = function(btn) {
+    var head = btn.closest('.breakdown-head');
+    var open = head.nextElementSibling && head.nextElementSibling.classList.contains('event-detail');
+    document.querySelectorAll('.event-detail').forEach(function(d) { d.remove(); });
+    document.querySelectorAll('.breakdown-open').forEach(function(b) { b.setAttribute('aria-expanded', 'false'); });
+    if (open) return;
+    btn.setAttribute('aria-expanded', 'true');
+    openEventDetail(head, btn.getAttribute('data-event'), btn.getAttribute('data-group'), false, '');
+  };
+
   window.removeBreakdown = function(id, site) {
     fetch(apiUrl('?breakdown_remove'), {
       method: 'POST',
@@ -1235,6 +1259,15 @@
     }).then(function() { load(currentDays); });
   };
 
+  // Keyboard: Enter and Space activate non-button elements that act as buttons
+  document.addEventListener('keydown', function(e) {
+    var t = e.target;
+    if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute && t.getAttribute('role') === 'button' && t.tagName !== 'BUTTON') {
+      e.preventDefault();
+      t.click();
+    }
+  });
+
   function renderGoals(goals) {
     if (!goals || !goals.length || isShared) return '';
     var html = '<div class="card"><span class="card-title">Goals</span><div style="margin-top:12px">';
@@ -1247,7 +1280,7 @@
         '</div>' +
         '<div style="text-align:right">' +
           '<div class="goal-rate">' + g.rate + '%</div>' +
-          '<div class="goal-meta">' + num(g.conversions) + ' of ' + num(lastData.totals.visitors) + ' visitors</div>' +
+          '<div class="goal-meta">' + (g.conversions ? num(g.conversions) + ' of ' + num(lastData.totals.visitors) + ' visitors' : 'No hits yet') + '</div>' +
         '</div>' +
         '<button class="goal-remove" onclick="removeGoal(\'' + esc(g.path) + '\')" title="Remove goal">&times;</button>' +
       '</div>';
@@ -1713,7 +1746,7 @@
       var pct = (+r.count / max) * 100;
       var name = r.event_name.replace(/_/g, ' ');
       var visitors = r.visitors !== undefined ? num(r.visitors) + ' visitor' + (+r.visitors === 1 ? '' : 's') : '';
-      html += '<div class="trow trow-clickable" data-event="' + esc(r.event_name) + '" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
+      html += '<div class="trow trow-clickable" role="button" tabindex="0" aria-label="' + esc(name) + ': ' + num(r.count) + ' events, show details" data-event="' + esc(r.event_name) + '" data-anchor="event:' + esc(r.event_name) + '" onclick="loadEventDetail(\'' + esc(r.event_name) + '\', this)">' +
         '<span class="trow-label">' + esc(name) + (visitors ? ' <span style="color:var(--light);font-size:11px">' + visitors + '</span>' : '') + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#f16272"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
@@ -1731,7 +1764,7 @@
     rows.forEach(function(r) {
       var pct = (+r.clicks / max) * 100;
       var display = r.url ? r.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '(unknown)';
-      html += '<div class="trow trow-clickable" onclick="loadOutboundDetail(\'' + esc(r.url || '') + '\', this)">' +
+      html += '<div class="trow trow-clickable" role="button" tabindex="0" onclick="loadOutboundDetail(\'' + esc(r.url || '') + '\', this)">' +
         '<span class="trow-label" title="' + esc(r.url || '') + '">' + esc(display) + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#06b6d4"></div></div>' +
         '<span class="trow-val">' + num(r.clicks) + '</span>' +
@@ -1814,7 +1847,7 @@
       var pct = (+c.visitors / maxVisitors) * 100;
       var color = channelColors[c.channel] || '#f16272';
       var slug = channelSlugs[c.channel] || '';
-      html += '<div class="trow trow-clickable" onclick="filterChannel(\'' + slug + '\')">' +
+      html += '<div class="trow trow-clickable" role="button" tabindex="0" onclick="filterChannel(\'' + slug + '\')">' +
         '<span class="trow-label">' + esc(c.channel) +
           ' <span style="color:var(--light);font-size:11px">' + c.pages_per_visitor + ' p/v</span>' +
         '</span>' +
@@ -2556,17 +2589,21 @@
   // Two-step funnel: of the visitors who did this event, how many did the chosen one after it
   function renderEventFunnel(st, d) {
     var names = d.eventNames || [];
-    if (!names.length) return '';
+    // Free text with suggestions, so an event not seen yet can be the second step
+    var listId = 'funnel-events-' + Math.random().toString(36).slice(2);
     var html = '<div class="event-chips"><span class="event-chips-label">Then</span>' +
-      '<select class="event-select" onchange="setEventFunnel(this)" aria-label="Second event for funnel">' +
-        '<option value="">Pick an event…</option>';
+      '<input class="event-select" list="' + listId + '" value="' + esc(st.then || '') + '" placeholder="Event name…" onchange="setEventFunnel(this)" aria-label="Second event for funnel" autocomplete="off" spellcheck="false">' +
+      '<datalist id="' + listId + '">';
     names.forEach(function(n) {
-      html += '<option value="' + esc(n) + '"' + (n === st.then ? ' selected' : '') + '>' + esc(n.replace(/_/g, ' ')) + '</option>';
+      html += '<option value="' + esc(n) + '">';
     });
-    html += '</select></div>';
+    html += '</datalist></div>';
 
     var f = d.funnel;
     if (!f) return html;
+    if (!f.started) {
+      return html + '<div class="event-funnel"><div class="event-funnel-head"><span>No visitors did <b>' + esc(st.name.replace(/_/g, ' ')) + '</b> in this period yet, so there is nothing to follow to <b>' + esc(f.then.replace(/_/g, ' ')) + '</b>.</span></div></div>';
+    }
     var delta = f.rate !== null && f.previousRate !== null ? Math.round((f.rate - f.previousRate) * 10) / 10 : null;
     html += '<div class="event-funnel">' +
       '<div class="event-funnel-head">' +
@@ -2813,6 +2850,18 @@
     events.forEach(function(e) {
       html += goalItemHtml(e.event_name, goalPaths.indexOf(e.event_name) >= 0, 'event');
     });
+    // Not seen yet: offer the typed text as a goal so it counts from the first hit
+    var typed = filter.trim();
+    var typedType = typed.charAt(0) === '/' ? 'page' : 'event';
+    var known = typedType === 'page'
+      ? pages.some(function(p) { return p.path === typed; })
+      : events.some(function(e) { return e.event_name === typed; });
+    if (typed && !known && goalPaths.indexOf(typed) < 0) {
+      html += '<div class="goal-list-label">Not seen yet</div>' +
+        '<button class="goal-item goal-item-new" data-type="' + typedType + '" onclick="menuToggleGoal(this.getAttribute(\'data-path\'), this.getAttribute(\'data-type\'))" data-path="' + esc(typed) + '">' +
+          '<span class="goal-item-path">+ Add ' + typedType + ' goal: ' + esc(typed) + '</span>' +
+        '</button>';
+    }
     goalList.innerHTML = html;
   }
 

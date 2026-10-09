@@ -63,7 +63,9 @@ async function main() {
   if (!token) throw new Error('Seed did not print a share token');
 
   // 2. Serve it
-  const env = { ...process.env, DB_PATH: dbPath, APP_KEY: 'smoke-test-key' };
+  const usersFile = join(tmp, 'users.json');
+  execFileSync('php', ['-r', 'file_put_contents($argv[1], json_encode(["smoke" => ["password" => password_hash("smoke-pass", PASSWORD_BCRYPT, ["cost" => 4]), "sites" => []]]));', usersFile]);
+  const env = { ...process.env, DB_PATH: dbPath, APP_KEY: 'smoke-test-key', USERS_FILE: usersFile };
   children.push(spawn('php', ['-S', `localhost:${PHP_PORT}`, '-t', join(root, 'public')], { env, stdio: 'ignore' }));
   const base = `http://localhost:${PHP_PORT}`;
   await waitForHttp(`${base}/?health`);
@@ -162,8 +164,10 @@ async function main() {
     const row = q('.trow[data-event="cta_click"]');
     expect(row, 'cta_click row in Events tab');
     if (!row) return fails;
-    row.click();
-    if (!await waitFor(() => q('.event-detail') && q('.event-detail')._state, 'event drill-down')) return fails;
+    expect(row.getAttribute('role') === 'button' && row.tabIndex === 0, 'event row is a keyboard button');
+    row.focus();
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    if (!await waitFor(() => q('.event-detail') && q('.event-detail')._state, 'event drill-down opened with Enter')) return fails;
     expect(q('.event-detail .event-summary'), 'drill-down summary');
     expect(q('.event-detail .event-chart .chart-bar'), 'drill-down trend bars');
     expect(q('.event-detail .event-chip[data-key="@version"]'), 'version group chip');
@@ -175,13 +179,17 @@ async function main() {
     expect(document.querySelectorAll('.event-detail .trow').length >= 3, 'version values listed');
 
     // Funnel
-    const sel = q('.event-detail .event-select');
-    expect(sel && sel.options.length > 1, 'funnel picker has events');
-    if (sel && sel.options.length > 1) {
-      sel.value = sel.options[1].value;
-      sel.dispatchEvent(new Event('change'));
-      await waitFor(() => q('.event-detail .event-funnel'), 'funnel result');
-    }
+    const input = q('.event-detail input.event-select');
+    const options = input && input.list ? input.list.options : [];
+    expect(options.length > 0, 'funnel picker suggests events');
+    // An event never seen still gives a funnel (0 converted) instead of an error
+    input.value = 'never_seen_event';
+    input.dispatchEvent(new Event('change'));
+    await waitFor(() => q('.event-detail .event-funnel') && q('.event-detail')._state.then === 'never_seen_event', 'funnel to an unseen event');
+    const again = q('.event-detail input.event-select');
+    again.value = options[0].value;
+    again.dispatchEvent(new Event('change'));
+    await waitFor(() => q('.event-detail .event-funnel') && q('.event-detail')._state.then === options[0].value, 'funnel result');
 
     // Compare mode follows into the drill-down
     const cmp = q('.chart-compare-toggle');
@@ -195,6 +203,18 @@ async function main() {
     await waitFor(() => q('.event-detail .event-chart.dense'), 'dense 90-day chart with panel still open', 8000);
     expect(q('.event-detail') && q('.event-detail')._state && q('.event-detail')._state.then, 'funnel choice kept across period change');
 
+    // Breakdown card opens the same drill-down inside the card, grouped on its key
+    const open = q('.breakdown-card .breakdown-open');
+    expect(open, 'Details button on breakdown card');
+    if (open) {
+      open.click();
+      await waitFor(() => q('.breakdown-card .event-detail') && q('.breakdown-card .event-detail')._state, 'drill-down inside breakdown card');
+      expect(q('.breakdown-card .event-detail')._state.data.eventGroupKey === 'location', 'card drill-down grouped on the card key');
+      expect(q('.breakdown-card .breakdown-open').getAttribute('aria-expanded') === 'true', 'Details button reports expanded');
+      q('.period-btn[data-days="30"]').click();
+      await waitFor(() => q('.breakdown-card .event-detail') && q('.breakdown-card .event-detail')._state && q('.breakdown-card .event-detail')._state.data.days === 30, 'card drill-down kept across period change', 8000);
+    }
+
     // Light theme renders too
     document.documentElement.setAttribute('data-theme', 'light');
     expect(getComputedStyle(document.body).backgroundColor !== '', 'light theme applies');
@@ -207,15 +227,47 @@ async function main() {
     returnByValue: true,
   });
   if (result.exceptionDetails) errors.push(`Smoke steps threw: ${result.exceptionDetails.exception?.description}`);
-  const failures = [...(result.result?.value || []), ...errors];
+  const failures = [...(result.result?.value || [])];
+
+  // 6. Logged in: a goal can be added for an event that has not happened yet
+  const wait2 = loaded();
+  await send('Page.navigate', { url: `${base}/` });
+  await wait2;
+  const wait3 = loaded();
+  await send('Runtime.evaluate', { expression: `document.getElementById('username').value='smoke'; document.getElementById('password').value='smoke-pass'; document.querySelector('form[action="/?login"]').submit();` });
+  await wait3;
+  const loggedIn = async () => {
+    const fails = [];
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const q = (s) => document.querySelector(s);
+    const waitFor = async (fn, what, ms = 5000) => {
+      for (let t = 0; t < ms; t += 100) { if (fn()) return true; await sleep(100); }
+      fails.push(`timed out waiting for ${what}`);
+      return false;
+    };
+    if (!await waitFor(() => q('#chart-card') && q('#goal-search'), 'logged-in dashboard')) return fails;
+    const search = q('#goal-search');
+    search.value = 'pwa_install';
+    search.dispatchEvent(new Event('input'));
+    const add = q('#goal-list .goal-item-new');
+    if (!add || add.getAttribute('data-type') !== 'event') { fails.push('goal picker offers an unseen event'); return fails; }
+    add.click();
+    await waitFor(() => [...document.querySelectorAll('.goal-row')].some((r) => r.textContent.includes('pwa_install') && r.textContent.includes('No hits yet')), 'unseen event goal shows No hits yet', 8000);
+    if (q('.menu-close').getAttribute('aria-label') !== 'Close settings') fails.push('settings close button is labelled');
+    return fails;
+  };
+  const result2 = await send('Runtime.evaluate', { expression: `(${loggedIn.toString()})()`, awaitPromise: true, returnByValue: true });
+  if (result2.exceptionDetails) errors.push(`Logged-in steps threw: ${result2.exceptionDetails.exception?.description}`);
+  failures.push(...(result2.result?.value || []));
 
   ws.close();
+  failures.push(...errors);
   if (failures.length) {
     console.error(`Dashboard smoke test FAILED (${failures.length}):`);
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, release markers, breakdown card, drill-down, group by version, funnel, compare, 90 days, light theme. No JS errors.');
+    console.log('Dashboard smoke test passed: load, release markers, breakdown card and its details, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, light theme, logged-in goal for an unseen event. No JS errors.');
   }
 }
 
