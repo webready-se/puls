@@ -51,6 +51,7 @@ tests/                  — Pest test suite (191 tests, unit + feature)
 scripts/hooks/pre-push  — Git hook: runs Pest before allowing push
 scripts/build-release.sh — Builds release zip with runtime files only
 scripts/screenshots.sh  — Generates all README screenshots (headless Chrome + demo DB)
+scripts/smoke.mjs       — Dashboard smoke test: headless Chrome over DevTools protocol, fails on JS errors (no npm deps)
 scripts/seed-demo.php   — Seeds a demo SQLite database with realistic fake data
 Dockerfile              — Alpine + PHP built-in server (~93MB image)
 docker-entrypoint.sh    — Auto-generates APP_KEY, creates admin from ADMIN_PASSWORD env var
@@ -85,6 +86,9 @@ php -S localhost:8080 -t public
 
 # Run tests
 ./vendor/bin/pest
+
+# Dashboard smoke test (needs Node 22+ and Chrome; runs in CI as its own job)
+node scripts/smoke.mjs
 
 # Add user with site restriction
 php puls user:add client --sites=their-site
@@ -134,7 +138,7 @@ Pest for tests. Two levels:
 | CLI deterministic output (error messages, no-arg fallbacks) | Yes |
 | Pure functions (normalize, detect, etc.) | Yes |
 | Interactive STDIN prompts | No — manual testing |
-| Frontend/dashboard JS | No — Pest can't test it |
+| Frontend/dashboard JS | Smoke test — extend `scripts/smoke.mjs` when adding a dashboard feature |
 
 ### Principles
 

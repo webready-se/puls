@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Dashboard smoke test (`node scripts/smoke.mjs`): seeds a demo database with the old schema, serves it, drives headless Chrome over the DevTools protocol through load, release markers, breakdown cards, event drill-down, group by version, funnel, compare and the 90-day view, and fails on any JavaScript error or missing element. Runs in CI as its own job. No npm dependencies.
+
 ## [1.19.0] — 2026-10-09
 
 ### Security
