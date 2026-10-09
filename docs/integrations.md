@@ -154,6 +154,8 @@ Track any interaction with `puls.track(name, data)`. Events appear in the dashbo
 - **Totals** — events, visitors, rate per 100 visitors and the change versus the previous period.
 - **CSV** — every row in the period with `created_at`, `page_path` and one column per data key.
 
+Any event can also be a **goal**: open the menu, search under Goals, and pick the event name from the Events section. The Goals card then shows how many visitors triggered it and the conversion rate, next to page goals. This is the way to measure a conversion that has no thank-you page, such as `feedback_sent` or `pwa_install` in a single-page app.
+
 The same data is available as JSON: `?api&days=30&event=search_miss&group=query` returns `eventSeries`, `previousEventSeries`, `eventTotals`, `eventKeys`, `eventGroup` (each value with `count`, `visitors`, `new`) and `eventGroupNew`. Add `&format=csv` for the CSV instead. Both work with `&share=<token>` for read-only access, so a script can pull missed searches straight into a backlog:
 
 ```bash

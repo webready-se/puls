@@ -40,7 +40,7 @@ Puls is designed to be GDPR-friendly without consent banners:
 - **Traffic channels** — Paid, Campaign, Organic, Social, Referral, Direct with click filtering
 - **Country stats** — visitor countries from Accept-Language with flag emojis
 - **Custom date range** — 24h, 7d, 30d, 90d, or pick any from/to dates
-- **Goals/conversions** — set target pages and track conversion rate
+- **Goals/conversions** — set target pages or events and track conversion rate
 - **Trend indicators** — comparison with previous period (▲12%)
 - **Bounce rate & session length** — median session duration, inverted bounce trend
 - **Entry/exit pages** — see where visitors land and leave
