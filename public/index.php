@@ -257,6 +257,46 @@ if ((isset($_GET['annotation_add']) || isset($_GET['annotation_update']) || isse
     respond(json_encode(['ok' => true, 'id' => $id]), 200, 'application/json');
 }
 
+// Excluded IPs: a site's list plus the rows for all sites ('*'), and the caller's own
+// address as the tracker sees it, so Settings can exclude it in one step
+if (isset($_GET['excluded'])) {
+    require_auth();
+    $exSite = substr((string) ($_GET['site'] ?? ''), 0, 200);
+    if ($exSite === '') respond('', 400);
+    require_site_access($config, $exSite);
+    $db = get_db($config['db_path']);
+    $ip = client_ip($_SERVER, $config['trusted_proxies'] ?? []);
+    $stmt = $db->prepare("SELECT site, ip, label, created_at FROM excluded_ips WHERE site IN (?, '*') ORDER BY site = '*', ip");
+    $stmt->execute([$exSite]);
+    respond(json_encode([
+        'ip' => $ip,
+        'ip_excluded' => is_excluded_ip($db, $exSite, $ip),
+        'excluded' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+    ]), 200, 'application/json');
+}
+
+// Add or remove an excluded IP or range. require_site_access turns away '*' for a user
+// limited to some sites, so only a user with every site can change the all-sites rows
+if ((isset($_GET['exclude_add']) || isset($_GET['exclude_remove'])) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_auth();
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $exSite = substr((string) ($input['site'] ?? ''), 0, 200);
+    if ($exSite === '') respond('', 400);
+    require_site_access($config, $exSite);
+    $db = get_db($config['db_path']);
+    $raw = trim((string) ($input['ip'] ?? ''));
+    $range = normalize_ip_range($raw);
+    if (isset($_GET['exclude_add'])) {
+        if ($range === null) respond(json_encode(['error' => 'Invalid IP address or range']), 400, 'application/json');
+        $label = mb_substr(trim((string) ($input['label'] ?? '')), 0, 100);
+        $db->prepare('INSERT OR IGNORE INTO excluded_ips (site, ip, label, created_at) VALUES (?, ?, ?, ?)')
+            ->execute([$exSite, $range, $label !== '' ? $label : null, date('Y-m-d H:i:s')]);
+    } else {
+        $db->prepare('DELETE FROM excluded_ips WHERE site = ? AND ip = ?')->execute([$exSite, $range ?? $raw]);
+    }
+    respond(json_encode(['ok' => true, 'ip' => $range ?? $raw]), 200, 'application/json');
+}
+
 if (isset($_GET['api'])) {
     require_auth();
     $user = get_current_user_data($config);
@@ -846,6 +886,22 @@ function is_excluded_ip(PDO $db, string $site, string $ip): bool
         if (ip_in_range($ip, $range)) return true;
     }
     return false;
+}
+
+/**
+ * An address or CIDR range in canonical form (81.2.3.4, 81.2.3.0/24, 2001:db8::/48),
+ * or null when it is not one. The same rule as exclude:add in the CLI, so a row
+ * added in Settings and one added from the CLI are stored alike.
+ */
+function normalize_ip_range(string $input): ?string
+{
+    [$ip, $bits] = array_pad(explode('/', trim($input), 2), 2, null);
+    $bin = @inet_pton($ip);
+    if ($bin === false) return null;
+    $ip = inet_ntop($bin);
+    if ($bits === null) return $ip;
+    if (!ctype_digit($bits) || (int) $bits > strlen($bin) * 8) return null;
+    return $ip . '/' . (int) $bits;
 }
 
 /**

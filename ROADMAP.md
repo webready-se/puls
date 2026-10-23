@@ -39,7 +39,7 @@
 - [x] Google Ads detection (gad_source/gad_campaignid auto-fill, JS + server-side)
 - [x] Stripping of gad\_\*, gbraid, wbraid, \_gl, ved from paths
 - [x] Realtime view — "N online now" badge (last 5 min)
-- [x] Exclude own visits: IP addresses and CIDR ranges per site or all sites (`exclude:add/list/remove`), per browser with `#puls-ignore`
+- [x] Exclude own visits: IP addresses and CIDR ranges per site or all sites (`exclude:add/list/remove`, or Settings in the dashboard), per browser with `#puls-ignore`
 
 ---
 

@@ -363,7 +363,11 @@ Your own and your team's visits can be left out of the numbers in two ways. Both
 
 ### By IP address
 
-Pageviews and events from an excluded address or range are dropped before anything is stored. Use it for an office or another network with a fixed IP:
+Pageviews and events from an excluded address or range are dropped before anything is stored. Use it for an office or another network with a fixed IP.
+
+In the dashboard, open **Settings** and find **Excluded IPs**. It shows your own address as Puls sees it, with **Exclude it** to stop counting it, and the site's list, where you can add an address or range with a label, or remove one with ×. Pick a site first when you can see several. Rows for all sites are listed too, and only a user with access to every site can add or remove them.
+
+From the CLI:
 
 ```bash
 php puls exclude:add my-site 81.2.3.4 --label=Office   # one address

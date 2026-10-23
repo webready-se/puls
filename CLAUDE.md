@@ -37,6 +37,9 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `POST /?annotation_add` | Yes | Add a chart note on a date or date range |
 | `POST /?annotation_update` | Yes | Change a chart note's text |
 | `POST /?annotation_remove` | Yes | Remove a chart note |
+| `GET /?excluded&site=x` | Yes | A site's excluded IPs (and the all-sites ones), plus the caller's own address and whether it is excluded |
+| `POST /?exclude_add` | Yes | Exclude an IP or CIDR range on a site (`*` = all sites, only for users with every site) |
+| `POST /?exclude_remove` | Yes | Count an excluded IP or range again |
 | `GET /?logout` | Yes | End session |
 
 Static file requests (anything with `.` in path) return 404 early to prevent routing conflicts (e.g. favicon.ico triggering CSRF token regeneration).
@@ -54,7 +57,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (257 tests, unit + feature)
+tests/                  — Pest test suite (260 tests, unit + feature)
 docs/integrations.md    - Tracking setup: script attributes, events, keeping personal data out of URLs, excluding own visits, reverse proxies
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading

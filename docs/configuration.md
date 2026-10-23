@@ -63,7 +63,7 @@ Stop counting an office or a home connection by IP address or range, per site or
 php puls exclude:add example.com 81.2.3.0/24 --label="Office"
 ```
 
-Or per browser: open any tracked page with `#puls-ignore`, and `#puls-track` to count it again. Details in [integrations](integrations.md#excluding-your-own-visits).
+Or in the dashboard under **Settings**, **Excluded IPs**, which also shows your current address. Or per browser: open any tracked page with `#puls-ignore`, and `#puls-track` to count it again. Details in [integrations](integrations.md#excluding-your-own-visits).
 
 ## White-label
 

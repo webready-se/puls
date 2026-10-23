@@ -1463,6 +1463,72 @@ test('an excluded range for all sites drops hits on every site', function () {
     expect((int) $db->query("SELECT COUNT(*) FROM pageviews WHERE site = 'any-site-excluded'")->fetchColumn())->toBe(0);
 });
 
+test('excluded IP endpoints require auth', function () {
+    $opts = ['header' => "Content-Type: application/json", 'content' => json_encode(['site' => 'test', 'ip' => '81.2.3.4'])];
+    expect(http('GET', '/?excluded&site=test')['status'])->toBe(401)
+        ->and(http('POST', '/?exclude_add', $opts)['status'])->toBe(401)
+        ->and(http('POST', '/?exclude_remove', $opts)['status'])->toBe(401);
+});
+
+test('excluded IPs can be listed, added and removed on the user\'s sites', function () {
+    $cookie = restrictedSession();
+    $post = fn (string $endpoint, array $body) => http('POST', $endpoint, [
+        'header' => "Content-Type: application/json\r\n{$cookie}",
+        'content' => json_encode($body),
+    ], 8090);
+    $list = fn () => json_decode(http('GET', '/?excluded&site=test', ['header' => $cookie], 8090)['body'], true);
+    $db = getTestDb();
+
+    try {
+        expect(http('GET', '/?excluded&site=not-my-site', ['header' => $cookie], 8090)['status'])->toBe(403)
+            ->and($post('/?exclude_add', ['site' => 'not-my-site', 'ip' => '81.2.3.4'])['status'])->toBe(403)
+            ->and($post('/?exclude_add', ['site' => '*', 'ip' => '81.2.3.4'])['status'])->toBe(403)
+            ->and($post('/?exclude_add', ['site' => 'test', 'ip' => 'not-an-ip'])['status'])->toBe(400)
+            ->and($post('/?exclude_add', ['site' => 'test', 'ip' => '81.2.3.0/33'])['status'])->toBe(400);
+
+        // The caller's own address, as the tracker sees it (the dev server sees loopback)
+        $data = $list();
+        expect($data['ip'])->toBeIn(['127.0.0.1', '::1'])
+            ->and($data['ip_excluded'])->toBeFalse();
+
+        // Stored in the same canonical form as the CLI's exclude:add
+        $r = $post('/?exclude_add', ['site' => 'test', 'ip' => ' 2001:DB8:0::/48 ', 'label' => 'Office']);
+        expect($r['status'])->toBe(200)
+            ->and(json_decode($r['body'], true)['ip'])->toBe('2001:db8::/48');
+        expect($post('/?exclude_add', ['site' => 'test', 'ip' => $data['ip']])['status'])->toBe(200);
+        $db->exec("INSERT INTO excluded_ips (site, ip, created_at) VALUES ('*', '203.0.113.0/24', datetime('now')), ('other-site', '198.51.100.7', datetime('now'))");
+
+        $data = $list();
+        expect($data['ip_excluded'])->toBeTrue()
+            ->and(array_column($data['excluded'], 'ip'))->toBe(['2001:db8::/48', $data['ip'], '203.0.113.0/24'])
+            ->and($data['excluded'][0]['label'])->toBe('Office')
+            ->and($data['excluded'][2]['site'])->toBe('*');
+
+        // The all-sites rows belong to users with every site
+        expect($post('/?exclude_remove', ['site' => '*', 'ip' => '203.0.113.0/24'])['status'])->toBe(403);
+
+        expect($post('/?exclude_remove', ['site' => 'test', 'ip' => '2001:db8:0::/48'])['status'])->toBe(200)
+            ->and($post('/?exclude_remove', ['site' => 'test', 'ip' => $data['ip']])['status'])->toBe(200)
+            ->and(array_column($list()['excluded'], 'ip'))->toBe(['203.0.113.0/24']);
+    } finally {
+        $db->exec("DELETE FROM excluded_ips WHERE site IN ('test', '*', 'other-site')");
+    }
+});
+
+test('a user with every site can change the all-sites excluded IPs', function () {
+    $cookie = restrictedSession('full');
+    $post = fn (string $endpoint) => http('POST', $endpoint, [
+        'header' => "Content-Type: application/json\r\n{$cookie}",
+        'content' => json_encode(['site' => '*', 'ip' => '203.0.113.9']),
+    ], 8090)['status'];
+    $count = fn () => (int) getTestDb()->query("SELECT COUNT(*) FROM excluded_ips WHERE site = '*' AND ip = '203.0.113.9'")->fetchColumn();
+
+    expect($post('/?exclude_add'))->toBe(200)
+        ->and($count())->toBe(1)
+        ->and($post('/?exclude_remove'))->toBe(200)
+        ->and($count())->toBe(0);
+});
+
 test('js snippet lets a browser opt out with #puls-ignore and back in with #puls-track', function () {
     $r = http('GET', '/?js');
     expect($r['body'])->toContain("'#puls-ignore'")

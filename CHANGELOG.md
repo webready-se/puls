@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Excluded IPs in Settings. The dashboard lists a site's excluded addresses and ranges, with those for all sites, and shows your own address as Puls sees it, with a button to exclude it. Add an address or range with an optional label, or remove one. Only a user with access to every site can change the all-sites rows. Endpoints: `GET /?excluded&site=x`, `POST /?exclude_add`, `POST /?exclude_remove`. Rows are stored as `exclude:add` stores them, so the CLI and the dashboard share one list.
+
 ### Changed
 
 - The summary row (best day, peak hour, top page, top source) comes before the goals, so the Goals heading no longer seems to cover it.

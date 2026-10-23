@@ -394,6 +394,16 @@
   .note-item input { flex: 1; min-width: 0; }
   .note-item button { background: none; border: none; color: var(--light); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
   .note-item button:hover { color: var(--red); }
+  .excluded-mine { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .excluded-mine code, .excluded-ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
+  .excluded-mine button { padding: 3px 10px; border-radius: 6px; border: 1px solid var(--note); background: none; color: var(--note); font-size: 12px; font-family: inherit; cursor: pointer; }
+  .excluded-hint { margin: 0; font-size: 11px; color: var(--light); }
+  .excluded-list { display: flex; flex-direction: column; gap: 6px; }
+  .excluded-list:empty::after { content: 'No excluded IPs'; font-size: 11px; color: var(--light); }
+  .excluded-item .excluded-ip { flex: 1; min-width: 0; }
+  .excluded-form { padding: 0; }
+  .excluded-form input { flex: 1 1 100%; min-width: 0; }
+  .excluded-form input[name="label"] { flex-basis: 0; }
   .chart-compare-toggle.active { color: var(--accent); border-color: var(--accent); background: var(--subtle); }
 
   /* Grid */
@@ -897,6 +907,17 @@
   <div class="menu-section" id="notes-section" style="display:none">
     <span class="menu-label" id="notes-label">Chart notes</span>
     <div class="note-list" id="note-list" aria-labelledby="notes-label"></div>
+  </div>
+  <div class="menu-section" id="excluded-section" style="display:none">
+    <span class="menu-label" id="excluded-label">Excluded IPs</span>
+    <div class="excluded-mine" id="excluded-mine"></div>
+    <div class="excluded-list" id="excluded-list" aria-labelledby="excluded-label"></div>
+    <form class="note-form excluded-form" id="excluded-form" onsubmit="addExcluded(event)">
+      <input type="text" name="ip" required maxlength="50" placeholder="IP or range, e.g. 81.2.3.0/24" aria-label="IP address or range to exclude" autocomplete="off" spellcheck="false">
+      <input type="text" name="label" maxlength="100" placeholder="Label, e.g. Office" aria-label="Label (optional)">
+      <button type="submit">Exclude</button>
+    </form>
+    <p class="excluded-hint">Pageviews and events from these addresses are not stored.</p>
   </div>
   <div class="menu-section" id="goals-section" style="display:none">
     <span class="menu-label">Goals</span>
@@ -3315,6 +3336,7 @@
     menuPanel.classList.add('open');
     populateGoalPicker();
     populateNotes();
+    populateExcluded();
     dialogOpened(menuPanel);
   };
 
@@ -3434,6 +3456,71 @@
         (next ? next.querySelector('input') : menuPanel.querySelector('.menu-close')).focus();
         announce('Note removed');
       }, function() { announce('Could not remove the note'); });
+  };
+
+  // --- Excluded IPs: the site's list and the viewer's own address, editable in Settings ---
+  var excludedSection = document.getElementById('excluded-section');
+  var excludedMine = document.getElementById('excluded-mine');
+  var excludedList = document.getElementById('excluded-list');
+  var excludedForm = document.getElementById('excluded-form');
+
+  function populateExcluded() {
+    if (isShared) { excludedSection.style.display = 'none'; return; }
+    excludedSection.style.display = '';
+    var site = noteSite();
+    excludedForm.hidden = !site;
+    if (!site) {
+      excludedMine.textContent = 'Pick a site to see its excluded IPs.';
+      excludedList.innerHTML = '';
+      return;
+    }
+    fetch(apiUrl('?excluded&site=' + encodeURIComponent(site)))
+      .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function(d) {
+        excludedMine.innerHTML = 'Your IP <code>' + esc(d.ip) + '</code>' + (d.ip_excluded
+          ? '<span>is not counted</span>'
+          : '<button type="button" onclick="excludeMine(' + jsArg(d.ip) + ')">Exclude it</button>');
+        excludedList.innerHTML = d.excluded.map(function(x) {
+          var note = [x.label, x.site === '*' ? 'all sites' : ''].filter(Boolean).join(' · ');
+          return '<div class="note-item excluded-item" data-site="' + esc(x.site) + '" data-ip="' + esc(x.ip) + '">' +
+            '<span class="excluded-ip">' + esc(x.ip) + '</span>' +
+            (note ? '<span class="note-item-date">' + esc(note) + '</span>' : '') +
+            '<button type="button" aria-label="Count ' + esc(x.ip) + ' again" onclick="removeExcluded(this)">&times;</button>' +
+          '</div>';
+        }).join('');
+      })
+      .catch(function() { excludedMine.textContent = 'Could not load excluded IPs.'; });
+  }
+
+  function postExcluded(endpoint, body) {
+    return fetch(apiUrl(endpoint), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(r) { if (!r.ok) throw new Error(); populateExcluded(); });
+  }
+
+  window.excludeMine = function(ip) {
+    postExcluded('?exclude_add', { site: noteSite(), ip: ip })
+      .then(function() { announce(ip + ' excluded'); }, function() { announce('Could not exclude ' + ip); });
+  };
+
+  window.addExcluded = function(e) {
+    e.preventDefault();
+    var ip = excludedForm.elements.ip.value.trim();
+    postExcluded('?exclude_add', { site: noteSite(), ip: ip, label: excludedForm.elements.label.value })
+      .then(function() { excludedForm.reset(); announce(ip + ' excluded'); }, function() {
+        excludedForm.elements.ip.setCustomValidity('Not an IP address or range');
+        excludedForm.reportValidity();
+        excludedForm.elements.ip.setCustomValidity('');
+      });
+  };
+
+  window.removeExcluded = function(btn) {
+    var item = btn.closest('.excluded-item'), ip = item.getAttribute('data-ip');
+    postExcluded('?exclude_remove', { site: item.getAttribute('data-site'), ip: ip })
+      .then(function() { menuPanel.querySelector('.menu-close').focus(); announce(ip + ' is counted again'); },
+        function() { announce('Could not remove ' + ip); });
   };
 
   // --- Goal picker in menu ---
