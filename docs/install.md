@@ -138,6 +138,8 @@ docker run -p 8080:8080 -e ADMIN_PASSWORD=changeme -v puls-data:/app/data puls
 
 Behind a reverse proxy, set `TRUSTED_PROXIES` so visitors are told apart by their own address: see [reverse proxies](integrations.md#behind-a-reverse-proxy-docker-cloudflare-load-balancers).
 
+The container runs on UTC. Add `-e TIMEZONE=Europe/Stockholm` (or your zone) so days and hours follow your visitors: see [time zone](configuration.md#time-zone).
+
 ## One-click deploy
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/webready-se/puls)

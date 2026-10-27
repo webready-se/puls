@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PHP_PORT = 8799;
 const CDP_PORT = 9333;
+// Seed, server and browser run in a zone other than UTC, so a time read as UTC shows up
+const TIMEZONE = 'Europe/Stockholm';
 const tmp = mkdtempSync(join(tmpdir(), 'puls-smoke-'));
 const dbPath = join(tmp, 'smoke.sqlite');
 const children = [];
@@ -58,14 +60,14 @@ async function cleanup() {
 
 async function main() {
   // 1. Seed a demo DB with the old schema; the first request runs every migration on it
-  const seed = execFileSync('php', [join(root, 'scripts/seed-demo.php'), dbPath], { encoding: 'utf8' });
+  const seed = execFileSync('php', ['-d', `date.timezone=${TIMEZONE}`, join(root, 'scripts/seed-demo.php'), dbPath], { encoding: 'utf8' });
   const token = seed.match(/Share token: ([a-f0-9]+)/)?.[1];
   if (!token) throw new Error('Seed did not print a share token');
 
   // 2. Serve it
   const usersFile = join(tmp, 'users.json');
   execFileSync('php', ['-r', 'file_put_contents($argv[1], json_encode(["smoke" => ["password" => password_hash("smoke-pass", PASSWORD_BCRYPT, ["cost" => 4]), "sites" => []]]));', usersFile]);
-  const env = { ...process.env, DB_PATH: dbPath, USERS_FILE: usersFile };
+  const env = { ...process.env, DB_PATH: dbPath, USERS_FILE: usersFile, TIMEZONE };
   children.push(spawn('php', ['-S', `localhost:${PHP_PORT}`, '-t', join(root, 'public')], { env, stdio: 'ignore' }));
   const base = `http://localhost:${PHP_PORT}`;
   await waitForHttp(`${base}/?health`);
@@ -79,24 +81,25 @@ async function main() {
   for (let i = 0; i < 3; i++) {
     await post({ event_name: 'cta_click', site: 'demo.example.com', page_path: '/', app_version: '9.9.' + i, event_data: { location: 'smoke' + i } }, `Mozilla/5.0 Smoke/${i}`);
   }
-  execFileSync('php', ['-r', `
+  execFileSync('php', ['-d', `date.timezone=${TIMEZONE}`, '-r', `
     $db = new PDO('sqlite:' . $argv[1]);
-    $db->exec("INSERT INTO breakdowns (site, label, event_name, group_key, created_at) VALUES ('demo.example.com', 'Smoke card', 'cta_click', 'location', datetime('now'))");
+    $now = date('Y-m-d H:i:s');
+    $db->exec("INSERT INTO breakdowns (site, label, event_name, group_key, created_at) VALUES ('demo.example.com', 'Smoke card', 'cta_click', 'location', '$now')");
     // A second card, so the logged-in view can arrange them
-    $db->exec("INSERT INTO breakdowns (site, label, event_name, group_key, created_at) VALUES ('demo.example.com', 'Versions', 'cta_click', '@version', datetime('now'))");
+    $db->exec("INSERT INTO breakdowns (site, label, event_name, group_key, created_at) VALUES ('demo.example.com', 'Versions', 'cta_click', '@version', '$now')");
     // More than five values, so the card offers Show all
-    $more = $db->prepare("INSERT INTO events (site, event_name, page_path, event_data, visitor_hash, created_at) VALUES ('demo.example.com', 'cta_click', '/', ?, ?, datetime('now'))");
+    $more = $db->prepare("INSERT INTO events (site, event_name, page_path, event_data, visitor_hash, created_at) VALUES ('demo.example.com', 'cta_click', '/', ?, ?, '$now')");
     for ($i = 0; $i < 6; $i++) $more->execute([json_encode(['location' => 'extra' . $i]), 'extra-' . $i]);
     // Hostile names from the public endpoints must render as text, never as markup or script
     $hostile = 'x"><img src=x onerror="window.__xss=1">' . "');window.__xss=2;('";
-    $ev = $db->prepare("INSERT INTO events (site, event_name, page_path, visitor_hash, created_at) VALUES ('demo.example.com', ?, '/', ?, datetime('now'))");
+    $ev = $db->prepare("INSERT INTO events (site, event_name, page_path, visitor_hash, created_at) VALUES ('demo.example.com', ?, '/', ?, '$now')");
     for ($i = 0; $i < 40; $i++) $ev->execute([$hostile, 'xss-' . $i]);
-    $pv = $db->prepare("INSERT INTO pageviews (site, path, visitor_hash, created_at) VALUES ('demo.example.com', ?, ?, datetime('now'))");
+    $pv = $db->prepare("INSERT INTO pageviews (site, path, visitor_hash, created_at) VALUES ('demo.example.com', ?, ?, '$now')");
     for ($i = 0; $i < 400; $i++) $pv->execute(['/' . $hostile, 'xss-' . $i]);
     // A path a spreadsheet would read as a formula: the CSV export must defuse it
     for ($i = 0; $i < 450; $i++) $pv->execute(['=HYPERLINK("https://example.com","x")', 'csv-' . $i]);
     // Annotations: a range, a label that needs escaping, and one on the release day (stacked labels)
-    $note = $db->prepare("INSERT INTO annotations (site, date, end_date, label, created_at) VALUES ('demo.example.com', ?, ?, ?, datetime('now'))");
+    $note = $db->prepare("INSERT INTO annotations (site, date, end_date, label, created_at) VALUES ('demo.example.com', ?, ?, ?, '$now')");
     $note->execute([date('Y-m-d', strtotime('-6 days')), date('Y-m-d', strtotime('-4 days')), 'Smoke campaign']);
     $note->execute([date('Y-m-d', strtotime('-2 days')), null, 'Say "hi" <b>bold</b>']);
     $note->execute([date('Y-m-d'), null, 'Smoke film']);
@@ -154,6 +157,7 @@ async function main() {
 
   await send('Page.enable');
   await send('Runtime.enable');
+  await send('Emulation.setTimezoneOverride', { timezoneId: TIMEZONE });
 
   // 5. Load the shared dashboard and walk through it
   const wait = loaded();
@@ -190,6 +194,18 @@ async function main() {
       expect(shownRows() === 5, 'Show fewer collapses it again');
     }
     expect(/^\d+(\.\d)?% bounce$/.test(q('[data-panel="entry"] .trow-bounce')?.textContent || ''), 'bounce rate on entry pages');
+
+    // Times are the install's, in its zone (TIMEZONE): Peak hour is 24 h, and "x hr ago" counts
+    // from the server's now, not from a time read as UTC (the footer's zone, step 10)
+    const peak = [...document.querySelectorAll('.summary-card')].find((c) => c.querySelector('.summary-card-label')?.textContent === 'Peak hour');
+    expect(/^\d{2}:00–\d{2}:00$/.test(peak?.querySelector('.summary-card-value')?.textContent || ''), 'Peak hour in 24 h');
+    const api = await (await fetch('/?api&days=7&share=' + new URLSearchParams(location.search).get('share'))).json();
+    const wall = (t) => Date.parse(t.replace(' ', 'T') + 'Z');
+    const ago = (s) => s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : Math.floor(s / 3600) + ' hr ago';
+    const age = (wall(api.now) - wall(api.botActivity[0].created_at)) / 1000;
+    const shownAgo = q('.bot-row-time')?.textContent;
+    // The dashboard rendered a little before this request, so it may show up to two minutes less
+    expect([ago(age), ago(age - 120)].includes(shownAgo), `latest bot visit counts from the server's now (shows ${shownAgo}, expected ${ago(age)})`);
 
     // Order: the chart right after the numbers, saved cards after pages and sources
     const isle = (k) => q(`#app [data-island="${k}"]`);
@@ -334,7 +350,7 @@ async function main() {
     expect(getComputedStyle(document.body).backgroundColor !== '', 'light theme applies');
     // The shared footer: name, version and freshness, then the Webready credit with the family's marks
     const foot = q('#app .foot');
-    expect(foot && /^Puls \d+\.\d+\.\d+ · from the tracking script, updated \d\d:\d\d$/.test(foot.firstElementChild.textContent), 'footer names Puls, its version and when it was updated');
+    expect(foot && /^Puls \d+\.\d+\.\d+ · from the tracking script, updated \d\d:\d\d$/.test(foot.firstElementChild.textContent), 'footer names Puls, its version and when it was updated (no zone: the viewer shares it)');
     expect(foot && foot.querySelector('a[href="https://webready.se"]') && foot.querySelectorAll('.foot-marks svg').length === 1 && foot.querySelector('.foot-marks a[href="https://github.com/webready-se/puls"]'), 'footer credit links Webready, with only the public tools\' marks (today Puls), each linked');
     // Figtree, self-hosted, actually loads (a CSP without font-src would block it silently)
     await document.fonts.ready;
@@ -495,9 +511,10 @@ async function main() {
 
   // 7. A hostile site name already in the database renders as text in the chart and the site overview
   const hostileSite = 'x"><img src=x onerror="window.__xss=1">' + "');window.__xss=2;('";
-  execFileSync('php', ['-r', `
+  execFileSync('php', ['-d', `date.timezone=${TIMEZONE}`, '-r', `
     $db = new PDO('sqlite:' . $argv[1]);
-    $db->prepare("INSERT INTO pageviews (site, path, visitor_hash, created_at) VALUES (?, '/', 'xss-site', datetime('now'))")->execute([$argv[2]]);
+    $now = date('Y-m-d H:i:s');
+    $db->prepare("INSERT INTO pageviews (site, path, visitor_hash, created_at) VALUES (?, '/', 'xss-site', '$now')")->execute([$argv[2]]);
   `, dbPath, hostileSite]);
   await send('Runtime.evaluate', { expression: `localStorage.setItem('puls-site', ${JSON.stringify(hostileSite)})` });
   const wait5 = loaded();
@@ -590,6 +607,20 @@ async function main() {
     if (shown.result?.value !== tab) failures.push(`chart opens on ${tab} after picking it (showed ${shown.result?.value})`);
   }
 
+  // 10. A viewer in another time zone: the footer names the install's, in plain words
+  await send('Emulation.setTimezoneOverride', { timezoneId: 'America/New_York' });
+  const wait7 = loaded();
+  await send('Page.navigate', { url: `${base}/` });
+  await wait7;
+  const zoneFoot = async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let t = 0; t < 5000 && !document.querySelector('#app .foot'); t += 100) await sleep(100);
+    return document.querySelector('#app .foot')?.firstElementChild.textContent || '';
+  };
+  const footText = (await send('Runtime.evaluate', { expression: `(${zoneFoot.toString()})()`, awaitPromise: true, returnByValue: true })).result?.value || '';
+  if (!/updated \d\d:\d\d, Stockholm time$/.test(footText)) failures.push(`footer names the install's zone for a viewer elsewhere (shows "${footText}")`);
+  await send('Emulation.setTimezoneOverride', { timezoneId: TIMEZONE });
+
   ws.close();
   failures.push(...errors);
   if (failures.length) {
@@ -597,7 +628,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, release markers, breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, Today period wording, light theme, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, release markers, breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 
