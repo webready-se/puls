@@ -560,6 +560,40 @@ test('api entry pages include bounces that add up to the site bounce rate', func
     expect(round(100 * $bounced / 6, 1))->toEqual($data['bounceRate']);
 });
 
+test('api hours returns one day per hour with the chart filters', function () {
+    $site = 'hours-' . uniqid();
+    $day = date('Y-m-d', strtotime('-1 day'));
+    $db = getTestDb();
+    $stmt = $db->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash) VALUES (?, ?, ?, ?)');
+    // 09:00: a on two pages, b once. 21:00: a again, so a counts in both hours
+    $stmt->execute(["{$day} 09:05:00", $site, '/', 'a']);
+    $stmt->execute(["{$day} 09:40:00", $site, '/kale', 'a']);
+    $stmt->execute(["{$day} 09:59:59", $site, '/', 'b']);
+    $stmt->execute(["{$day} 21:30:00", $site, '/', 'a']);
+    // Neither the day before nor the day after, nor another site
+    $stmt->execute([date('Y-m-d 23:59:59', strtotime('-2 days')), $site, '/', 'c']);
+    $stmt->execute([date('Y-m-d 00:00:00'), $site, '/', 'c']);
+    $stmt->execute(["{$day} 09:10:00", 'other-' . $site, '/', 'c']);
+
+    $token = createTestShareToken($site);
+    $data = json_decode(http('GET', "/?api&days=7&hours={$day}&share={$token}")['body'], true);
+    $byHour = array_column($data['hours'], null, 'hour');
+
+    expect($data['date'])->toBe($day)
+        ->and($data['today'])->toBe(date('Y-m-d'))
+        ->and($data['hours'])->toHaveCount(24)
+        ->and($byHour[9])->toBe(['hour' => 9, 'views' => 3, 'visitors' => 2])
+        ->and($byHour[21])->toBe(['hour' => 21, 'views' => 1, 'visitors' => 1])
+        ->and(array_sum(array_column($data['hours'], 'views')))->toBe(4)
+        ->and($data)->not->toHaveKey('totals');
+
+    // The chart's path filter applies too
+    $kale = json_decode(http('GET', "/?api&days=7&hours={$day}&path=/kale&share={$token}")['body'], true);
+    expect(array_sum(array_column($kale['hours'], 'views')))->toBe(1);
+
+    expect(http('GET', "/?api&days=7&hours=yesterday&share={$token}")['body'])->toContain('Invalid date');
+});
+
 test('share API returns 404 for expired token', function () {
     $token = createTestShareToken('test', '2020-01-01 00:00:00');
     $r = http('GET', '/?api&days=7&share=' . $token);

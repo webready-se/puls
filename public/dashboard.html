@@ -477,6 +477,24 @@
   }
   .chart-col-compare:hover > .tip { display: block; }
   .chart-date { font-size: 10px; color: var(--text-3); white-space: nowrap; }
+  /* The day the hourly card shows */
+  .chart-col[data-date] { cursor: pointer; }
+  .chart-col.selected .chart-date { color: var(--accent); font-weight: 700; }
+  .chart-col.selected .chart-bar:not(.chart-bar-prev) { outline: 2px solid var(--accent-tile); outline-offset: 2px; }
+  /* Hourly card: all 24 hours fit the card, so it never scrolls */
+  .hour-scroll { padding-top: 30px; }
+  .hour-chart { gap: 4px; }
+  .hour-chart .chart-col { min-width: 0; padding: 0; }
+  .hour-chart .chart-col.later .chart-date { opacity: 0.5; }
+  .hour-chart .chart-col:nth-child(-n+3) .tip { left: 0; transform: none; }
+  .hour-chart .chart-col:nth-last-child(-n+3) .tip { left: auto; right: 0; transform: none; }
+  .hour-chart .chart-col:nth-child(-n+3) .tip::after { left: 8px; }
+  .hour-chart .chart-col:nth-last-child(-n+3) .tip::after { left: auto; right: 3px; }
+  @media (max-width: 800px) {
+    .hour-chart { gap: 2px; }
+    .hour-chart .chart-val { display: none; }
+    .hour-chart .chart-col:not(:nth-child(3n+1)) .chart-date { visibility: hidden; }
+  }
   /* Release marker: line stops above the date label, label sits above the bar value */
   .chart-col.has-release { position: relative; background: linear-gradient(var(--accent-tile), var(--accent-tile)) center top / 1px calc(100% - 22px) no-repeat; background-clip: content-box; }
   .chart-col.has-release .chart-val { position: relative; z-index: 1; background: var(--surface); padding: 0 3px; border-radius: 3px; }
@@ -1199,10 +1217,8 @@
     return url;
   }
 
-  // auto: the 60 s refresh, which keeps the current view if the request fails
-  function load(days, auto) {
-    currentDays = days;
-    lastLoad = Date.now();
+  // The API URL for the current period, site and filters
+  function viewUrl(days) {
     let url;
     if (currentFrom && currentTo) {
       url = apiUrl('?api&from=' + currentFrom + '&to=' + currentTo);
@@ -1212,7 +1228,14 @@
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
     if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
     if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
-    return fetch(url)
+    return url;
+  }
+
+  // auto: the 60 s refresh, which keeps the current view if the request fails
+  function load(days, auto) {
+    currentDays = days;
+    lastLoad = Date.now();
+    return fetch(viewUrl(days))
       .then(function(r) {
         if (r.status === 401) {
           if (isShared) { app.innerHTML = '<div class="empty"><p>This link has expired or is no longer valid.</p></div>'; return; }
@@ -1447,6 +1470,7 @@
 
     var filtered = !!d.path;
     var html = '';
+    pickHourDay(d);
 
     // Filter chips
     if (filtered) {
@@ -1472,6 +1496,7 @@
     // cards after them. The summary sits above the Goals heading so it does not read as goals.
     html += island('stats', renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend)) +
       island('chart', renderChart(d)) +
+      island('hours', renderHourCard(d)) +
       island('sites', renderSiteOverview(d.siteOverview)) +
       island('summary', renderSummary(d.summary)) +
       renderGoals(d.goals);
@@ -1506,6 +1531,7 @@
     patchIslands(html, sameView).forEach(showLatestDays);
     var newScroll = app.querySelector('#chart-card .chart-scroll');
     if (keepLeft !== null && newScroll && newScroll !== oldScroll) newScroll.scrollLeft = keepLeft;
+    loadHours();
 
     activeTabs.forEach(function(id) {
       var tab = document.querySelector('.card-tab[data-tab="' + id + '"]');
@@ -2120,7 +2146,7 @@
           (prev ? '<div style="color:var(--text-3);margin-top:2px">vs ' + prevLabel + ': ' + num(prev.views) + ' / ' + num(prev.visitors) + '</div>' : '') +
         '</div>';
 
-        bars += '<div class="chart-col chart-col-compare' + (marks[p.date] ? marks[p.date].cls : '') + '">' +
+        bars += '<div class="chart-col chart-col-compare' + (marks[p.date] ? marks[p.date].cls : '') + hourPick(p.date) + '">' +
           (marks[p.date] ? marks[p.date].html : '') +
           combinedTip +
           '<div class="chart-bars">' +
@@ -2136,7 +2162,7 @@
           '<span class="chart-date">' + label + '</span>' +
         '</div>';
       } else {
-        bars += '<div class="chart-col' + (marks[p.date] ? marks[p.date].cls : '') + '">' +
+        bars += '<div class="chart-col' + (marks[p.date] ? marks[p.date].cls : '') + hourPick(p.date) + '">' +
           (marks[p.date] ? marks[p.date].html : '') +
           '<span class="chart-val">' + num(p[key]) + '</span>' +
           '<div class="chart-bar" style="height:' + h + 'px">' +
@@ -2157,6 +2183,107 @@
     el.classList.add('active');
     var chartEl = card.querySelector('.chart');
     chartEl.innerHTML = buildBars(lastData.pageviews, lastData.previousPageviews);
+    fillHourCard();
+  };
+
+  // Hourly card under the chart: one day's pageviews or visitors per hour, following the
+  // chart's tab. Clicking a day in the chart picks it; until then it is the latest day.
+  var hourDay = '', hourPicked = false, hourData = null, hourSeq = 0;
+
+  function pickHourDay(d) {
+    var dates = (d.pageviews || []).map(function(p) { return p.date; });
+    if (!hourPicked || dates.indexOf(hourDay) < 0) {
+      hourPicked = false;
+      hourDay = dates[dates.length - 1] || '';
+    }
+  }
+
+  // The chart column's class tail and attributes that pick its day: a button for
+  // keyboards and screen readers (Enter and Space click it, like every role=button)
+  function hourPick(date) {
+    var day = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return (date === hourDay ? ' selected' : '') + '" data-date="' + esc(date) + '" role="button" tabindex="0"' +
+      ' aria-pressed="' + (date === hourDay) + '" aria-label="' + esc('Show ' + day + ' by hour') + '" onclick="pickHour(' + jsArg(date) + ')';
+  }
+
+  function hourKey() {
+    return [currentSite, currentDays, currentFrom, currentTo, currentPath, currentChannel, hourDay].join('|');
+  }
+
+  function hourLabel(h, long) {
+    var x = h % 12 || 12;
+    return long ? x + (h < 12 ? ' am' : ' pm') : x + (h < 12 ? 'a' : 'p');
+  }
+
+  function hourTitle() {
+    var day = new Date(hourDay + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return (chartMode === 'visitors' ? 'Visitors' : 'Pageviews') + ' by hour, ' + day;
+  }
+
+  function renderHourCard(d) {
+    if (!hourDay) return '';
+    return '<div class="card" id="hour-card">' +
+      '<div class="card-header">' +
+        '<span class="card-title" id="hour-title">' + hourTitle() + '</span>' +
+        '<span class="card-subtitle">' + esc(currentSite || 'all sites') + '</span>' +
+      '</div>' +
+      '<div class="hour-scroll"><div class="chart hour-chart">' + buildHourBars() + '</div></div>' +
+    '</div>';
+  }
+
+  function buildHourBars() {
+    if (!hourData || hourData.key !== hourKey()) return '';
+    var key = chartMode === 'visitors' ? 'visitors' : 'views';
+    var maxVal = Math.max.apply(null, hourData.hours.map(function(r) { return +r[key]; }).concat([1]));
+    // Today's hours after this one have not happened yet: no bar
+    var lastHour = hourData.date === hourData.today ? hourData.hourNow : 23;
+    return hourData.hours.map(function(r) {
+      if (r.hour > lastHour) {
+        return '<div class="chart-col later"><span class="chart-date">' + hourLabel(r.hour) + '</span></div>';
+      }
+      var h = Math.max(4, (+r[key] / maxVal) * 140);
+      return '<div class="chart-col">' +
+        '<span class="chart-val">' + num(r[key]) + '</span>' +
+        '<div class="chart-bar" style="height:' + h + 'px">' +
+          '<div class="tip">' + hourLabel(r.hour, true) + ': ' + num(r.views) + ' views, ' + num(r.visitors) + ' visitors</div>' +
+        '</div>' +
+        '<span class="chart-date">' + hourLabel(r.hour) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function fillHourCard() {
+    var card = document.getElementById('hour-card');
+    if (!card) return;
+    document.getElementById('hour-title').textContent = hourTitle();
+    card.querySelector('.hour-chart').innerHTML = buildHourBars();
+  }
+
+  function loadHours() {
+    if (!hourDay || !document.getElementById('hour-card')) return;
+    var key = hourKey(), seq = ++hourSeq;
+    fetch(viewUrl(currentDays) + '&hours=' + hourDay)
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(h) {
+        if (!h || !h.hours || seq !== hourSeq) return;
+        h.key = key;
+        hourData = h;
+        fillHourCard();
+      })
+      .catch(function() {});
+  }
+
+  window.pickHour = function(date) {
+    if (date === hourDay) return;
+    hourDay = date;
+    hourPicked = true;
+    document.querySelectorAll('#chart-card .chart-col[data-date]').forEach(function(c) {
+      var on = c.getAttribute('data-date') === date;
+      c.classList.toggle('selected', on);
+      c.setAttribute('aria-pressed', on);
+    });
+    fillHourCard();
+    loadHours();
   };
 
   window.toggleCompareMode = function(el) {

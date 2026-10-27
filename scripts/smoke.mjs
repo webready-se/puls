@@ -191,10 +191,11 @@ async function main() {
     }
     expect(/^\d+(\.\d)?% bounce$/.test(q('[data-panel="entry"] .trow-bounce')?.textContent || ''), 'bounce rate on entry pages');
 
-    // Order: the chart right after the numbers, saved cards after pages and sources
+    // Order: the chart right after the numbers, then its hours, saved cards after pages and sources
     const isle = (k) => q(`#app [data-island="${k}"]`);
-    const order = ['stats', 'chart', 'pages', 'traffic', 'breakdowns', 'bots'].map(isle);
-    expect(order.every((el, i) => el && (!i || order[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)), 'sections in order: numbers, chart, pages, sources, saved cards, bots');
+    const order = ['stats', 'chart', 'hours', 'pages', 'traffic', 'breakdowns', 'bots'].map(isle);
+    expect(order.every((el, i) => el && (!i || order[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)), 'sections in order: numbers, chart, hours, pages, sources, saved cards, bots');
+    expect(isle('chart')?.nextElementSibling === isle('hours'), 'the hourly card sits right under the chart');
 
     // Islands: a refresh of the same view keeps unchanged parts as the same DOM, an open drill-down included
     const card = q('.breakdown-card'), chartCard = q('#chart-card');
@@ -590,6 +591,39 @@ async function main() {
     if (shown.result?.value !== tab) failures.push(`chart opens on ${tab} after picking it (showed ${shown.result?.value})`);
   }
 
+  // 10. The hourly card: opens on the latest day, follows a clicked day and the chart's tab
+  const hourly = async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const q = (s) => document.querySelector(s);
+    const waitFor = async (fn) => { for (let t = 0; t < 5000 && !fn(); t += 100) await sleep(100); return fn(); };
+    const fails = [];
+    // An earlier step leaves Today (one bar) picked; seven days give other days to click
+    if (!await waitFor(() => q('.period-btn[data-days="7"]'))) return ['no 7 days period button'];
+    q('.period-btn[data-days="7"]').click();
+    if (!await waitFor(() => document.querySelectorAll('#chart-card .chart-col[data-date]').length === 7)) return ['7 days shows seven days'];
+    if (!await waitFor(() => document.querySelectorAll('#hour-card .hour-chart .chart-col').length === 24)) return ['hourly card shows 24 hours'];
+    const days = [...document.querySelectorAll('#chart-card .chart-col[data-date]')].map((c) => c.dataset.date);
+    if (q('#chart-card .chart-col.selected')?.dataset.date !== days[days.length - 1]) fails.push('hourly card opens on the latest day');
+    const pick = days[days.length - 3];
+    const label = new Date(pick + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    q(`#chart-card .chart-col[data-date="${pick}"]`).click();
+    if (!await waitFor(() => q('#hour-title').textContent.endsWith(label) && document.querySelectorAll('#hour-card .hour-chart .chart-col').length === 24)) fails.push(`clicking ${pick} shows its hours (title: ${q('#hour-title').textContent})`);
+    if (document.querySelectorAll('#chart-card .chart-col.selected').length !== 1 || q('#chart-card .chart-col.selected').dataset.date !== pick) fails.push('the clicked day is the one marked');
+    if (q(`#chart-card .chart-col[data-date="${pick}"]`).getAttribute('aria-pressed') !== 'true') fails.push('the picked day is aria-pressed');
+    // Keyboard: Enter on a focused day picks it
+    const keyed = q(`#chart-card .chart-col[data-date="${days[days.length - 2]}"]`);
+    keyed.focus();
+    keyed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    if (!await waitFor(() => keyed.classList.contains('selected'))) fails.push('Enter on a focused day picks it');
+    q('#chart-card .card-tab[data-chart="visitors"]').click();
+    if (!q('#hour-title').textContent.startsWith('Visitors by hour')) fails.push('the hourly card follows the chart tab');
+    q('#chart-card .card-tab[data-chart="views"]').click();
+    return fails;
+  };
+  const resultHours = await send('Runtime.evaluate', { expression: `(${hourly.toString()})()`, awaitPromise: true, returnByValue: true });
+  if (resultHours.exceptionDetails) errors.push(`Hourly card steps threw: ${resultHours.exceptionDetails.exception?.description}`);
+  failures.push(...(resultHours.result?.value || []));
+
   ws.close();
   failures.push(...errors);
   if (failures.length) {
@@ -597,7 +631,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, release markers, breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, Today period wording, light theme, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, release markers, breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, hourly card (latest day, clicked day, chart tab), Today period wording, light theme, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 

@@ -69,6 +69,18 @@ Every response compares with the previous period of the same length, in the `pre
 | `bots`, `botCategories`, `botPages`, `botActivity` | Crawler and AI bot visits |
 | `live` | Visitors in the last 5 minutes |
 
+## Hours of a day
+
+`?api&days=30&hours=2026-03-14` returns one day per hour, with the same `site`, `path` and `channel` filters as the dashboard data (a `channel` picks its visitors over the whole period, as it does for the chart). The dashboard draws it in the card under the chart.
+
+| Field | Shape |
+|-------|-------|
+| `date` | The day asked for |
+| `hours` | Always 24 rows: `[{hour, views, visitors}]`, `hour` 0 to 23 in the server's time zone. A visitor seen in two hours counts in both, so the hours' visitors can add up to more than the day's |
+| `today`, `hourNow` | The server's date and current hour, so a client can tell the hours of today that have not happened yet |
+
+A date that is not `YYYY-MM-DD` returns `{"error": "Invalid date"}`.
+
 ## Event drill-down
 
 `?api&days=30&event=signup` returns one event in detail:

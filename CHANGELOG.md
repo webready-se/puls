@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A card under the chart shows one day hour by hour, in the chart's Pageviews or Visitors. Clicking a day's bar picks it, and the card opens on the latest day, so today. The hours come from `?api&hours=YYYY-MM-DD` (`docs/api.md`), with the chart's site, page and channel filters.
+
 ### Changed
 
 - The chart remembers whether it shows Pageviews or Visitors, as it already remembers Compare, so the dashboard opens on the tab you picked last (`puls-chart` in local storage).
