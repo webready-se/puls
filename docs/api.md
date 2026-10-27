@@ -62,12 +62,13 @@ Every response compares with the previous period of the same length, in the `pre
 | `outbound`, `outboundTotal` | `[{url, clicks, visitors}]` |
 | `goals` | `[{path, label, type, conversions, rate, previousConversions, series, target, targetPeriod}]`, `type` is `page` or `event`. `series` is the visitors who converted per day; `target` is a count per `targetPeriod` (`day`, `week` or `month`), or `null` |
 | `breakdowns` | Saved event cards: `[{id, site, label, event, group, rows, total, new, count, previousCount, series}]`. `rows` holds the top 50 values, `total` the number of values, `count` and `previousCount` the events with a value in this and the previous period, `series` their count per day |
-| `summary` | `{bestDay, bestDayViews, peakHour, peakHourViews, topPage, topPageViews, topSource, topSourceVisitors}` |
+| `summary` | `{bestDay, bestDayViews, peakHour, peakHourStart, peakHourViews, topPage, topPageViews, topSource, topSourceVisitors}`. `peakHourStart` is the hour (0 to 23) that `peakHour` starts |
 | `versions` | `[{version, first_seen}]` from `data-version` |
 | `annotations` | Chart notes overlapping the period: `[{id, site, date, end_date, label}]` |
 | `brokenLinks` | 404s and redirects logged by Nginx: `[{site, path, status, hits, referrers, first_seen, last_seen}]` |
 | `bots`, `botCategories`, `botPages`, `botActivity` | Crawler and AI bot visits |
 | `live` | Visitors in the last 5 minutes |
+| `now`, `timezone` | The server's time and its time zone (`TIMEZONE`). Every time in the API is in that zone and carries no offset |
 
 ## Event drill-down
 

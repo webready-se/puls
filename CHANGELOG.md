@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `TIMEZONE` in `.env` sets the time zone for stored times, days and hours, such as `TIMEZONE=Europe/Stockholm`. Without it Puls uses PHP's, which is UTC on most servers and in Docker, and puts Peak hour and midnight one or two hours off for a site in Sweden. The dashboard footer names the zone when it differs from the reader's own ("Stockholm time"). Changing it on a running install applies to new visits only (`docs/configuration.md`).
+- `TIME_FORMAT=12h` shows clock times as 2 PM instead of 14:00 (24h is the default).
+- The API gives the server's `now` and `timezone`, and `summary.peakHourStart` as a number.
+
 ### Changed
 
 - The chart remembers whether it shows Pageviews or Visitors, as it already remembers Compare, so the dashboard opens on the tab you picked last (`puls-chart` in local storage). Contributed by @isaacgerg (#103).
 
 ### Fixed
 
+- Times in the dashboard ("5 min ago", bot activity, event details, pages to fix) assumed the server ran on UTC. On a server in another zone they were off by its offset; they now count from the server's own clock.
+- Pages to fix covered the last 30 days by SQLite's clock, which is always UTC, instead of the server's.
 - The install steps in the README and `docs/install.md` ran `cd puls-*` after unzipping, which also matched the zip itself: zsh and bash 5 stopped there, and only the old bash on macOS carried on. They now run `cd puls-*/`, which matches only the folder.
 
 ## [1.28.0] - 2026-10-26

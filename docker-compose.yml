@@ -5,6 +5,8 @@ services:
       - "8080:8080"
     environment:
       - ADMIN_PASSWORD=changeme
+      # The container runs on UTC; set where your visitors are (docs/configuration.md#time-zone)
+      # - TIMEZONE=Europe/Stockholm
     volumes:
       - puls-data:/app/data
 
