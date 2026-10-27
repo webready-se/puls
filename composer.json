@@ -8,7 +8,8 @@
     "authors": [
         {
             "name": "Nicklas Jarnesjö",
-            "email": "nicklas@webready.se"
+            "email": "nicklas@webready.se",
+            "homepage": "https://webready.se"
         }
     ],
     "require": {
