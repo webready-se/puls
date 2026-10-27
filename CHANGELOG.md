@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- The chart remembers whether it shows Pageviews or Visitors, as it already remembers Compare, so the dashboard opens on the tab you picked last (`puls-chart` in local storage).
+- The chart remembers whether it shows Pageviews or Visitors, as it already remembers Compare, so the dashboard opens on the tab you picked last (`puls-chart` in local storage). Contributed by @isaacgerg (#103).
 
 ### Fixed
 
