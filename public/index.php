@@ -360,6 +360,7 @@ function start_session(array $config): void
     // Use dedicated session directory to avoid GC conflicts with other PHP apps
     $sessionPath = dirname($config['db_path']) . '/sessions';
     if (!is_dir($sessionPath)) mkdir($sessionPath, 0700, true);
+    cleanup_sessions($sessionPath, $config['session_lifetime']);
     ini_set('session.save_path', $sessionPath);
 
     ini_set('session.gc_maxlifetime', $config['session_lifetime']);
@@ -407,6 +408,21 @@ function rotate_session(): void
     session_id($next);
     session_start();
     $_SESSION = ['last_rotated' => time()] + $data;
+}
+
+/**
+ * Delete session files unused for as long as a session lasts, once a day. PHP's own clean-up
+ * does not reach them: Debian and Ubuntu (Forge) set session.gc_probability to 0 and clean
+ * only PHP's default directory from cron, and Puls keeps its sessions in a directory of its own.
+ */
+function cleanup_sessions(string $dir, int $lifetime): void
+{
+    $marker = $dir . '/.cleanup';
+    if (file_exists($marker) && file_get_contents($marker) === date('Y-m-d')) return;
+    file_put_contents($marker, date('Y-m-d'));
+    foreach (glob($dir . '/sess_*') ?: [] as $file) {
+        if (filemtime($file) < time() - $lifetime) @unlink($file);
+    }
 }
 
 function handle_login(array $config): void
