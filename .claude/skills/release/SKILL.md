@@ -13,9 +13,9 @@ Puls uses semantic versioning and GitHub Releases with automated builds.
 
 ## Two audiences, two paths
 
-- **puls.wrlabs.se and its customers run on `main`.** Forge deploys every merge
-  to main automatically. A customer waiting for a change gets it when the PR is
-  merged; tell them it is "live on puls.wrlabs.se", no release needed.
+- **The production installs and their customers run on `main`.** Forge deploys
+  every merge to main automatically. A customer waiting for a change gets it when
+  the PR is merged; tell them it is live, no release needed.
 - **Tagged releases are for self-hosters** (zip download, Docker). They should
   get few, coherent upgrades, not one per PR.
 

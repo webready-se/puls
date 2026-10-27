@@ -206,7 +206,7 @@ On session start:
    (`gh api 'repos/webready-se/puls/security-advisories?state=triage'`). Mention each one
    and suggest a reply; a vulnerability report comes first (SECURITY.md promises a reply within 48 hours)
 
-Merging to main deploys puls.wrlabs.se (Forge); that alone needs no release.
+Merging to main deploys the production installs (Forge); that alone needs no release.
 Tagged releases are for self-hosters and are batched, see `.claude/skills/release/`:
 - Epic or coherent feature set completed → suggest a minor release
 - Security, data loss, or broken install/upgrade fix → suggest a patch release immediately
