@@ -146,7 +146,7 @@
 
 Seven stars after seven months: the code is not the problem, being found is. Everything here costs time, not money.
 
-- [x] **GitHub topics** - analytics, web-analytics, privacy, self-hosted, cookieless, gdpr, google-analytics-alternative, php, sqlite, single-file, so the repo shows up in topic search. No homepage link yet: puls.wrlabs.se is the production install and only shows a login
+- [x] **GitHub topics** - analytics, web-analytics, privacy, self-hosted, cookieless, gdpr, google-analytics-alternative, php, sqlite, single-file, so the repo shows up in topic search. No homepage link yet: the production install only shows a login
 - [x] **README as a landing page** - every channel (topic search, awesome lists, a launch post) lands there, so it decides whether a visitor tries Puls. Lead with what few others show (AI crawlers and other bots, broken links from Nginx, one file on any PHP host), a three-line quick start right under the screenshot (file drop first, Docker second: the pitch is no containers), a short feature list instead of 45 bullets, the live demo link, and the Nginx, Apache and Forge details moved to `docs/`
 - [x] **README images** - `scripts/readme-media.mjs` captures every image from the demo data, cut to dashboard elements, plus a drill-down GIF and the social preview; replaces `screenshots.sh`
 - [ ] **Live demo** - a separate install with seeded demo data, reseeded nightly, shown read-only through a share link. Never the production install or real customer data. Linked at the top of README and set as the repo homepage

@@ -40,5 +40,5 @@ test('decodes punycode domains', function () {
     if (!function_exists('idn_to_utf8')) {
         $this->markTestSkipped('intl extension required');
     }
-    expect(normalize_referrer('xn--snittrnta-02a.se'))->toBe('snittränta.se');
+    expect(normalize_referrer('xn--bcher-kva.example'))->toBe('bücher.example');
 });

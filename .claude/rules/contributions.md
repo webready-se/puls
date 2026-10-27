@@ -15,5 +15,5 @@ Puls takes pull requests from outside, and many are written with Claude Code, so
 - Review against the product as well as for bugs
 - Ask for everything in one round, say why, and mark what is optional. Thank first and say what is good
 - Ask the contributor for what the PR itself brings in: its bugs, regressions and product direction. Problems that were there before are ours: say so, and don't make the PR wait for them
-- Don't merge and fix afterwards when the fix changes what users see, since merging to main deploys puls.wrlabs.se
+- Don't merge and fix afterwards when the fix changes what users see, since a merge to main deploys the production installs
 - Credit outside contributors in `CHANGELOG.md`: `Contributed by @handle (#n).`, or `Reported by` for an issue

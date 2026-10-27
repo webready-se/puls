@@ -2223,7 +2223,7 @@
     var max = Math.max.apply(null, rows.map(function(r) { return +r[valKey]; }));
     var prefix = '';
     if (labelKey === 'path' && currentSite && rows.length > 1) {
-      // Check if site name is a path prefix (subpath sites like /odlingsguiden)
+      // Check if site name is a path prefix (subpath sites like /garden-guide)
       var sitePrefix = '/' + currentSite + '/';
       var sitePrefixBase = '/' + currentSite;
       if (rows.some(function(r) { var p = decode(r[labelKey]); return p.indexOf(sitePrefix) === 0; })) {

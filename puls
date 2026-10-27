@@ -1163,7 +1163,7 @@ function nginxConfig(): void
     $defaultUrl = $_ENV['APP_URL'] ?? '';
     $pulsUrl = $defaultUrl
         ? prompt("Puls URL [{$defaultUrl}]: ")
-        : prompt("Puls URL (e.g. https://puls.wrlabs.se): ");
+        : prompt("Puls URL (e.g. https://puls.example.com): ");
     if (empty($pulsUrl)) $pulsUrl = $defaultUrl;
     if (empty($pulsUrl)) {
         echo "Puls URL is required.\n";
