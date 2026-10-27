@@ -61,3 +61,11 @@ test('TIME_FORMAT is 24h unless set to 12h', function () {
         ->and(configValue("TIME_FORMAT=12\n", '$c["time_format"]'))->toBe('12h')
         ->and(configValue("TIME_FORMAT=ampm\n", '$c["time_format"]'))->toBe('24h');
 });
+
+test("no query reads SQLite's clock, which is UTC while stored times follow TIMEZONE", function () {
+    foreach (['public/index.php', 'puls'] as $file) {
+        // Code only: comments may name the function they warn about
+        $code = implode('', array_map(fn ($t) => is_array($t) ? (in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true) ? '' : $t[1]) : $t, token_get_all(file_get_contents(__DIR__ . '/../../' . $file))));
+        expect(preg_match_all('/\b(date|datetime|strftime|julianday)\(\s*[\'"]now|CURRENT_(TIMESTAMP|DATE|TIME)\b/i', $code, $m))->toBe(0, "{$file}: " . implode(', ', $m[0]));
+    }
+});
