@@ -477,20 +477,33 @@
   }
   .chart-col-compare:hover > .tip { display: block; }
   .chart-date { font-size: 10px; color: var(--text-3); white-space: nowrap; }
-  /* Release marker: line stops above the date label, label sits above the bar value */
-  .chart-col.has-release { position: relative; background: linear-gradient(var(--accent-tile), var(--accent-tile)) center top / 1px calc(100% - 22px) no-repeat; background-clip: content-box; }
+  /* Release and note markers: one line from the label down to above the date, drawn by the day
+     itself, so its parts cannot land a pixel apart; the bar value sits on top of it */
+  .chart-col.has-release::before, .chart-col.has-note::before { content: ''; position: absolute; left: 50%; top: -14px; bottom: 22px; border-left: 1px solid var(--note); }
+  .chart-col.has-release::before { border-left-color: var(--accent-tile); }
   .chart-col.has-release .chart-val { position: relative; z-index: 1; background: var(--surface); padding: 0 3px; border-radius: 3px; }
-  .chart-release::after { content: ''; position: absolute; left: 50%; top: 100%; height: 16px; border-left: 1px solid var(--accent-tile); }
   .chart-release { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 9px; font-weight: 600; line-height: 14px; color: var(--accent); background: var(--surface); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
-  .chart-col.has-note { position: relative; background: linear-gradient(var(--note), var(--note)) center top / 1px calc(100% - 22px) no-repeat; background-clip: content-box; }
-  .chart-col.has-note.has-release { background-image: linear-gradient(var(--accent-tile), var(--accent-tile)); }
   .chart-col.has-note .chart-val { position: relative; z-index: 1; background: var(--surface); padding: 0 3px; border-radius: 3px; }
   .chart-col.in-note { background-color: var(--note-band); border-radius: 4px; }
   .chart-note { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 9px; font-weight: 600; line-height: 14px; color: var(--note); background: var(--surface); border: 1px solid var(--note); border-radius: 4px; padding: 0 4px; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
   .chart-note.stacked { top: -48px; }
-  /* Edge days: anchor the label to the chart edge so it is not clipped */
-  .chart-col:first-child > .chart-note { left: 0; transform: none; }
-  .chart-col:last-child > .chart-note { left: auto; right: 0; transform: none; }
+  /* Every version or note behind a marker label, shown on hover or a tap (.open). Hidden the
+     way .sr-only is, so a screen reader still reads it after the label */
+  .chart-release, .chart-note { cursor: default; }
+  .mark-tip { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  :is(.chart-release, .chart-note):is(:hover, .open) + .mark-tip {
+    width: auto; height: auto; overflow: visible; clip: auto; top: 2px; left: 50%; transform: translateX(-50%); z-index: 20;
+    background: var(--text); color: var(--bg); padding: 6px 12px; border-radius: 8px; font-size: 11px; line-height: 1.5; text-align: left;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .mark-tip > span { display: block; }
+  .mark-tip > span:first-child { font-weight: 600; }
+  /* Edge days: a label and its tip stay centred on the line where they fit, and shift inward only
+     as far as needed to stay within the day, so they are never clipped at the chart's edge. The
+     day is a size container for cqw (50cqw is half of it). After the tip rule, which centres it */
+  .chart-col:is(.has-release, .has-note) { container-type: inline-size; }
+  .chart-col:first-child > :is(.chart-note, .chart-release, .mark-tip) { transform: translateX(max(-50%, -50cqw)); }
+  .chart-col:last-child > :is(.chart-note, .chart-release, .mark-tip) { transform: translateX(min(-50%, 50cqw - 100%)); }
   .chart-scroll.stacked-marks { padding-top: 48px; }
   .chart-scroll.compare.stacked-marks { padding-top: 98px; }
   .event-chart.chart-scroll.stacked-marks { padding-top: 52px; }
@@ -1743,6 +1756,14 @@
     }).then(function() { load(currentDays); });
   };
 
+  // A tap on a chart marker label shows its full list, as hovering does with a mouse; a tap
+  // anywhere else closes it
+  document.addEventListener('click', function(e) {
+    var mark = e.target.closest('.chart-release, .chart-note');
+    document.querySelectorAll('.chart-release.open, .chart-note.open').forEach(function(m) { if (m !== mark) m.classList.remove('open'); });
+    if (mark) mark.classList.toggle('open');
+  });
+
   // ---------- Accessibility ----------
 
   // Keyboard: Enter and Space activate non-button elements acting as buttons or tabs;
@@ -2070,19 +2091,27 @@
     dates.forEach(function(date) {
       var cls = '', html = '', rel = releases[date], list = notes[date];
       if (rel) {
+        // Newest first, compared as version numbers: as text, 2.9.0 would come after 2.21.1
+        rel.sort(function(a, b) { return b.localeCompare(a, 'en', { numeric: true }); });
         cls += ' has-release';
-        html += '<span class="chart-release" title="First seen: ' + esc(rel.join(', ')) + '">' + esc(rel[rel.length - 1]) + (rel.length > 1 ? ' +' + (rel.length - 1) : '') + '</span>';
+        html += '<span class="chart-release">' + esc(rel[0]) + (rel.length > 1 ? ' +' + (rel.length - 1) : '') + '</span>' +
+          markTip('First seen ' + formatDay(date), rel);
       }
       if (list) {
         cls += ' has-note';
         if (rel) stacked = true;
-        var title = list.map(function(a) { return formatDay(a.date) + (a.end_date ? ' to ' + formatDay(a.end_date) : '') + ': ' + a.label; }).join('\n');
-        html += '<span class="chart-note' + (rel ? ' stacked' : '') + '" title="' + esc(title) + '">' + esc(list[0].label) + (list.length > 1 ? ' +' + (list.length - 1) : '') + '</span>';
+        html += '<span class="chart-note' + (rel ? ' stacked' : '') + '">' + esc(list[0].label) + (list.length > 1 ? ' +' + (list.length - 1) : '') + '</span>' +
+          markTip(list.length > 1 ? 'Notes' : 'Note', list.map(function(a) { return formatDay(a.date) + (a.end_date ? ' to ' + formatDay(a.end_date) : '') + ': ' + a.label; }));
       }
       if (band[date]) cls += ' in-note';
       if (cls) byDate[date] = { cls: cls, html: html };
     });
     return { byDate: byDate, stacked: stacked };
+  }
+
+  // The full list behind a marker label, one line each under a heading
+  function markTip(heading, lines) {
+    return '<span class="mark-tip"><span>' + esc(heading) + '</span>' + lines.map(function(l) { return '<span>' + esc(l) + '</span>'; }).join('') + '</span>';
   }
 
   function marksFor(d, dates) {

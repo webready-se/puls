@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A release marker named the version that sorts last as text, so on a day with 2.9.0 and 2.10.0 it showed 2.9.0. It now names the newest by version number.
+- Every version or note behind a chart marker ("2.21.1 +5") shows in a tooltip on hover or a tap, newest first. It was the browser's own title, slow to appear and missing on phones.
+- The line from a marker label down to its bar was drawn in two parts that could land a pixel apart; it is now one line. On the first and last day a label stays centred where it fits and shifts inward only as far as needed, so it is no longer clipped at the chart's edge.
 - The install steps in the README and `docs/install.md` ran `cd puls-*` after unzipping, which also matched the zip itself: zsh and bash 5 stopped there, and only the old bash on macOS carried on. They now run `cd puls-*/`, which matches only the folder.
 
 ## [1.28.0] - 2026-10-26

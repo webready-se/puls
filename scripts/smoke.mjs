@@ -100,6 +100,8 @@ async function main() {
     $note->execute([date('Y-m-d', strtotime('-6 days')), date('Y-m-d', strtotime('-4 days')), 'Smoke campaign']);
     $note->execute([date('Y-m-d', strtotime('-2 days')), null, 'Say "hi" <b>bold</b>']);
     $note->execute([date('Y-m-d'), null, 'Smoke film']);
+    // A version that sorts first as text but is the newest by number (9.10.0 after 9.9.2)
+    $db->prepare("INSERT OR IGNORE INTO app_versions (site, version, first_seen) VALUES ('demo.example.com', '9.10.0', ?)")->execute([date('Y-m-d')]);
   `, dbPath]);
 
   // 4. Headless Chrome with remote debugging
@@ -174,6 +176,16 @@ async function main() {
     if (!await waitFor(() => q('#chart-card'), 'pageview chart')) return fails;
     expect(document.querySelectorAll('.stat-card, .card').length > 5, 'dashboard cards render');
     expect(q('#chart-card .chart-release'), 'release marker on pageview chart');
+    // The newest version by number, every version in its tip, one line drawn by the day itself,
+    // and a tap shows the tip (hover does it with a mouse)
+    const rel = q('#chart-card .chart-release'), relTip = rel?.nextElementSibling;
+    expect(rel?.textContent === '9.10.0 +3', `release marker names the newest version by number (shows ${rel?.textContent})`);
+    expect(relTip?.classList.contains('mark-tip') && ['9.10.0', '9.9.2', '9.9.1', '9.9.0'].every((v) => relTip.textContent.includes(v)), 'release tip lists every version');
+    expect(rel && getComputedStyle(rel.closest('.chart-col'), '::before').borderLeftWidth === '1px' && getComputedStyle(rel, '::after').content === 'none', 'release line is one element');
+    rel?.click();
+    expect(rel?.classList.contains('open') && relTip.offsetWidth > 20, 'a tap on the release marker shows its tip');
+    rel?.click();
+    expect(!rel?.classList.contains('open') && relTip.offsetWidth <= 1, 'a second tap hides it');
     expect(q('.breakdown-card'), 'saved breakdown card');
     expect(q('.breakdown-card .event-new'), 'NEW badge on breakdown card');
 
@@ -460,16 +472,16 @@ async function main() {
     if (form.hidden || document.activeElement !== form.elements.label) fails.push('+ Note opens the form and focuses the text');
     form.elements.label.value = 'Smoke note';
     form.requestSubmit();
-    await waitFor(() => [...document.querySelectorAll('#chart-card .chart-note')].some((n) => /Smoke note/.test(n.title)), 'new note on the chart', 8000);
+    await waitFor(() => [...document.querySelectorAll('#chart-card .chart-note + .mark-tip')].some((t) => /Smoke note/.test(t.textContent)), 'new note on the chart', 8000);
     window.openMenu();
     const item = [...document.querySelectorAll('#note-list .note-item')].find((i) => i.querySelector('input').value === 'Smoke note');
     if (!item) { fails.push('note listed in Settings'); return fails; }
     const field = item.querySelector('input');
     field.value = 'Smoke note, clarified';
     field.dispatchEvent(new Event('change'));
-    await waitFor(() => [...document.querySelectorAll('#chart-card .chart-note')].some((n) => /Smoke note, clarified/.test(n.title)), 'relabelled note on the chart', 8000);
+    await waitFor(() => [...document.querySelectorAll('#chart-card .chart-note + .mark-tip')].some((t) => /Smoke note, clarified/.test(t.textContent)), 'relabelled note on the chart', 8000);
     item.querySelector('button').click();
-    await waitFor(() => ![...document.querySelectorAll('#chart-card .chart-note')].some((n) => /Smoke note/.test(n.title)), 'removed note leaves the chart', 8000);
+    await waitFor(() => ![...document.querySelectorAll('#chart-card .chart-note + .mark-tip')].some((t) => /Smoke note/.test(t.textContent)), 'removed note leaves the chart', 8000);
     window.closeMenu();
     q('.note-toggle').click();
     q('.note-form-hint button').click();
@@ -597,7 +609,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, release markers, breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, Today period wording, light theme, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, Today period wording, light theme, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 
