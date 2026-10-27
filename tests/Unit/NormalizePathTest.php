@@ -35,8 +35,8 @@ test('handles path with fbclid and trailing slash', function () {
 });
 
 test('handles complex facebook urls', function () {
-    $path = '/odlingsguiden/?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAdGRleAQc';
-    expect(normalize_path($path))->toBe('/odlingsguiden');
+    $path = '/garden-guide/?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAdGRleAQc';
+    expect(normalize_path($path))->toBe('/garden-guide');
 });
 
 test('returns path unchanged when no query string', function () {
@@ -62,8 +62,8 @@ test('strips utm_id but keeps other params', function () {
 });
 
 test('strips fbclid with utm params from subpath', function () {
-    $path = '/odlingsguiden/?fbclid=IwZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQKNjYyODU2ODM3OQABHlijNEh0JKXI85QilabUiYJE_XInh2gPyfjOV8-pqiZqcOCuRUY7JhN5gnNl_aem_ZwpzPSX_ONy9Ei9syt8R5A';
-    expect(normalize_path($path))->toBe('/odlingsguiden');
+    $path = '/garden-guide/?fbclid=IwZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQKNjYyODU2ODM3OQABHlijNEh0JKXI85QilabUiYJE_XInh2gPyfjOV8-pqiZqcOCuRUY7JhN5gnNl_aem_ZwpzPSX_ONy9Ei9syt8R5A';
+    expect(normalize_path($path))->toBe('/garden-guide');
 });
 
 test('strips Google Ads params (gad_source, gad_campaignid, gbraid)', function () {

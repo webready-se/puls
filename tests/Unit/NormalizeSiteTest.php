@@ -2,7 +2,7 @@
 
 test('keeps ordinary site names', function (string $site) {
     expect(normalize_site($site))->toBe($site);
-})->with(['my-site', 'lillabosgarden.se', 'localhost:8080', 'blog_2', 'my site', 'at&t', 'åäö.se']);
+})->with(['my-site', 'shop.example', 'localhost:8080', 'blog_2', 'my site', 'at&t', 'åäö.se']);
 
 test('strips markup characters', function () {
     expect(normalize_site('<img src=x onerror=alert(document.domain)>'))->toBe('img src=x onerror=alert(document.domain)')

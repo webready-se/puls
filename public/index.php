@@ -2064,7 +2064,7 @@ function normalize_referrer(string $host): string
 
     $name = $map[strtolower($host)] ?? $host;
 
-    // Decode IDN/punycode domains (xn--snittrnta-02a.se → snittränta.se)
+    // Decode IDN/punycode domains (xn--bcher-kva.example → bücher.example)
     if (str_contains($name, 'xn--') && function_exists('idn_to_utf8')) {
         $decoded = idn_to_utf8($name, 0, INTL_IDNA_VARIANT_UTS46);
         if ($decoded !== false) $name = $decoded;
