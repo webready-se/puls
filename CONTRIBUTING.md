@@ -7,8 +7,11 @@ Thanks for your interest in contributing! Puls is intentionally minimal — one 
 - **No runtime dependencies.** Puls must remain deployable as a file drop on any PHP 8.3+ host.
 - **No build step.** The dashboard is self-contained HTML/CSS/JS.
 - **Keep it simple.** If a feature needs a framework, it's probably out of scope.
+- **A calm dashboard.** It opens on what most site owners need, and more detail is one click away. A new card or panel usually opens on demand rather than being always on.
 
 ## How to Contribute
+
+For a new feature or a visible change to the dashboard, open an issue or a draft pull request first, so we can agree on the direction before you put in the work. Bug fixes and docs can go straight to a pull request.
 
 1. Fork the repo and create a branch from `main`
 2. Make your changes

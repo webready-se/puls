@@ -99,6 +99,8 @@ Read its README.md first, then the doc for what you are changing. Copy values an
 files from it; never link to it at runtime or install it. When the kit and this
 tool disagree, the kit wins, unless this tool's docs say why it differs.
 
+**Calm by default.** The dashboard opens on what most site owners need: the numbers, the chart, pages and sources. More detail is one click away, so a new card or panel usually opens on demand (a click on a day, a row or a button) and can be closed again, rather than being always on. Anyone who wants it always there is served by remembering that it is open, as Compare and the chart tab are remembered, without making it everyone's default. Why: Puls is for busy site owners who are not analytics experts, and every section that is always on pushes the rest further down, on a phone most of all.
+
 Puls's copy of the kit's tokens is at the top of the `<style>` in `public/dashboard.html`, with the kit version it was copied from. Where Puls differs on purpose:
 
 - **Strict CSP comes later.** The kit asks for `script-src 'self'` and `style-src 'self'`; Puls still has inline handlers and styles and gets there in steps (ROADMAP, Epic 3)
