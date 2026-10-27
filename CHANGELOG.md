@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - The dashboard could jump to the login page about once an hour. The hourly new session id deleted the old session at once, so a request already on its way with the old id got a 401. The old id now leads to the new one for a minute, as the PHP manual advises for requests in flight, and counts for nothing after that.
 - Session files were never deleted on Debian and Ubuntu (Forge), where PHP's own clean-up is off and its cron job only knows PHP's default directory, not Puls's `data/sessions`. Puls now deletes session files unused for `SESSION_LIFETIME`, once a day.
+- The tooltip on a chart's first day was cut off at the chart's left edge, and on narrow charts the last day's at the right. It now stays centred where it fits and shifts inward only as far as needed, with its arrow still on the day.
 - Times in the dashboard ("5 min ago", bot activity, event details, pages to fix) assumed the server ran on UTC. On a server in another zone they were off by its offset; they now count from the server's own clock.
 - Pages to fix covered the last 30 days by SQLite's clock, which is always UTC, instead of the server's.
 - A share link with an expiry date stayed valid one or two hours too long on a server not on UTC: the check used SQLite's clock, which is always UTC. `share:create` also stamped new links in UTC. A test now fails if code reads SQLite's clock.

@@ -498,12 +498,16 @@
   }
   .mark-tip > span { display: block; }
   .mark-tip > span:first-child { font-weight: 600; }
-  /* Edge days: a label and its tip stay centred on the line where they fit, and shift inward only
-     as far as needed to stay within the day, so they are never clipped at the chart's edge. The
-     day is a size container for cqw (50cqw is half of it). After the tip rule, which centres it */
-  .chart-col:is(.has-release, .has-note) { container-type: inline-size; }
-  .chart-col:first-child > :is(.chart-note, .chart-release, .mark-tip) { transform: translateX(max(-50%, -50cqw)); }
-  .chart-col:last-child > :is(.chart-note, .chart-release, .mark-tip) { transform: translateX(min(-50%, 50cqw - 100%)); }
+  /* Edge days: marker labels, their tips and the day's tooltip stay centred where they fit, and
+     shift inward only as far as needed to stay within the day, so they are never clipped at the
+     chart's edge. The day is a size container for cqw (50cqw is half of it). After the tip rules,
+     which centre them */
+  .chart-col:is(:first-child, :last-child) { container-type: inline-size; }
+  .chart-col:first-child > :is(.chart-note, .chart-release, .mark-tip, .tip), .chart-col:first-child .chart-bar > .tip { transform: translateX(max(-50%, -50cqw)); }
+  .chart-col:last-child > :is(.chart-note, .chart-release, .mark-tip, .tip), .chart-col:last-child .chart-bar > .tip { transform: translateX(min(-50%, 50cqw - 100%)); }
+  /* The tooltip's arrow stays on the middle of the day when the tooltip shifts */
+  .chart-col:first-child > .tip::after, .chart-col:first-child .chart-bar > .tip::after { left: min(50%, 50cqw); }
+  .chart-col:last-child > .tip::after, .chart-col:last-child .chart-bar > .tip::after { left: max(50%, 100% - 50cqw); }
   .chart-scroll.stacked-marks { padding-top: 48px; }
   .chart-scroll.compare.stacked-marks { padding-top: 98px; }
   .event-chart.chart-scroll.stacked-marks { padding-top: 52px; }

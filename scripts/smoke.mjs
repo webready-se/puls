@@ -333,6 +333,18 @@ async function main() {
     const mainScroll = q('#chart-card .chart-scroll');
     expect(mainScroll.scrollWidth > mainScroll.clientWidth, '90-day pageview chart is wider than the card');
     expect(mainScroll.scrollLeft + mainScroll.clientWidth >= mainScroll.scrollWidth - 1, 'pageview chart opens scrolled to the latest day');
+    // The tooltip on the first and last day stays inside the chart, its arrow on the middle of the day
+    // (measured first: a tooltip sticking out to the right widens the scroll area itself)
+    const content = mainScroll.getBoundingClientRect().left - mainScroll.scrollLeft, contentEnd = content + mainScroll.scrollWidth;
+    for (const [edge, col] of [['first', mainScroll.querySelector('.chart-col:first-child')], ['last', mainScroll.querySelector('.chart-col:last-child')]]) {
+      const tip = col?.querySelector(':scope > .tip, .chart-bar > .tip');
+      if (!tip) { fails.push(`tooltip on the ${edge} day`); continue; }
+      tip.style.display = 'block';
+      const t = tip.getBoundingClientRect(), c = col.getBoundingClientRect();
+      const arrow = t.left + parseFloat(getComputedStyle(tip, '::after').left);
+      expect(t.left >= content - 1 && t.right <= contentEnd + 1 && Math.abs(arrow - (c.left + c.width / 2)) < 2, `tooltip on the ${edge} day stays inside the chart and points at its day`);
+      tip.style.display = '';
+    }
     expect(q('.event-detail') && q('.event-detail')._state && q('.event-detail')._state.then, 'funnel choice kept across period change');
 
     // Breakdown card opens the same drill-down inside the card, grouped on its key
