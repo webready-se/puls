@@ -1712,3 +1712,49 @@ test('a share link expires on the configured clock, not SQLite UTC', function ()
 
     expect(http('GET', '/?api&days=7&share=' . $token, [], 8092)['status'])->toBe(404);
 });
+
+/**
+ * A logged-in session that is due for its hourly new id, and its session file.
+ * Returns [cookie header line, path to the session file].
+ */
+function sessionDueForNewId(): array
+{
+    $cookie = restrictedSession('full');
+    $file = $GLOBALS['test_dir'] . '/sessions/sess_' . explode('=', $cookie, 2)[1];
+    file_put_contents($file, preg_replace('/last_rotated\|i:\d+;/', 'last_rotated|i:0;', file_get_contents($file)));
+    return [$cookie, $file];
+}
+
+function newSessionCookie(array $headers): ?string
+{
+    foreach ($headers as $h) {
+        if (preg_match('/^Set-Cookie:\s*(PHPSESSID=[^;]+)/i', $h, $m) && !str_contains($m[1], 'deleted')) return 'Cookie: ' . $m[1];
+    }
+    return null;
+}
+
+test('a request still on the session id that was just replaced stays logged in, on the new id', function () {
+    [$old] = sessionDueForNewId();
+
+    // Two requests sent together: the first gets the new id, the second was already on its way with the old one
+    $first = http('GET', '/?api&sites', ['header' => $old], 8090);
+    $new = newSessionCookie($first['headers']);
+    expect($first['status'])->toBe(200)
+        ->and($new)->not->toBeNull()->not->toBe($old);
+
+    $late = http('GET', '/?api&sites', ['header' => $old], 8090);
+    expect($late['status'])->toBe(200)
+        ->and(newSessionCookie($late['headers']))->toBe($new)
+        ->and(http('GET', '/?api&sites', ['header' => $new], 8090)['status'])->toBe(200);
+});
+
+test('a session id replaced more than a minute ago no longer logs in', function () {
+    [$old, $file] = sessionDueForNewId();
+    $new = newSessionCookie(http('GET', '/?api&sites', ['header' => $old], 8090)['headers']);
+
+    // A minute later the old id counts for nothing: one still in use could be a stolen one
+    file_put_contents($file, preg_replace('/replaced_at\|i:\d+;/', 'replaced_at|i:' . (time() - 120) . ';', file_get_contents($file)));
+    expect(http('GET', '/?api&sites', ['header' => $old], 8090)['status'])->toBe(401)
+        ->and(file_exists($file))->toBeFalse()
+        ->and(http('GET', '/?api&sites', ['header' => $new], 8090)['status'])->toBe(200);
+});
