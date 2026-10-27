@@ -63,7 +63,9 @@ docs/integrations.md    - Tracking setup: script attributes, events, keeping per
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading
 docs/configuration.md   - .env settings, users and access, share links, excluding own visits, white-label, CLI reference
-scripts/hooks/pre-push  — Git hook: runs Pest before allowing push
+scripts/hooks/pre-push  - Git hook: stops a push that sends a real name (see below), then runs Pest
+scripts/hooks/pre-commit, commit-msg - Git hooks: stop a commit whose added lines or message name a real site, customer, server or person
+scripts/hooks/real-names - Shared by the name hooks: prints lines that match .private/real-names.txt (gitignored; without it nothing is checked)
 scripts/build-release.sh — Builds release zip with runtime files only
 scripts/readme-media.mjs - Generates every README image, the drill-down GIF and the social preview (headless Chrome over DevTools protocol + demo DB, ffmpeg)
 scripts/smoke.mjs       — Dashboard smoke test: headless Chrome over DevTools protocol, fails on JS errors (no npm deps)
@@ -73,6 +75,7 @@ docker-entrypoint.sh    - Creates .env from .env.example, creates admin from ADM
 docker-compose.yml      — One-command setup with volume for /app/data
 .dockerignore           — Excludes dev files from Docker build
 .claude/hooks/php-lint.sh — PostToolUse hook: syntax-checks PHP after edit
+.claude/hooks/no-real-names.sh - PreToolUse hook: stops a gh command whose text for GitHub names a real site, customer, server or person
 ```
 
 **Sensitive files:** `users.json` (accounts, password hashes), `data/*.sqlite` (visitor data, the local copy may be production data) and `.env` are gitignored and must stay that way. Change users and data only through the `puls` CLI. Don't print their contents, query real visitor data, or overwrite or delete them without asking first. Use `data/demo.sqlite` (`scripts/seed-demo.php`) for demos and experiments.
@@ -146,6 +149,8 @@ Images in `docs/screenshots/`: `dashboard` and `dashboard-light` (README hero, p
 ### Pre-push hook
 
 Tests run automatically before every `git push`. The hook is configured via `composer post-install-cmd` — any contributor gets it after `composer install`. No manual setup needed.
+
+The git hooks and a Claude Code hook also keep real names (sites, customers, servers, people) out of commits, pushes and texts sent to GitHub, from a gitignored list in `.private/real-names.txt`: see `.claude/rules/no-real-names.md`. Without the list, as in a fresh clone, they check nothing.
 
 ## Multi-site Hub
 

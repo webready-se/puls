@@ -1,7 +1,37 @@
 #!/bin/sh
+# Stop a push that would send a real name to GitHub: in a branch or tag name,
+# a tag message, or the messages and added lines of the commits being pushed
+# (this also catches commits made before a name was added to the list).
+# See .claude/rules/no-real-names.md. Then run the tests.
+names="$(dirname "$0")/real-names"
+zero=0000000000000000000000000000000000000000
+found=$(
+    while read -r local_ref local_oid remote_ref remote_oid; do
+        [ "$local_oid" = "$zero" ] && continue
+        printf 'ref %s\n' "$remote_ref"
+        # A tag's message, after the header (the tagger is the author, as on commits)
+        if [ "$(git cat-file -t "$local_oid")" = tag ]; then
+            git cat-file -p "$local_oid" | sed '1,/^$/d'
+        fi
+        if [ "$remote_oid" != "$zero" ] && git cat-file -e "$remote_oid" 2>/dev/null; then
+            range="$remote_oid..$local_oid"
+        else
+            range="$local_oid --not --remotes"
+        fi
+        # shellcheck disable=SC2086
+        git log --format='%h %B' $range
+        # shellcheck disable=SC2086
+        git log -p -U0 --no-color --format='commit %h' $range | grep -e '^commit ' -e '^+' | grep -v '^+++'
+    done | "$names"
+)
+if [ -n "$found" ]; then
+    printf 'Push stopped: names from .private/real-names.txt would reach GitHub:\n%s\n\nRename the branch, or rewrite the commits with example names. See .claude/rules/no-real-names.md.\n' "$found" >&2
+    exit 1
+fi
+
 echo "Running tests before push..."
 ./vendor/bin/pest --colors=always
 if [ $? -ne 0 ]; then
-    echo "\nTests failed — push aborted."
+    printf "\nTests failed, push aborted.\n"
     exit 1
 fi

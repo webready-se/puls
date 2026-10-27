@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stop a commit whose added lines contain a real name, domain, IP or URL
+# (see .claude/rules/no-real-names.md). Removing one is fine.
+found=$(git diff --cached -U0 --no-color | grep '^+' | grep -v '^+++' | "$(dirname "$0")/real-names")
+if [ -n "$found" ]; then
+    printf 'Commit stopped: these added lines contain names from .private/real-names.txt:\n%s\n\nUse example names instead (shop.example, 203.0.113.10). See .claude/rules/no-real-names.md.\n' "$found" >&2
+    exit 1
+fi
