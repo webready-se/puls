@@ -7,10 +7,15 @@
 root="${PULS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 list="$root/.private/real-names.txt"
 [ -f "$list" ] || exit 0
+# Names and text are compared in one Unicode form (NFC): "ö" can also be written as
+# "o" plus a combining diaeresis (NFD), as macOS often does, and would not match
+nfc() {
+    if command -v perl >/dev/null 2>&1; then perl -MUnicode::Normalize -CSD -pe '$_ = NFC($_)'; else cat; fi
+}
 patterns=$(mktemp)
 trap 'rm -f "$patterns"' EXIT
 # An empty line would match everything: keep only names
-grep -v -e '^#' -e '^[[:space:]]*$' "$list" > "$patterns"
+grep -v -e '^#' -e '^[[:space:]]*$' "$list" | nfc > "$patterns"
 [ -s "$patterns" ] || exit 0
-grep -n -i -F -f "$patterns"
+nfc | grep -n -i -F -f "$patterns"
 exit 0
