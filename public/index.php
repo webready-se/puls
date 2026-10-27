@@ -22,6 +22,10 @@ $config = require __DIR__ . '/../config.php';
 // Shown in the dashboard footer. Bump it with the CHANGELOG heading when releasing (tests/Unit/VersionTest.php)
 const PULS_VERSION = '1.28.0';
 
+// How long a replaced session id still leads to the new one (start_session). Up here: routing
+// starts the session before execution reaches anything defined further down
+const SESSION_REPLACED_GRACE_SECONDS = 60;
+
 // =====================================================================
 // ROUTING
 // =====================================================================
@@ -368,14 +372,41 @@ function start_session(array $config): void
     ]);
     session_start();
 
-    // Rotate session ID every hour to prevent session fixation
-    if (!empty($_SESSION['authenticated'])) {
-        $lastRotated = $_SESSION['last_rotated'] ?? 0;
-        if (time() - $lastRotated > 3600) {
-            session_regenerate_id(true);
-            $_SESSION['last_rotated'] = time();
+    // An id just replaced by the hourly new one (below) leads to it for a minute, for a request
+    // that was already on its way with it: the dashboard often sends two at once. Deleting the
+    // old session at once gave such a request a 401, and the dashboard then went to the login page
+    if (isset($_SESSION['replaced_at'])) {
+        if (time() - (int) $_SESSION['replaced_at'] > SESSION_REPLACED_GRACE_SECONDS) {
+            // Too late: an old id still in use could be a stolen one
+            session_destroy();
+            session_id(session_create_id());
+            session_start();
+            return;
         }
+        $next = (string) $_SESSION['replaced_by'];
+        session_write_close();
+        session_id($next);
+        session_start();
+        return;
     }
+
+    // A new session id every hour makes a stolen one short-lived
+    if (!empty($_SESSION['authenticated']) && time() - ($_SESSION['last_rotated'] ?? 0) > 3600) rotate_session();
+}
+
+/**
+ * Move the session to a new id, keeping the old one for a minute as a pointer to it, without the
+ * user (as the PHP manual advises for session_regenerate_id() with requests in flight).
+ */
+function rotate_session(): void
+{
+    $data = $_SESSION;
+    $next = session_create_id();
+    $_SESSION = ['replaced_at' => time(), 'replaced_by' => $next];
+    session_write_close();
+    session_id($next);
+    session_start();
+    $_SESSION = ['last_rotated' => time()] + $data;
 }
 
 function handle_login(array $config): void

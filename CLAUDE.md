@@ -81,7 +81,7 @@ docker-compose.yml      — One-command setup with volume for /app/data
 
 - **No framework** — pure PHP 8.3+, only requires `pdo_sqlite`
 - **SQLite with WAL mode** — good concurrent read performance, single-file database
-- **Session-based auth** — CSRF-protected, brute-force lockout per IP (failed logins counted in `audit_log`), bcrypt passwords
+- **Session-based auth** — CSRF-protected, brute-force lockout per IP (failed logins counted in `audit_log`), bcrypt passwords; a new session id every hour, the old one leading to it for a minute so requests in flight stay logged in
 - **Per-user site access** — users can be restricted to specific sites
 - **Self-contained dashboard** — no build tools, no CDN, works offline after load
 - **Dashboard islands** - `render()` wraps each section in `island(key, html)`, and `patchIslands()` replaces only the islands whose HTML changed since the last render of the same view, so the 60 s refresh leaves the rest of the DOM alone (hover, focus, open drill-downs, tabs, chart scroll). A new section goes through `island()` with a unique key; a list of cards is one `data-island-list` element with a `data-island` key per card
