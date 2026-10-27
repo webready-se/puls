@@ -18,6 +18,13 @@ if (file_exists($envFile)) {
     }
 }
 
+// The time zone that stored times, days and hours are in (TIMEZONE=Europe/Stockholm). Unset keeps
+// php.ini's. An unknown name keeps it too, with a warning, so a typo never stops the tracking
+$timezone = trim($_ENV['TIMEZONE'] ?? '');
+if ($timezone !== '' && !@date_default_timezone_set($timezone)) {
+    error_log("Puls: unknown TIMEZONE '{$timezone}', using " . date_default_timezone_get());
+}
+
 function resolve_path(string $path): string
 {
     if ($path[0] === '/') return $path;
@@ -40,6 +47,12 @@ return [
 
     // "Made by Webready in Sweden" in the dashboard footer; FOOTER_CREDIT=false turns it off
     'footer_credit' => !in_array(strtolower(trim($_ENV['FOOTER_CREDIT'] ?? 'true')), ['false', '0', 'no', 'off'], true),
+
+    'timezone' => date_default_timezone_get(),
+
+    // Clock times in the dashboard: 24h (14:00) unless TIME_FORMAT=12h (2 PM). Not the browser's
+    // locale, since Chrome formats by its UI language, not the OS region
+    'time_format' => in_array(strtolower(trim($_ENV['TIME_FORMAT'] ?? '')), ['12h', '12'], true) ? '12h' : '24h',
 
     'db_path' => resolve_path($_ENV['DB_PATH'] ?? 'data/puls.sqlite'),
 

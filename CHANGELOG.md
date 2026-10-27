@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `TIMEZONE` in `.env` sets the time zone for stored times, days and hours, such as `TIMEZONE=Europe/Stockholm`. Without it Puls uses PHP's, which is UTC on most servers and in Docker, and puts Peak hour and midnight one or two hours off for a site in Sweden. The dashboard footer names the zone when it differs from the reader's own ("Stockholm time"). Changing it on a running install applies to new visits only (`docs/configuration.md`).
+- `TIME_FORMAT=12h` shows clock times as 2 PM instead of 14:00 (24h is the default).
+- The API gives the server's `now` and `timezone`, and `summary.peakHourStart` as a number.
+
 ### Changed
 
 - The chart remembers whether it shows Pageviews or Visitors, as it already remembers Compare, so the dashboard opens on the tab you picked last (`puls-chart` in local storage). Contributed by @isaacgerg (#103).
 
 ### Fixed
 
+- Times in the dashboard ("5 min ago", bot activity, event details, pages to fix) assumed the server ran on UTC. On a server in another zone they were off by its offset; they now count from the server's own clock.
+- Pages to fix covered the last 30 days by SQLite's clock, which is always UTC, instead of the server's.
+- A share link with an expiry date stayed valid one or two hours too long on a server not on UTC: the check used SQLite's clock, which is always UTC. `share:create` also stamped new links in UTC. A test now fails if code reads SQLite's clock.
 - A release marker named the version that sorts last as text, so on a day with 2.9.0 and 2.10.0 it showed 2.9.0. It now names the newest by version number.
 - Every version or note behind a chart marker ("2.21.1 +5") shows in a tooltip on hover or a tap, newest first. It was the browser's own title, slow to appear and missing on phones.
 - The line from a marker label down to its bar was drawn in two parts that could land a pixel apart; it is now one line. On the first and last day a label stays centred where it fits and shifts inward only as far as needed, so it is no longer clipped at the chart's edge.

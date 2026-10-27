@@ -89,6 +89,7 @@ docker-compose.yml      — One-command setup with volume for /app/data
 - **Forge auto-detection** — `resolve_path()` in config.php detects `/releases/\d+/` pattern and resolves to site root
 - **Sender owns the data** - Puls gives sites the controls (`data-query`, `data-path`, no PII in `puls.track`) and documents the risks, but does not inspect, mask or audit what they send. Masking was considered and declined: pattern matching would silently damage legitimate paths and give false confidence
 - **Share tokens in plain text** - hashing them (as Hamstra does) was considered and declined: a token only reads one site's statistics, which live in the same database, so anyone with the database already has what the token protects. Plain text lets `share:list` show a link again, and needs no migration that the CLI (which opens the database without running migrations) would have to handle
+- **Times without an offset** - a stored time is the wall clock of the install's time zone (`TIMEZONE`, else php.ini) with no offset, so days and hours group in SQL as they are. Use PHP's clock, never SQLite's `date('now')`, which is UTC. The dashboard reads a stored time as UTC and formats it as UTC, which keeps that wall clock whatever the viewer's zone, and counts "x min ago" from the API's `now`
 - **Data quality** — normalize_path strips tracking params (fbclid, gclid, utm_*) and, for Meta ad traffic only, Meta's per-click brid (media_type is kept: it records the ad format); normalize_referrer groups social domains, IDN decode
 
 ## Design

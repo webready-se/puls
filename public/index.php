@@ -148,7 +148,7 @@ if ($shareToken !== null) {
     if (file_exists($dashboard)) {
         $html = file_get_contents($dashboard);
         $shareJson = json_encode(['token' => $share['token'], 'site' => $share['site']]);
-        $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent'], 'accentText' => accent_text_colours($config['app_accent']), 'version' => PULS_VERSION, 'credit' => $config['footer_credit']]);
+        $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent'], 'accentText' => accent_text_colours($config['app_accent']), 'version' => PULS_VERSION, 'credit' => $config['footer_credit'], 'timeFormat' => $config['time_format']]);
         $html = inject_after_title($html, '<script>window.PULS_SHARE=' . $shareJson . ';window.PULS_BRANDING=' . $brandingJson . ';</script>');
         respond($html, 200, 'text/html', security_headers());
     }
@@ -317,7 +317,7 @@ if (!is_authenticated()) {
 $dashboard = __DIR__ . '/dashboard.html';
 if (file_exists($dashboard)) {
     $html = file_get_contents($dashboard);
-    $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent'], 'accentText' => accent_text_colours($config['app_accent']), 'version' => PULS_VERSION, 'credit' => $config['footer_credit']]);
+    $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent'], 'accentText' => accent_text_colours($config['app_accent']), 'version' => PULS_VERSION, 'credit' => $config['footer_credit'], 'timeFormat' => $config['time_format']]);
     $html = inject_after_title($html, '<script>window.PULS_BRANDING=' . $brandingJson . ';</script>');
     respond($html, 200, 'text/html', security_headers());
 }
@@ -339,8 +339,9 @@ function validate_share_token(array $config, string $token): ?array
 {
     if (strlen($token) < 32) return null;
     $db = get_db($config['db_path']);
-    $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime("now"))');
-    $stmt->execute([$token]);
+    // PHP's clock: expires_at is in the configured time zone, SQLite's datetime('now') is UTC
+    $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token = ? AND (expires_at IS NULL OR expires_at > ?)');
+    $stmt->execute([$token, date('Y-m-d H:i:s')]);
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
@@ -1459,7 +1460,8 @@ function get_api_data(array $config, array $user): string
         unset($a);
     }
 
-    // Broken links (last 30 days, regardless of $days filter)
+    // Broken links (last 30 days, regardless of $days filter). PHP's clock, not SQLite's
+    // date('now'), which is UTC while stored times are in the configured time zone
     $blSiteFilter = $site ? 'AND site = ?' : '';
     $blSiteParams = $site ? [$site] : [];
     if (!$site && !empty($allowedSites)) {
@@ -1475,9 +1477,9 @@ function get_api_data(array $config, array $user): string
                     first_seen, last_seen,
                     ROW_NUMBER() OVER (PARTITION BY status ORDER BY hits DESC) as rn
                 FROM broken_links
-                WHERE last_seen >= date('now', '-30 days') {$blSiteFilter}
+                WHERE last_seen >= ? {$blSiteFilter}
             ) WHERE rn <= 25");
-        $stmt->execute($blSiteParams);
+        $stmt->execute(array_merge([date('Y-m-d', strtotime('-30 days'))], $blSiteParams));
         $brokenLinks = $stmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($brokenLinks as &$bl) {
             $bl['hits'] = (int) $bl['hits'];
@@ -1594,6 +1596,8 @@ function get_api_data(array $config, array $user): string
                 'bestDay' => $bestDay['day'],
                 'bestDayViews' => (int) $bestDay['views'],
                 'peakHour' => $peakHour ? sprintf('%d:00–%d:00', $peakHour['hour'], $peakHour['hour'] + 1) : null,
+                // The hour (0-23) the peak starts, for the dashboard to format as TIME_FORMAT says
+                'peakHourStart' => $peakHour ? (int) $peakHour['hour'] : null,
                 'peakHourViews' => $peakHour ? (int) $peakHour['views'] : null,
                 'topPage' => $topPage ? $topPage['path'] : null,
                 'topPageViews' => $topPage ? (int) $topPage['views'] : null,
@@ -1684,6 +1688,9 @@ function get_api_data(array $config, array $user): string
         'days'      => $days,
         'from'      => $since,
         'to'        => $until ? date('Y-m-d', strtotime($until . ' -1 day')) : null,
+        // Stored times are in this zone and carry no offset; "x min ago" counts from this now
+        'now'       => date('Y-m-d H:i:s'),
+        'timezone'  => date_default_timezone_get(),
         'live'      => (int)$live,
         'totals'    => $totals,
         'previousTotals' => $previousTotals,

@@ -1161,14 +1161,25 @@
     var sec = Math.round(s % 60);
     return sec > 0 ? m + 'm ' + sec + 's' : m + 'm';
   }
+  // Times are in the install's time zone (TIMEZONE) and carry no offset. Read as UTC and formatted
+  // as UTC, they keep the wall clock the server wrote, whatever the viewer's zone; serverSkew is
+  // how far that wall clock is from the real now, so "x min ago" counts from the server's now
+  var serverSkew = 0;
+  function wallClock(dt) { return new Date(dt.replace(' ', 'T') + 'Z'); }
+  // A clock time as TIME_FORMAT says: 14:05 or 2:05 PM; without minutes 14:00 or 2 PM.
+  // Written out by hand: Intl puts a narrow no-break space before PM in some browsers only
+  function clock(h, m) {
+    var mm = ('0' + (m || 0)).slice(-2);
+    if (branding.timeFormat !== '12h') return ('0' + h).slice(-2) + ':' + mm;
+    return (h % 12 || 12) + (m == null ? '' : ':' + mm) + (h < 12 ? ' AM' : ' PM');
+  }
   function formatTime(dt) {
-    var d = new Date(dt.replace(' ', 'T') + 'Z');
-    var now = new Date();
-    var diff = (now - d) / 1000;
+    var d = wallClock(dt);
+    var diff = (Date.now() + serverSkew - d) / 1000;
     if (diff < 60) return 'just now';
     if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
     if (diff < 172800) return Math.floor(diff / 3600) + ' hr ago';
-    return d.toLocaleDateString('en-US', {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+    return d.toLocaleDateString('en-US', {day:'numeric', month:'short', timeZone:'UTC'}) + ' ' + clock(d.getUTCHours(), d.getUTCMinutes());
   }
   function decode(s) { try { return decodeURIComponent(s); } catch(e) { return s; } }
 
@@ -1233,7 +1244,11 @@
         }
         return r.json();
       })
-      .then(function(data) { if (data) render(data); })
+      .then(function(data) {
+        if (!data) return;
+        if (data.now) serverSkew = wallClock(data.now) - Date.now();
+        render(data);
+      })
       .catch(function() {
         if (auto) return;
         app.innerHTML = '<div class="empty">' + icons.chart +
@@ -1955,7 +1970,7 @@
     if (summary.peakHour) {
       html += '<div class="summary-card">' +
         '<div class="summary-card-label">Peak hour</div>' +
-        '<div class="summary-card-value">' + esc(summary.peakHour) + '</div>' +
+        '<div class="summary-card-value">' + clock(summary.peakHourStart) + '–' + clock((summary.peakHourStart + 1) % 24) + '</div>' +
         '<div class="summary-card-sub">' + num(summary.peakHourViews) + ' views</div>' +
       '</div>';
     }
@@ -2764,9 +2779,20 @@
 
   // The shared footer (the kit's docs/layout.md). Left: what this is and how fresh. Right: the
   // credit, or "Powered by Puls" under white-label. FOOTER_CREDIT=false turns the credit off
+  // The install's time zone, named only when its clock differs from the viewer's, in plain words
+  // ("Stockholm time", "UTC"): then the times are not the viewer's own, and an install still on
+  // its server's UTC gets noticed. serverSkew is the install's offset, give or take clock drift
+  function zoneNote() {
+    var tz = lastData && lastData.timezone;
+    var viewerOffset = -new Date().getTimezoneOffset() * 60000;
+    if (!tz || Math.abs(serverSkew - viewerOffset) < 10 * 60000) return '';
+    return ', ' + (tz.indexOf('/') < 0 || tz.indexOf('Etc/') === 0 ? tz.replace('Etc/', '') : tz.split('/').pop().replace(/_/g, ' ') + ' time');
+  }
+
   function renderFooter() {
     var whiteLabel = appName !== 'Puls';
-    var updated = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var now = new Date(Date.now() + serverSkew);
+    var updated = clock(now.getUTCHours(), now.getUTCMinutes()) + zoneNote();
     var left = esc(appName) + (whiteLabel ? '' : ' ' + esc(branding.version || '')) + ' · from the tracking script, updated ' + updated;
     var right = '';
     if (whiteLabel) {

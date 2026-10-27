@@ -17,6 +17,7 @@ afterAll(function () {
     stopServer($GLOBALS['server_pid']);
     if (isset($GLOBALS['restricted_server'])) stopServer($GLOBALS['restricted_server']);
     if (isset($GLOBALS['proxy_server'])) stopServer($GLOBALS['proxy_server']);
+    if (isset($GLOBALS['zone_server'])) stopServer($GLOBALS['zone_server']);
     exec('rm -rf ' . escapeshellarg($GLOBALS['test_dir']));
 });
 
@@ -1656,4 +1657,58 @@ test('behind a trusted proxy, visitors are told apart by X-Forwarded-For and can
 
     expect(distinctVisitors('xff-trusted'))->toBe(2)
         ->and((int) getTestDb()->query("SELECT COUNT(*) FROM pageviews WHERE site = 'xff-trusted'")->fetchColumn())->toBe(2);
+});
+
+test('api gives the server time, its time zone and the peak hour as a number', function () {
+    $site = 'clock-' . uniqid();
+    $day = date('Y-m-d', strtotime('-1 day'));
+    $stmt = getTestDb()->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash) VALUES (?, ?, ?, ?)');
+    foreach (['14:05:00', '14:30:00', '09:10:00'] as $i => $time) {
+        $stmt->execute(["{$day} {$time}", $site, '/', "v{$i}"]);
+    }
+
+    $data = json_decode(http('GET', '/?api&days=7&share=' . createTestShareToken($site))['body'], true);
+
+    expect($data['timezone'])->toBe(date_default_timezone_get())
+        ->and(abs(strtotime($data['now']) - time()))->toBeLessThan(5)
+        ->and($data['summary']['peakHourStart'])->toBe(14)
+        ->and($data['summary']['peakHour'])->toBe('14:00–15:00');
+});
+
+test('the dashboard gets the clock format', function () {
+    expect(http('GET', '/?share=' . createTestShareToken('clock-format'))['body'])->toContain('"timeFormat":"24h"');
+});
+
+test('TIMEZONE sets the clock for the API and for pages to fix', function () {
+    // Kiritimati is UTC+14, so its date is a day ahead of UTC for most of the day
+    $zone = 'Pacific/Kiritimati';
+    if (!isset($GLOBALS['zone_server'])) {
+        $GLOBALS['zone_server'] = startServer(8092, $GLOBALS['test_env'] + ['TIMEZONE' => $zone]);
+    }
+    $local = new DateTimeImmutable('now', new DateTimeZone($zone));
+    $site = 'zone-' . uniqid();
+    // Pages to fix covers 30 days back on the local calendar: the first is listed, the evening before is not
+    $inside = $local->modify('-30 days')->format('Y-m-d 00:30:00');
+    $outside = $local->modify('-31 days')->format('Y-m-d 23:30:00');
+    $stmt = getTestDb()->prepare('INSERT INTO broken_links (site, path, status, hits, first_seen, last_seen) VALUES (?, ?, 404, 1, ?, ?)');
+    $stmt->execute([$site, '/inside', $inside, $inside]);
+    $stmt->execute([$site, '/outside', $outside, $outside]);
+
+    $data = json_decode(http('GET', '/?api&days=7&share=' . createTestShareToken($site), [], 8092)['body'], true);
+
+    expect($data['timezone'])->toBe($zone)
+        ->and(abs((new DateTimeImmutable($data['now'], new DateTimeZone($zone)))->getTimestamp() - time()))->toBeLessThan(5)
+        ->and(array_column($data['brokenLinks'], 'path'))->toBe(['/inside']);
+});
+
+test('a share link expires on the configured clock, not SQLite UTC', function () {
+    $zone = 'Pacific/Kiritimati';
+    if (!isset($GLOBALS['zone_server'])) {
+        $GLOBALS['zone_server'] = startServer(8092, $GLOBALS['test_env'] + ['TIMEZONE' => $zone]);
+    }
+    // Expired an hour ago on the install's clock, which is 14 hours ahead of UTC's
+    $expired = (new DateTimeImmutable('-1 hour', new DateTimeZone($zone)))->format('Y-m-d H:i:s');
+    $token = createTestShareToken('zone-expiry', $expired);
+
+    expect(http('GET', '/?api&days=7&share=' . $token, [], 8092)['status'])->toBe(404);
 });

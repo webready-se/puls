@@ -5,6 +5,7 @@
 - [Users and access](#users-and-access)
 - [Share links](#share-links)
 - [Excluding your own visits](#excluding-your-own-visits)
+- [Time zone](#time-zone)
 - [White-label](#white-label)
 - [CLI reference](#cli-reference)
 
@@ -23,6 +24,8 @@ LOCKOUT_MINUTES=15          # Window for those failures, and how long the lockou
 IGNORED_BOTS=               # Bot UA patterns to exclude (comma-separated)
 TRUSTED_PROXIES=            # Proxies in front of Puls (IPs/CIDR), see integrations.md
 EVENTS_RETENTION_DAYS=400   # Days to keep custom events, 0 = forever
+TIMEZONE=                   # Time zone for days and hours, e.g. Europe/Stockholm; empty = php.ini's
+TIME_FORMAT=24h             # Clock times in the dashboard: 24h (14:00) or 12h (2 PM)
 FOOTER_CREDIT=true          # "Made by Webready in Sweden" in the dashboard footer, false = off
 ```
 
@@ -67,6 +70,20 @@ php puls exclude:add example.com 81.2.3.0/24 --label="Office"
 ```
 
 Or in the dashboard under **Settings**, **Excluded IPs**, which also shows your current address. Or per browser: open any tracked page with `#puls-ignore`, and `#puls-track` to count it again. Details in [integrations](integrations.md#excluding-your-own-visits).
+
+## Time zone
+
+Puls stores each visit with the time on its own clock, and that clock decides which day a visit counts on, the hour in Peak hour and when "Today" starts. Set it to where your visitors are:
+
+```env
+TIMEZONE=Europe/Stockholm
+```
+
+Without `TIMEZONE`, Puls uses PHP's time zone (`date.timezone` in php.ini), which is UTC on most servers and in the Docker image. For a site in Sweden that puts Peak hour and midnight one or two hours off. When the zone differs from the reader's own, the dashboard footer names it ("Stockholm time", "UTC"), so an install still on UTC shows. A name PHP does not know keeps PHP's zone and logs a warning, so a typo never stops the tracking.
+
+Changing the zone on a running install applies to new visits only: stored times keep the clock they were written with, so for a while the hours and day boundaries before the change stay as they were. Nothing is lost, and it grows out of view as the periods move on.
+
+`TIME_FORMAT=12h` shows clock times as 2 PM instead of 14:00. Puls does not follow the browser here: Chrome formats by its own language, not the computer's region, so English Chrome would show 2 PM to a reader who expects 14:00.
 
 ## White-label
 
