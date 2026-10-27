@@ -1,0 +1,16 @@
+#!/bin/sh
+# Prints the lines of the text on stdin that contain a name from
+# .private/real-names.txt (one name per line, any case; # starts a comment).
+# Shared by the pre-commit and commit-msg hooks and by Claude Code's
+# .claude/hooks/no-real-names.sh. The list is gitignored, so the names never
+# reach git; without it, nothing is checked. See .claude/rules/no-real-names.md.
+root="${PULS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+list="$root/.private/real-names.txt"
+[ -f "$list" ] || exit 0
+patterns=$(mktemp)
+trap 'rm -f "$patterns"' EXIT
+# An empty line would match everything: keep only names
+grep -v -e '^#' -e '^[[:space:]]*$' "$list" > "$patterns"
+[ -s "$patterns" ] || exit 0
+grep -n -i -F -f "$patterns"
+exit 0

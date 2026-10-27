@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stop a commit whose message contains a real name, domain, IP or URL
+# (see .claude/rules/no-real-names.md).
+found=$(grep -v '^#' "$1" | "$(dirname "$0")/real-names")
+if [ -n "$found" ]; then
+    printf 'Commit stopped: the message contains names from .private/real-names.txt:\n%s\n\nDescribe the case with example names instead. See .claude/rules/no-real-names.md.\n' "$found" >&2
+    exit 1
+fi
