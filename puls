@@ -798,8 +798,8 @@ function shareCreate(array $config, ?string $site, array $argv): void
     }
 
     $token = bin2hex(random_bytes(32));
-    $stmt = $db->prepare('INSERT INTO share_tokens (token, site, label, expires_at, created_at) VALUES (?, ?, ?, ?, datetime("now"))');
-    $stmt->execute([$token, $site, $label, $expiresAt]);
+    $stmt = $db->prepare('INSERT INTO share_tokens (token, site, label, expires_at, created_at) VALUES (?, ?, ?, ?, ?)');
+    $stmt->execute([$token, $site, $label, $expiresAt, date('Y-m-d H:i:s')]);
 
     echo "Share link created for '{$site}'.\n";
     if ($label) echo "  Label: {$label}\n";

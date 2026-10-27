@@ -1700,3 +1700,15 @@ test('TIMEZONE sets the clock for the API and for pages to fix', function () {
         ->and(abs((new DateTimeImmutable($data['now'], new DateTimeZone($zone)))->getTimestamp() - time()))->toBeLessThan(5)
         ->and(array_column($data['brokenLinks'], 'path'))->toBe(['/inside']);
 });
+
+test('a share link expires on the configured clock, not SQLite UTC', function () {
+    $zone = 'Pacific/Kiritimati';
+    if (!isset($GLOBALS['zone_server'])) {
+        $GLOBALS['zone_server'] = startServer(8092, $GLOBALS['test_env'] + ['TIMEZONE' => $zone]);
+    }
+    // Expired an hour ago on the install's clock, which is 14 hours ahead of UTC's
+    $expired = (new DateTimeImmutable('-1 hour', new DateTimeZone($zone)))->format('Y-m-d H:i:s');
+    $token = createTestShareToken('zone-expiry', $expired);
+
+    expect(http('GET', '/?api&days=7&share=' . $token, [], 8092)['status'])->toBe(404);
+});

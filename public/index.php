@@ -339,8 +339,9 @@ function validate_share_token(array $config, string $token): ?array
 {
     if (strlen($token) < 32) return null;
     $db = get_db($config['db_path']);
-    $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime("now"))');
-    $stmt->execute([$token]);
+    // PHP's clock: expires_at is in the configured time zone, SQLite's datetime('now') is UTC
+    $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token = ? AND (expires_at IS NULL OR expires_at > ?)');
+    $stmt->execute([$token, date('Y-m-d H:i:s')]);
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
