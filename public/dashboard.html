@@ -231,12 +231,36 @@
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
   .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; position: relative; }
-  .site-select {
-    padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line);
-    font-size: 13px; color: var(--text); background: var(--surface);
-    cursor: pointer; font-weight: 500; outline: none;
+  /* Site picker: a button with the sites in a list under it, in the CMD+K palette's rows */
+  .site-picker { position: relative; }
+  .site-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 10px 8px 14px; border-radius: 10px; border: 1px solid var(--line);
+    font: inherit; font-size: 13px; font-weight: 500; color: var(--text); background: var(--surface); cursor: pointer;
   }
-  .site-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+  .site-btn:hover { border-color: var(--line-strong); }
+  .site-btn svg { width: 14px; height: 14px; color: var(--text-2); transition: transform 0.2s; }
+  .site-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .site-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
+    min-width: 100%; width: max-content; max-width: min(340px, 90vw);
+    padding: 6px; border-radius: 12px; background: var(--surface);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 0 0 1px var(--line);
+  }
+  .site-menu[hidden] { display: none; }
+  .site-filter {
+    width: 100%; padding: 8px 10px; margin-bottom: 4px; border: 1px solid var(--line); border-radius: 8px;
+    font: inherit; font-size: 13px; color: var(--text); background: var(--surface);
+  }
+  .site-filter:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+  .site-list { max-height: 320px; overflow-y: auto; }
+  /* The highlighted row shows where the keyboard is, as in the palette */
+  .site-list:focus-visible { outline: none; }
+  @media (max-width: 600px) {
+    /* Full width under the header, from the controls' edges */
+    .site-picker { position: static; }
+    .site-menu { left: 0; right: 0; width: auto; max-width: none; }
+  }
   .period-group { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
   .period-btn {
     padding: 7px 14px; border-radius: 8px; border: none; font-size: 13px;
@@ -928,7 +952,8 @@
     padding: 10px 12px; border-radius: 10px; cursor: pointer;
     font-size: 13px; color: var(--text); gap: 12px;
   }
-  .cmd-item:hover, .cmd-item.active { background: var(--surface-2); }
+  /* One highlighted row: the mouse moves it as the arrow keys do */
+  .cmd-item.active { background: var(--surface-2); }
   .cmd-item-path {
     flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-weight: 500;
@@ -1009,9 +1034,13 @@
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       Search<kbd>⌘K</kbd>
     </button>
-    <select class="site-select" id="site-select">
-      <option value="">All sites</option>
-    </select>
+    <div class="site-picker" id="site-picker" hidden>
+      <button type="button" class="site-btn" id="site-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="site-list"><span class="sr-only">Site: </span><span id="site-btn-label">All sites</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+      <div class="site-menu" id="site-menu" hidden>
+        <input type="text" class="site-filter" id="site-filter" placeholder="Find a site..." aria-label="Find a site" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="site-list" aria-autocomplete="list" hidden>
+        <div class="site-list" id="site-list" role="listbox" aria-label="Sites" tabindex="-1"></div>
+      </div>
+    </div>
     <div class="period-group" id="period-group">
       <button class="period-btn" data-days="1">Today</button>
       <button class="period-btn active" data-days="7">7 days</button>
@@ -1160,7 +1189,6 @@
 
   // --- Elements ---
   const app = document.getElementById('app');
-  const siteSelect = document.getElementById('site-select');
   const periodGroup = document.getElementById('period-group');
   const datePicker = document.getElementById('date-picker');
   const dateFromInput = document.getElementById('date-from');
@@ -1222,13 +1250,135 @@
   }
 
   // --- Events ---
-  siteSelect.addEventListener('change', function() {
-    currentSite = this.value;
+  window.selectSite = function(site) {
+    currentSite = site;
     currentChannel = '';
     currentPath = '';
     if (!isShared) localStorage.setItem('puls-site', currentSite);
+    siteLabel();
     pendingAnnouncement = 'site';
     load(currentDays);
+  };
+  function siteLabel() { document.getElementById('site-btn-label').textContent = currentSite || 'All sites'; }
+
+  // Sites whose name has what was typed, names that start with it first: on a hub with many
+  // sites, they are the ones meant. The site picker and the CMD+K palette share these rows
+  function matchSites(q) {
+    var needle = q.toLowerCase();
+    var at = function(s) { return (s || 'All sites').toLowerCase().indexOf(needle); };
+    var found = [''].concat(sites).filter(function(s) { return at(s) >= 0; });
+    return found.filter(function(s) { return at(s) === 0; }).concat(found.filter(function(s) { return at(s) > 0; }));
+  }
+  function siteRowHtml(s) {
+    return '<div class="cmd-item" role="option" aria-selected="false" data-site="' + esc(s) + '">' +
+      '<span class="cmd-item-path">' + (s ? esc(s) : 'All sites') + '</span>' +
+      (s === currentSite ? '<span class="cmd-item-current">Current</span>' : '') +
+    '</div>';
+  }
+
+  // --- Site picker: a button with the sites in a list under it, not the palette: a control that
+  // shows a value is expected to open a list in place. It opens on the site on screen; a filter
+  // field shows only with many sites, and takes focus only with a fine pointer, since a phone's
+  // keyboard would cover the list. Escape or a click outside closes it, Escape back to the button
+  var SITE_FILTER_FROM = 8;
+  var sitePicker = document.getElementById('site-picker');
+  var siteBtn = document.getElementById('site-btn');
+  var siteMenu = document.getElementById('site-menu');
+  var siteFilter = document.getElementById('site-filter');
+  var siteList = document.getElementById('site-list');
+  var siteActive = -1;
+  var siteTyped = '', siteTypedTimer = 0;
+
+  function paintSites() {
+    var rows = matchSites(siteFilter.hidden ? '' : siteFilter.value.trim());
+    siteList.innerHTML = rows.length ? rows.map(siteRowHtml).join('') : '<div class="cmd-empty">No site matches</div>';
+    var items = siteList.querySelectorAll('.cmd-item');
+    items.forEach(function(el, i) { el.id = 'site-option-' + i; });
+    siteActive = Math.min(siteActive, items.length - 1);
+    if (siteActive < 0 && items.length) siteActive = 0;
+    markSite(items);
+  }
+  function markSite(items, byMouse) {
+    var owner = siteFilter.hidden ? siteList : siteFilter;
+    items.forEach(function(el, i) {
+      el.classList.toggle('active', i === siteActive);
+      el.setAttribute('aria-selected', String(i === siteActive));
+    });
+    if (items[siteActive]) {
+      owner.setAttribute('aria-activedescendant', items[siteActive].id);
+      if (!byMouse) items[siteActive].scrollIntoView({ block: 'nearest' });
+    } else {
+      owner.removeAttribute('aria-activedescendant');
+    }
+  }
+  function openSites() {
+    siteFilter.hidden = sites.length < SITE_FILTER_FROM;
+    siteFilter.value = '';
+    siteMenu.hidden = false;
+    siteBtn.setAttribute('aria-expanded', 'true');
+    siteActive = matchSites('').indexOf(currentSite);
+    paintSites();
+    (siteFilter.hidden || matchMedia('(pointer: coarse)').matches ? siteList : siteFilter).focus();
+  }
+  function closeSites(refocus) {
+    if (siteMenu.hidden) return;
+    siteMenu.hidden = true;
+    siteBtn.setAttribute('aria-expanded', 'false');
+    if (refocus) siteBtn.focus();
+  }
+  siteBtn.addEventListener('click', function() { if (siteMenu.hidden) openSites(); else closeSites(true); });
+  siteBtn.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowDown' && siteMenu.hidden) { e.preventDefault(); openSites(); }
+  });
+  siteFilter.addEventListener('input', function() { siteActive = -1; paintSites(); });
+  // The mouse moves the highlight too, so only one row ever looks picked
+  siteList.addEventListener('mousemove', function(e) {
+    var item = e.target.closest('.cmd-item'), items = siteList.querySelectorAll('.cmd-item');
+    var i = [].indexOf.call(items, item);
+    if (i >= 0 && i !== siteActive) { siteActive = i; markSite(items, true); }
+  });
+  siteList.addEventListener('click', function(e) {
+    var item = e.target.closest('.cmd-item');
+    if (!item) return;
+    closeSites(true);
+    if (item.getAttribute('data-site') !== currentSite) selectSite(item.getAttribute('data-site'));
+  });
+  siteMenu.addEventListener('keydown', function(e) {
+    var items = siteList.querySelectorAll('.cmd-item');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      siteActive = Math.max(0, Math.min(items.length - 1, siteActive + (e.key === 'ArrowDown' ? 1 : -1)));
+      markSite(items);
+    } else if ((e.key === 'Home' || e.key === 'End') && siteFilter.hidden) {
+      // In the filter field, Home and End move the caret as usual
+      e.preventDefault();
+      siteActive = e.key === 'Home' ? 0 : items.length - 1;
+      markSite(items);
+    } else if (e.key === 'Enter' && items[siteActive]) {
+      e.preventDefault();
+      items[siteActive].click();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeSites(true);
+    } else if (e.key === 'Tab') {
+      closeSites(false);
+    } else if (siteFilter.hidden && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey && (siteTyped || e.key !== ' ')) {
+      // Without the filter, typing the start of a name moves to it, as in the browser's own select:
+      // one letter, or the same letter again, goes to the next name that starts with it
+      siteTyped += e.key.toLowerCase();
+      clearTimeout(siteTypedTimer);
+      siteTypedTimer = setTimeout(function() { siteTyped = ''; }, 600);
+      var names = [].map.call(items, function(el) { return (el.getAttribute('data-site') || 'All sites').toLowerCase(); });
+      var cycle = siteTyped.split('').every(function(c) { return c === siteTyped.charAt(0); });
+      var prefix = cycle ? siteTyped.charAt(0) : siteTyped;
+      for (var i = 0; i < names.length; i++) {
+        var k = (Math.max(siteActive, 0) + (cycle ? 1 : 0) + i) % names.length;
+        if (names[k].indexOf(prefix) === 0) { siteActive = k; markSite(items); break; }
+      }
+    }
+  });
+  document.addEventListener('click', function(e) {
+    if (!siteMenu.hidden && !sitePicker.contains(e.target)) closeSites(false);
   });
 
   periodGroup.addEventListener('click', function(e) {
@@ -1291,7 +1441,6 @@
 
   // Shared mode: hide admin UI
   if (isShared) {
-    siteSelect.style.display = 'none';
     document.getElementById('menu-btn').style.display = 'none';
     document.title = shareSite + ' — Puls';
   }
@@ -1309,20 +1458,13 @@
       .then(function(s) {
         if (!s) return;
         sites = s;
-        s.forEach(function(name) {
-          var opt = document.createElement('option');
-          opt.value = name;
-          opt.textContent = name;
-          siteSelect.appendChild(opt);
-        });
-        if (s.length <= 1) siteSelect.style.display = 'none';
+        sitePicker.hidden = s.length <= 1;
         // Restore saved site selection
-        if (currentSite && s.indexOf(currentSite) >= 0) {
-          siteSelect.value = currentSite;
-        } else {
+        if (!currentSite || s.indexOf(currentSite) < 0) {
           currentSite = '';
           localStorage.removeItem('puls-site');
         }
+        siteLabel();
         // Restore saved period or custom range
         if (currentFrom && currentTo) {
           periodGroup.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
@@ -3582,11 +3724,6 @@
       .catch(function() { detail.innerHTML = '<span style="color:var(--text-2)">Failed to load</span>'; });
   };
 
-  window.selectSite = function(site) {
-    siteSelect.value = site;
-    siteSelect.dispatchEvent(new Event('change'));
-  };
-
   // The menu opens as an overview: notes, excluded IPs and goals folded to a line that says what
   // is set, so it is short and one task opens at a time. Not remembered: the menu is opened for
   // a task, and sections left open would make it long again. A link to one section (the note
@@ -4121,6 +4258,7 @@
   var cmdFailed = false;
 
   window.openSearch = function() {
+    closeSites(false);
     dialogOpened(null);
     cmdOverlay.classList.add('open');
     cmdInput.value = '';
@@ -4143,25 +4281,16 @@
   // pages only. One palette and no second shortcut; a user with one site sees pages as before
   function cmdSites(q) {
     if (isShared || sites.length <= 1 || q.charAt(0) === '/') return [];
-    var needle = q.toLowerCase();
-    var at = function(s) { return (s || 'All sites').toLowerCase().indexOf(needle); };
-    var found = [''].concat(sites).filter(function(s) { return at(s) >= 0; });
-    // Names that start with what was typed come first: on a hub with many sites, they are the ones meant
-    return found.filter(function(s) { return at(s) === 0; }).concat(found.filter(function(s) { return at(s) > 0; }));
+    return matchSites(q);
   }
 
   function paintCmd() {
     var q = cmdInput.value.trim();
-    var siteList = cmdSites(q);
+    var siteMatches = cmdSites(q);
     var html = '';
-    if (siteList.length) {
+    if (siteMatches.length) {
       html += '<div role="group" aria-labelledby="cmd-group-sites"><div class="cmd-group" id="cmd-group-sites">Sites</div>';
-      siteList.forEach(function(s) {
-        html += '<div class="cmd-item" role="option" aria-selected="false" data-site="' + esc(s) + '">' +
-          '<span class="cmd-item-path">' + (s ? esc(s) : 'All sites') + '</span>' +
-          (s === currentSite ? '<span class="cmd-item-current">Current</span>' : '') +
-        '</div>';
-      });
+      html += siteMatches.map(siteRowHtml).join('');
       html += '</div>';
     }
     if (cmdPages && cmdPages.length) {
@@ -4178,7 +4307,7 @@
       html += '</div>';
     } else if (cmdFailed) {
       html += '<div class="cmd-empty">Could not search pages</div>';
-    } else if (cmdPages && !siteList.length) {
+    } else if (cmdPages && !siteMatches.length) {
       html += '<div class="cmd-empty">No pages found</div>';
     }
     cmdResults.innerHTML = html;
@@ -4224,14 +4353,14 @@
     }
   });
 
-  function updateCmdActive(items) {
+  function updateCmdActive(items, byMouse) {
     items.forEach(function(el, i) {
       el.classList.toggle('active', i === cmdActive);
       el.setAttribute('aria-selected', String(i === cmdActive));
     });
     if (items[cmdActive]) {
       cmdInput.setAttribute('aria-activedescendant', items[cmdActive].id);
-      items[cmdActive].scrollIntoView({ block: 'nearest' });
+      if (!byMouse) items[cmdActive].scrollIntoView({ block: 'nearest' });
     } else {
       cmdInput.removeAttribute('aria-activedescendant');
     }
@@ -4267,6 +4396,12 @@
   });
 
   // A site opens that site; a page filters the dashboard on it
+  cmdResults.addEventListener('mousemove', function(e) {
+    var item = e.target.closest('.cmd-item'), items = cmdResults.querySelectorAll('.cmd-item');
+    var i = [].indexOf.call(items, item);
+    if (i >= 0 && i !== cmdActive) { cmdActive = i; updateCmdActive(items, true); }
+  });
+
   cmdResults.addEventListener('click', function(e) {
     var item = e.target.closest('.cmd-item');
     if (!item) return;

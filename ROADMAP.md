@@ -258,7 +258,7 @@ From a site with 4 goals and 9 saved cards: the page got long, the chart ended u
 
 **Switching site**
 - [x] **Sites in the CMD+K palette** - with nothing typed, the palette lists the viewer's sites (the current one marked); typing filters them in the browser, above the page search for the current site, and a query that starts with `/` searches pages only. One palette and no second shortcut: site names and paths rarely look alike, and today the palette stays empty until two characters are typed. A user with one site sees the palette as today. The results are a listbox with a group per kind and `aria-activedescendant`. Who is online per site was left out: `?api&sites` gives names only, so it would take a query on every open or a change to a documented endpoint, and the site overview on All sites already shows it; the own site picker below can take it up
-- [ ] **Own site picker** - the native `<select>` becomes a button with a list anchored under it, sharing the palette's rows. Not the palette: a control that shows a value is expected to open a list in place, and the palette is for whoever asked to search. A filter field on top only with many sites; Escape or a click outside closes it and returns focus to the button; full width under the header on a phone, without focusing the filter there, so the keyboard does not cover the list. Worth it for search among many sites and the online count, not for looks alone: the native select is accessible and good on phones. Build it after the palette item, whose rows it reuses
+- [x] **Own site picker** - the native `<select>` becomes a button with a list anchored under it, sharing the palette's rows. Not the palette: a control that shows a value is expected to open a list in place, and the palette is for whoever asked to search. A filter field on top only with many sites; Escape or a click outside closes it and returns focus to the button; full width under the header on a phone, without focusing the filter there, so the keyboard does not cover the list. Worth it for search among many sites and the online count, not for looks alone: the native select is accessible and good on phones. Build it after the palette item, whose rows it reuses. Filter from 8 sites; a hub with fewer scrolls a short list. Who is online per site was left out here too: `?api&sites` gives names only, and the site overview on All sites shows it (Ideas)
 
 ## Maintenance
 
@@ -279,6 +279,7 @@ From a site with 4 goals and 9 saved cards: the page got long, the chart ended u
 Things to explore later — not committed to.
 
 - **API keys** — alternative to session auth for headless API access
+- **Who is online per site in the site picker and CMD+K** - left out of both: the site list (`?api&sites`) gives names only, so it would take a query on every open or a change to a documented endpoint, and the site overview on All sites already shows it. Worth it if a hub's owner switches sites to find where visitors are now
 - **Slack/Discord notifications** — daily summary via webhook
 - **Aggregation tables** — daily rollups for faster queries at scale
 - **Backup/restore CLI** — `php puls backup` / `php puls restore` for SQLite snapshots

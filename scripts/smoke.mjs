@@ -441,8 +441,30 @@ async function main() {
     // each one, and a row in the overview opens that site
     const seeded = ['blog.example.com', 'demo.example.com', 'shop.example.com'];
     if (!await waitFor(() => q('.site-overview-row'), 'site overview on All sites')) return fails;
-    const picker = [...q('#site-select').options].map((o) => o.value);
-    expect(picker.join() === ['', ...seeded].join() && q('#site-select').offsetParent !== null, `site picker offers All sites and each site (offers ${picker.join(', ')})`);
+    // The site picker: a button with the sites in a list under it, opened on the site on screen,
+    // without a filter for three sites; Escape closes it back to the button
+    const siteBtn = q('#site-btn');
+    const pickerKey = (k) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    siteBtn?.click();
+    const picker = [...document.querySelectorAll('#site-list [data-site]')].map((el) => el.getAttribute('data-site'));
+    expect(siteBtn?.offsetParent && siteBtn.getAttribute('aria-expanded') === 'true' && picker.join() === ['', ...seeded].join() && q('#site-filter').hidden, `site picker lists All sites and each site, without a filter for three (lists ${picker.join(', ')})`);
+    expect(document.activeElement === q('#site-list') && q('#site-list').getAttribute('aria-activedescendant') === q('#site-list [data-site=""]')?.id, 'the picker opens on the site on screen, its list focused');
+    expect(siteBtn.textContent.startsWith('Site: All sites'), `the picker button tells a screen reader it is the site (says ${siteBtn.textContent})`);
+    q('#site-list [data-site="blog.example.com"]').dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    expect(q('#site-list .cmd-item.active')?.getAttribute('data-site') === 'blog.example.com' && document.querySelectorAll('#site-list .cmd-item.active').length === 1, 'the mouse moves the one highlight');
+    pickerKey('End');
+    expect(q('#site-list .cmd-item.active')?.getAttribute('data-site') === 'shop.example.com', 'End moves to the last site');
+    pickerKey('Home');
+    expect(q('#site-list .cmd-item.active')?.getAttribute('data-site') === '', 'Home moves to All sites');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
+    expect(q('#site-menu').hidden && q('#cmd-overlay.open'), 'CMD+K closes the picker as the palette opens');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    siteBtn.click();
+    pickerKey('Escape');
+    expect(q('#site-menu').hidden && document.activeElement === siteBtn && siteBtn.getAttribute('aria-expanded') === 'false', 'Escape closes the picker and returns to its button');
+    siteBtn?.click();
+    document.body.click();
+    expect(q('#site-menu').hidden, 'a click outside closes the picker');
     const rows = [...document.querySelectorAll('.site-overview-row')];
     const rowNames = rows.map((r) => r.querySelector('.site-overview-name').firstChild.textContent);
     expect(seeded.every((s) => rowNames.includes(s)), `site overview lists every site (lists ${rowNames.join(', ')})`);
@@ -451,6 +473,25 @@ async function main() {
     demoRow?.click();
     if (!await waitFor(() => q('#chart-card .card-subtitle')?.textContent.startsWith('demo.example.com') && !q('.site-overview-row') && q('.breakdown-card'), 'demo site opened from the site overview')) return fails;
     expect(localStorage.getItem('puls-site') === 'demo.example.com', 'the site picked in the overview is remembered');
+    // The picker by keyboard: ArrowDown on the button opens it on the demo site, typing the start
+    // of a name moves to it, the arrow keys move on, Enter picks, and the button names it
+    siteBtn.focus();
+    pickerKey('ArrowDown');
+    const pickerActive = () => q('#site-list .cmd-item.active')?.getAttribute('data-site');
+    expect(pickerActive() === 'demo.example.com' && q('#site-list [data-site="demo.example.com"] .cmd-item-current'), 'the picker opens on the demo site, marked current');
+    pickerKey('b');
+    expect(pickerActive() === 'blog.example.com', `typing the start of a name moves to it (on ${pickerActive()})`);
+    await sleep(700);
+    pickerKey('a');
+    expect(pickerActive() === '', `a moves to All sites (on ${pickerActive()})`);
+    await sleep(700);
+    pickerKey('b');
+    pickerKey('ArrowDown');
+    pickerKey('ArrowDown');
+    pickerKey('Enter');
+    if (!await waitFor(() => q('#chart-card .card-subtitle')?.textContent.startsWith('shop.example.com') && q('#site-btn-label').textContent === 'shop.example.com' && document.activeElement === siteBtn, 'ArrowDown and Enter in the picker open the next site')) return fails;
+    selectSite('demo.example.com');
+    if (!await waitFor(() => q('#chart-card .card-subtitle')?.textContent.startsWith('demo.example.com') && q('#site-btn-label').textContent === 'demo.example.com' && q('.breakdown-card'), 'back on the demo site')) return fails;
     // Tools fold like bots and pages to fix, behind a button a keyboard reaches
     const tools = q('[data-fold="tools"] .fold-toggle');
     expect(tools?.tagName === 'BUTTON' && tools.getAttribute('aria-expanded') === 'false' && q('#snippet-code')?.offsetParent === null, 'tools start folded behind a button');
@@ -642,9 +683,7 @@ async function main() {
     };
     if (!await waitFor(() => q('#chart-card .card-subtitle'), 'chart for the hostile site')) return fails;
     if (!q('#chart-card .card-subtitle').textContent.startsWith(name)) fails.push('hostile site name shown as text in the chart subtitle');
-    const select = q('#site-select');
-    select.value = '';
-    select.dispatchEvent(new Event('change'));
+    selectSite('');
     if (await waitFor(() => q('.site-overview-row'), 'site overview with the hostile site')) {
       if (![...document.querySelectorAll('.site-overview-name')].some((n) => n.textContent.startsWith(name))) fails.push('hostile site name shown as text in the site overview');
     }
@@ -739,7 +778,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (picker, site overview, a row opens the site and is remembered), sites in CMD+K (listed at once, filtered with names that start with the query first, / for pages only, Enter opens the first), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered), sites in CMD+K (listed at once, filtered with names that start with the query first, / for pages only, Enter opens the first), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 
