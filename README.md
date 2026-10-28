@@ -72,7 +72,7 @@ A goal is a page or an event. Its tile shows the visitors who converted, their s
 - **Teams and clients:** one dashboard for many sites, users limited to their own sites, read-only share links, a [JSON and CSV API](docs/api.md)
 - **Tracking without code:** phone and email clicks, downloads, form submissions, outbound links
 - **Keeping personal data out:** drop query strings or turn ids and tokens in URLs into `:id` and `:token` before anything leaves the browser
-- **Everyday use:** dark mode, a ⌘K command palette, installable as an app, white-label branding, an interactive CLI
+- **Everyday use:** dark mode, a ⌘K command palette for sites and pages, installable as an app, white-label branding, an interactive CLI
 
 <details>
 <summary>More screenshots</summary>

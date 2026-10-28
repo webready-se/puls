@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `TIMEZONE` in `.env` sets the time zone for stored times, days and hours, such as `TIMEZONE=Europe/Stockholm`. Without it Puls uses PHP's, which is UTC on most servers and in Docker, and puts Peak hour and midnight one or two hours off for a site in Sweden. The dashboard footer names the zone when it differs from the reader's own ("Stockholm time"). Changing it on a running install applies to new visits only (`docs/configuration.md`).
 - `TIME_FORMAT=12h` shows clock times as 2 PM instead of 14:00 (24h is the default).
 - The API gives the server's `now` and `timezone`, and `summary.peakHourStart` as a number.
+- ⌘K lists your sites as soon as it opens, with the one on screen marked, and typing filters them (names that start with what you type first) while pages are searched below. The first result is highlighted as you type, so Enter opens it. A query that starts with `/` searches pages only, as the hint under the results says. With one site the palette searches pages as before. Screen readers now hear the results as a list, grouped into sites and pages, and which row is highlighted.
 
 ### Changed
 

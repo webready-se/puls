@@ -458,6 +458,31 @@ async function main() {
     expect(q('#snippet-code')?.offsetParent && localStorage.getItem('puls-tools-open') === '1', 'a click on Tools shows the tracking snippet');
     tools?.click();
 
+    // CMD+K lists the sites before anything is typed; typing filters them, a query that starts
+    // with / searches pages only, and Enter on a site opens it
+    const key = (k, metaKey = false) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, metaKey, bubbles: true }));
+    const typeCmd = (text) => { const input = q('#cmd-input'); input.value = text; input.dispatchEvent(new Event('input')); };
+    const cmdSiteNames = () => [...document.querySelectorAll('#cmd-results [data-site]')].map((el) => el.getAttribute('data-site'));
+    key('k', true);
+    expect(q('#cmd-overlay.open') && cmdSiteNames().join() === ['', ...seeded].join() && q('#cmd-input').getAttribute('aria-expanded') === 'true', `CMD+K lists All sites and each site before anything is typed (lists ${cmdSiteNames().join(', ')})`);
+    expect(q('#cmd-results [data-site="demo.example.com"] .cmd-item-current'), 'the site on screen is marked current');
+    expect(!q('#cmd-input').hasAttribute('aria-activedescendant') && q('#cmd-hint').textContent.includes('/ pages only'), 'nothing is highlighted before anything is typed, and the hint says / searches pages only');
+    key('ArrowDown');
+    expect(q('#cmd-input').getAttribute('aria-activedescendant') === q('#cmd-results [data-site=""]')?.id, 'the arrow keys move the highlight, and screen readers are told');
+    typeCmd('/pri');
+    expect(!cmdSiteNames().length, 'a query that starts with / leaves the sites out');
+    if (await waitFor(() => q('#cmd-group-pages'), 'page results in the palette')) {
+      expect(q('#cmd-results [data-path="/pricing"]'), 'the page search finds /pricing');
+    }
+    // "s" is in shop.example.com and in All sites; the name that starts with it comes first
+    typeCmd('s');
+    expect(cmdSiteNames().join() === 'shop.example.com,', `typing filters the sites, names that start with it first (shows ${cmdSiteNames().join(', ')})`);
+    expect(q('#cmd-input').getAttribute('aria-activedescendant') === q('#cmd-results [data-site="shop.example.com"]')?.id, 'typing highlights the first result, so Enter opens it');
+    key('Enter');
+    if (!await waitFor(() => !q('#cmd-overlay.open') && q('#chart-card .card-subtitle')?.textContent.startsWith('shop.example.com'), 'Enter opens the site from the palette')) return fails;
+    selectSite('demo.example.com');
+    if (!await waitFor(() => q('#chart-card .card-subtitle')?.textContent.startsWith('demo.example.com') && q('.breakdown-card'), 'back on the demo site')) return fails;
+
     if (!await waitFor(() => q('#chart-card') && q('#goal-search'), 'logged-in dashboard')) return fails;
     const search = q('#goal-search');
     search.value = 'pwa_install';
@@ -698,7 +723,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (picker, site overview, a row opens the site and is remembered), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (picker, site overview, a row opens the site and is remembered), sites in CMD+K (listed at once, filtered with names that start with the query first, / for pages only, Enter opens the first), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 
