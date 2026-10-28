@@ -537,7 +537,7 @@
   .note-form .note-form-hint { flex-basis: 100%; margin: 0; }
   .note-form .note-form-hint button { padding: 0; border: none; font-size: inherit; color: inherit; text-decoration: underline; }
   .note-list { display: flex; flex-direction: column; gap: 6px; }
-  .note-list:empty::after { content: 'No notes in this period'; font-size: 11px; color: var(--text-3); }
+  .note-list:empty { display: none; }
   .note-item { display: flex; align-items: center; gap: 6px; }
   .note-item-date { font-size: 11px; color: var(--text-3); white-space: nowrap; }
   .note-item input { flex: 1; min-width: 0; }
@@ -793,6 +793,13 @@
   .menu-close:hover { color: var(--text); }
   .menu-close svg { width: 16px; height: 16px; }
   .menu-section { display: flex; flex-direction: column; gap: 8px; }
+  /* Folded menu sections: the label with the chevron on the right, so labels line up with
+     Appearance and Export, and the summary under it, as the panel is narrow */
+  .menu-fold-toggle { flex-wrap: wrap; row-gap: 2px; }
+  .menu-fold-toggle .menu-label { flex: 1; }
+  .menu-fold-toggle .fold-summary { flex-basis: 100%; margin-left: 0; text-align: left; font-size: 12px; }
+  .menu-fold-body { display: flex; flex-direction: column; gap: 8px; }
+  .menu-fold-body[hidden] { display: none; }
   .menu-label { font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 
   /* Theme toggle */
@@ -1067,11 +1074,19 @@
     </div>
   </div>
   <div class="menu-section" id="notes-section" style="display:none">
-    <span class="menu-label" id="notes-label">Chart notes</span>
+    <button type="button" class="fold-row fold-toggle menu-fold-toggle" aria-expanded="false" aria-controls="notes-body">
+      <span class="menu-label" id="notes-label">Chart notes</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><span class="fold-summary" id="notes-summary"></span>
+    </button>
+    <div class="menu-fold-body" id="notes-body" hidden>
     <div class="note-list" id="note-list" aria-labelledby="notes-label"></div>
+    <p class="excluded-hint" id="notes-empty">Add one with + Note above the chart.</p>
+    </div>
   </div>
   <div class="menu-section" id="excluded-section" style="display:none">
-    <span class="menu-label" id="excluded-label">Excluded IPs</span>
+    <button type="button" class="fold-row fold-toggle menu-fold-toggle" aria-expanded="false" aria-controls="excluded-body">
+      <span class="menu-label" id="excluded-label">Excluded IPs</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><span class="fold-summary" id="excluded-summary"></span>
+    </button>
+    <div class="menu-fold-body" id="excluded-body" hidden>
     <div class="excluded-mine" id="excluded-mine"></div>
     <div class="excluded-list" id="excluded-list" aria-labelledby="excluded-label"></div>
     <form class="note-form excluded-form" id="excluded-form" onsubmit="addExcluded(event)">
@@ -1080,11 +1095,16 @@
       <button type="submit">Exclude</button>
     </form>
     <p class="excluded-hint">Pageviews and events from these addresses are not stored.</p>
+    </div>
   </div>
   <div class="menu-section" id="goals-section" style="display:none">
-    <span class="menu-label">Goals</span>
+    <button type="button" class="fold-row fold-toggle menu-fold-toggle" aria-expanded="false" aria-controls="goals-body">
+      <span class="menu-label">Goals</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><span class="fold-summary" id="goals-summary"></span>
+    </button>
+    <div class="menu-fold-body" id="goals-body" hidden>
     <input type="text" class="goal-search" id="goal-search" placeholder="Search pages or events..." aria-label="Search pages or events for conversion goal" autocomplete="off" spellcheck="false">
     <div class="goal-list" id="goal-list"></div>
+    </div>
   </div>
   <div style="flex:1"></div>
   <a href="/?logout" class="menu-logout">
@@ -2671,7 +2691,9 @@
     var body = document.getElementById(btn.getAttribute('aria-controls'));
     body.hidden = !body.hidden;
     btn.setAttribute('aria-expanded', String(!body.hidden));
-    localStorage.setItem('puls-' + btn.closest('[data-fold]').getAttribute('data-fold') + '-open', body.hidden ? '0' : '1');
+    // The dashboard's sections remember the choice; the menu's fold again each time it opens
+    var fold = btn.closest('[data-fold]');
+    if (fold) localStorage.setItem('puls-' + fold.getAttribute('data-fold') + '-open', body.hidden ? '0' : '1');
   });
 
   var botCatColors = { 'AI': '#dc2626', 'Search engine': '#2563eb', 'Social': '#7c3aed', 'SEO': '#d97706', 'Monitor': '#059669', 'Other': '#94a3b8' };
@@ -3565,9 +3587,18 @@
     siteSelect.dispatchEvent(new Event('change'));
   };
 
-  window.openMenu = function() {
+  // The menu opens as an overview: notes, excluded IPs and goals folded to a line that says what
+  // is set, so it is short and one task opens at a time. Not remembered: the menu is opened for
+  // a task, and sections left open would make it long again. A link to one section (the note
+  // form's "Edit or remove notes in Settings") opens the menu with that section open
+  window.openMenu = function(section) {
     menuOverlay.classList.add('open');
     menuPanel.classList.add('open');
+    menuPanel.querySelectorAll('.menu-fold-toggle').forEach(function(btn) {
+      var open = btn.getAttribute('aria-controls') === section + '-body';
+      btn.setAttribute('aria-expanded', String(open));
+      document.getElementById(btn.getAttribute('aria-controls')).hidden = !open;
+    });
     populateGoalPicker();
     populateNotes();
     populateExcluded();
@@ -3608,7 +3639,7 @@
       '<label class="note-form-text">Note<input type="text" name="label" required maxlength="100" placeholder="What happened, e.g. a film on Facebook"></label>' +
       '<button type="submit">Save</button>' +
       '<button type="button" onclick="toggleNoteForm()">Cancel</button>' +
-      '<p class="note-form-hint">Edit or remove notes in <button type="button" onclick="toggleNoteForm(); openMenu()">Settings</button></p>' +
+      '<p class="note-form-hint">Edit or remove notes in <button type="button" onclick="toggleNoteForm(); openMenu(\'notes\')">Settings</button></p>' +
     '</form>';
   }
 
@@ -3651,6 +3682,11 @@
   var notesSection = document.getElementById('notes-section');
   var noteList = document.getElementById('note-list');
 
+  // A folded menu section's summary: how many there are, or that there are none
+  function menuSummary(id, n, one, many, none) {
+    document.getElementById(id + '-summary').textContent = n ? num(n) + ' ' + (n === 1 ? one : many) : none;
+  }
+
   function populateNotes() {
     if (isShared || !lastData) { notesSection.style.display = 'none'; return; }
     notesSection.style.display = '';
@@ -3662,6 +3698,14 @@
         '<button type="button" aria-label="Remove note for ' + esc(when) + '" onclick="removeNote(this)">&times;</button>' +
       '</div>';
     }).join('');
+    notesSummary();
+  }
+
+  // Without notes, the open section says where to add one rather than showing nothing
+  function notesSummary() {
+    var n = noteList.children.length;
+    menuSummary('notes', n, 'note', 'notes', 'None in this period');
+    document.getElementById('notes-empty').hidden = n > 0;
   }
 
   function postNote(endpoint, item, extra) {
@@ -3687,6 +3731,7 @@
       .then(function() {
         var next = item.nextElementSibling || item.previousElementSibling;
         item.remove();
+        notesSummary();
         (next ? next.querySelector('input') : menuPanel.querySelector('.menu-close')).focus();
         announce('Note removed');
       }, function() { announce('Could not remove the note'); });
@@ -3703,14 +3748,18 @@
     excludedSection.style.display = '';
     var site = noteSite();
     excludedForm.hidden = !site;
+    var summary = document.getElementById('excluded-summary');
     if (!site) {
       excludedMine.textContent = 'Pick a site to see its excluded IPs.';
       excludedList.innerHTML = '';
+      summary.textContent = 'Pick a site first';
       return;
     }
     fetch(apiUrl('?excluded&site=' + encodeURIComponent(site)))
       .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
       .then(function(d) {
+        var mine = 'your IP is ' + (d.ip_excluded ? 'not counted' : 'counted');
+        summary.textContent = d.excluded.length ? num(d.excluded.length) + ' excluded · ' + mine : mine.charAt(0).toUpperCase() + mine.slice(1);
         excludedMine.innerHTML = 'Your IP <code>' + esc(d.ip) + '</code>' + (d.ip_excluded
           ? '<span>is not counted</span>'
           : '<button type="button" onclick="excludeMine(' + jsArg(d.ip) + ')">Exclude it</button>');
@@ -3723,7 +3772,7 @@
           '</div>';
         }).join('');
       })
-      .catch(function() { excludedMine.textContent = 'Could not load excluded IPs.'; });
+      .catch(function() { excludedMine.textContent = 'Could not load excluded IPs.'; summary.textContent = 'Could not load'; });
   }
 
   function postExcluded(endpoint, body) {
@@ -3775,6 +3824,7 @@
   function renderGoalList(filter) {
     if (!lastData || !lastData.pages) { goalList.innerHTML = ''; return; }
     var goals = lastData.goals || [];
+    menuSummary('goals', goals.length, 'goal', 'goals', 'No goals yet');
     var goalPaths = goals.map(function(g) { return g.path; });
     var lower = filter.toLowerCase();
     var pages = lastData.pages.filter(function(p) {

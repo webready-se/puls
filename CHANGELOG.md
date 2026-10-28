@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Settings opens as an overview: Chart notes, Excluded IPs and Goals are folded to a line that says what is set ("1 goal", "2 excluded · your IP is counted"), and a click opens one. They fold again each time Settings opens, so it stays short; "Edit or remove notes in Settings" under a new chart note opens it on Chart notes. Appearance and Export stay as they are.
+
 ## [1.29.0] - 2026-10-28
 
 ### Added

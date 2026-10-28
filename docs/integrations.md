@@ -218,7 +218,7 @@ Track any interaction with `puls.track(name, data)`. Events appear in the dashbo
 
 **Save as card** keeps a grouping on the dashboard: with an event grouped on a key, click **Save as card** and it appears as its own card under Goals, with the top ten values, NEW badges and how many values are new. Click **Details** on a card to open the full drill-down (trend, funnel, CSV) inside it. Click the card title to rename it, for example "Missed searches" for `search_miss` grouped by `query`. Cards follow the selected period and also show on shared dashboards, read-only. API: `breakdowns` in the dashboard response.
 
-Any event can also be a **goal**: open the menu, search under Goals, and pick the event name from the Events section. The Goals card then shows how many visitors triggered it and the conversion rate, next to page goals. This is the way to measure a conversion that has no thank-you page, such as `feedback_sent` or `pwa_install` in a single-page app. An event does not have to have happened yet: type its name in the goal search and pick **Add event goal**, and it shows No hits yet until the first one arrives. The funnel's **Then** field takes any event name the same way.
+Any event can also be a **goal**: open the menu, open Goals, search, and pick the event name from the Events section. The Goals card then shows how many visitors triggered it and the conversion rate, next to page goals. This is the way to measure a conversion that has no thank-you page, such as `feedback_sent` or `pwa_install` in a single-page app. An event does not have to have happened yet: type its name in the goal search and pick **Add event goal**, and it shows No hits yet until the first one arrives. The funnel's **Then** field takes any event name the same way.
 
 The same data is available as JSON: `?api&days=30&event=search_miss&group=query` returns `eventSeries`, `previousEventSeries`, `eventTotals`, `eventKeys`, `eventGroup` (each value with `count`, `visitors`, `new`) and `eventGroupNew`. Add `&format=csv` for the CSV instead. Both work with `&share=<token>` for read-only access, so a script can pull missed searches straight into a backlog:
 
@@ -365,7 +365,7 @@ Your own and your team's visits can be left out of the numbers in two ways. Both
 
 Pageviews and events from an excluded address or range are dropped before anything is stored. Use it for an office or another network with a fixed IP.
 
-In the dashboard, open **Settings** and find **Excluded IPs**. It shows your own address as Puls sees it, with **Exclude it** to stop counting it, and the site's list, where you can add an address or range with a label, or remove one with ×. Pick a site first when you can see several. Rows for all sites are listed too, and only a user with access to every site can add or remove them.
+In the dashboard, open **Settings**: the **Excluded IPs** line already says whether your IP is counted. Open it, and it shows your own address as Puls sees it, with **Exclude it** to stop counting it, and the site's list, where you can add an address or range with a label, or remove one with ×. Pick a site first when you can see several. Rows for all sites are listed too, and only a user with access to every site can add or remove them.
 
 From the CLI:
 
