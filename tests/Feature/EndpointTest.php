@@ -1584,10 +1584,15 @@ test('excluded IPs can be listed, added and removed on the user\'s sites', funct
         $db->exec("INSERT INTO excluded_ips (site, ip, created_at) VALUES ('*', '203.0.113.0/24', datetime('now')), ('other-site', '198.51.100.7', datetime('now'))");
 
         $data = $list();
+        // The site's own rows sorted by address, then the all-sites ones. The dev server sees
+        // 127.0.0.1 or ::1, which sort on either side of 2001:db8::/48
+        $own = ['2001:db8::/48', $data['ip']];
+        sort($own, SORT_STRING);
+        $rows = array_column($data['excluded'], null, 'ip');
         expect($data['ip_excluded'])->toBeTrue()
-            ->and(array_column($data['excluded'], 'ip'))->toBe(['2001:db8::/48', $data['ip'], '203.0.113.0/24'])
-            ->and($data['excluded'][0]['label'])->toBe('Office')
-            ->and($data['excluded'][2]['site'])->toBe('*');
+            ->and(array_column($data['excluded'], 'ip'))->toBe([...$own, '203.0.113.0/24'])
+            ->and($rows['2001:db8::/48']['label'])->toBe('Office')
+            ->and($rows['203.0.113.0/24']['site'])->toBe('*');
 
         // The all-sites rows belong to users with every site
         expect($post('/?exclude_remove', ['site' => '*', 'ip' => '203.0.113.0/24'])['status'])->toBe(403);

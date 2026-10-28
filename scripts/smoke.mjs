@@ -396,7 +396,8 @@ async function main() {
   if (result.exceptionDetails) errors.push(`Smoke steps threw: ${result.exceptionDetails.exception?.description}`);
   const failures = [...(result.result?.value || [])];
 
-  // 6. Logged in: a goal can be added for an event that has not happened yet
+  // 6. Logged in: All sites first, then the demo site, where a goal can be added for an event
+  // that has not happened yet
   const wait2 = loaded();
   await send('Page.navigate', { url: `${base}/` });
   await wait2;
@@ -412,6 +413,22 @@ async function main() {
       fails.push(`timed out waiting for ${what}`);
       return false;
     };
+    const expect = (cond, what) => { if (!cond) fails.push(what); };
+    // With several sites the dashboard opens on All sites: the picker and the overview list
+    // each one, and a row in the overview opens that site
+    const seeded = ['blog.example.com', 'demo.example.com', 'shop.example.com'];
+    if (!await waitFor(() => q('.site-overview-row'), 'site overview on All sites')) return fails;
+    const picker = [...q('#site-select').options].map((o) => o.value);
+    expect(picker.join() === ['', ...seeded].join() && q('#site-select').offsetParent !== null, `site picker offers All sites and each site (offers ${picker.join(', ')})`);
+    const rows = [...document.querySelectorAll('.site-overview-row')];
+    const rowNames = rows.map((r) => r.querySelector('.site-overview-name').firstChild.textContent);
+    expect(seeded.every((s) => rowNames.includes(s)), `site overview lists every site (lists ${rowNames.join(', ')})`);
+    const demoRow = rows.find((r) => r.querySelector('.site-overview-name').firstChild.textContent === 'demo.example.com');
+    expect(demoRow?.querySelector('.site-overview-live'), 'site overview shows who is online on a site');
+    demoRow?.click();
+    if (!await waitFor(() => q('#chart-card .card-subtitle')?.textContent.startsWith('demo.example.com') && !q('.site-overview-row') && q('.breakdown-card'), 'demo site opened from the site overview')) return fails;
+    expect(localStorage.getItem('puls-site') === 'demo.example.com', 'the site picked in the overview is remembered');
+
     if (!await waitFor(() => q('#chart-card') && q('#goal-search'), 'logged-in dashboard')) return fails;
     const search = q('#goal-search');
     search.value = 'pwa_install';
@@ -652,7 +669,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (picker, site overview, a row opens the site and is remembered), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 

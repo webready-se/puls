@@ -101,6 +101,24 @@ $paths = [
     ['/signup', 3],
     ['/login', 6],
 ];
+$shopPaths = [
+    ['/', 30],
+    ['/products', 20],
+    ['/products/linen-shirt', 12],
+    ['/products/wool-socks', 9],
+    ['/cart', 8],
+    ['/checkout', 4],
+    ['/shipping', 3],
+    ['/about', 2],
+];
+$blogPaths = [
+    ['/', 25],
+    ['/posts/slow-mornings', 14],
+    ['/posts/winter-garden', 10],
+    ['/posts/sourdough-starter', 8],
+    ['/archive', 4],
+    ['/about', 3],
+];
 
 // Referrers
 $referrers = [
@@ -158,7 +176,7 @@ $now = time();
 // Visits start between 06 and 23, most of them in office hours.
 $sessionPages = [[1, 45], [2, 25], [3, 15], [4, 10], [5, 5]];
 $startHours = [[6, 2], [7, 4], [8, 7], [9, 10], [10, 11], [11, 11], [12, 9], [13, 10], [14, 11], [15, 10], [16, 8], [17, 6], [18, 5], [19, 5], [20, 5], [21, 4], [22, 3]];
-$addVisit = function (string $visitor, int $start) use ($stmt, $site, $paths, $referrers, $browsers, $devices, $countries, $languages, $campaigns, $sessionPages, $now, &$totalInserted) {
+$addVisit = function (string $site, array $paths, string $visitor, int $start) use ($stmt, $referrers, $browsers, $devices, $countries, $languages, $campaigns, $sessionPages, $now, &$totalInserted) {
     // Source, browser and place belong to the visitor, not to each page
     $referrer = pickWeighted($referrers);
     $browser = pickWeighted($browsers);
@@ -177,25 +195,35 @@ $addVisit = function (string $visitor, int $start) use ($stmt, $site, $paths, $r
         $t += mt_rand(20, 180);
     }
 };
-for ($daysAgo = 29; $daysAgo >= 0; $daysAgo--) {
-    // Traffic grows over time + weekly pattern (weekends lower)
-    $dayOfWeek = (int) date('w', strtotime("-{$daysAgo} days"));
-    $weekendMult = ($dayOfWeek === 0 || $dayOfWeek === 6) ? 0.5 : 1.0;
-    // +90% over the period with modest noise, so the last 7 days beat the 7 before
-    // even though today has only just begun (README images show the 7-day trend)
-    $growthMult = 1 + ((30 - $daysAgo) / 30) * 0.9;
-    $pageviewsToday = (int) (220 * $weekendMult * $growthMult * (0.9 + (mt_rand(0, 20) / 100)));
+// The demo site and two smaller ones with their own pages and trends, so the site picker,
+// the site overview and All sites have something to show. Per site: pages, pageviews on a
+// weekday at the start of the period, growth over the period, visitors online now.
+// The demo site grows +90% with modest noise, so its last 7 days beat the 7 before even
+// though today has only just begun (README images show the 7-day trend); the blog declines.
+$trafficSites = [
+    [$site, $paths, 220, 0.9, 4],
+    ['shop.example.com', $shopPaths, 70, 0.5, 1],
+    ['blog.example.com', $blogPaths, 25, -0.3, 0],
+];
+foreach ($trafficSites as [$name, $sitePaths, $perDay, $growth, $online]) {
+    for ($daysAgo = 29; $daysAgo >= 0; $daysAgo--) {
+        // Weekends lower
+        $dayOfWeek = (int) date('w', strtotime("-{$daysAgo} days"));
+        $weekendMult = ($dayOfWeek === 0 || $dayOfWeek === 6) ? 0.5 : 1.0;
+        $growthMult = 1 + ((30 - $daysAgo) / 30) * $growth;
+        $pageviewsToday = (int) ($perDay * $weekendMult * $growthMult * (0.9 + (mt_rand(0, 20) / 100)));
 
-    // About two pages per visit, never after now
-    $visitorsToday = (int) ($pageviewsToday / 2);
-    for ($v = 0; $v < $visitorsToday; $v++) {
-        $start = strtotime("-{$daysAgo} days " . sprintf('%02d:%02d:%02d', pickWeighted($startHours), mt_rand(0, 59), mt_rand(0, 59)));
-        $addVisit(substr(hash('sha256', "visitor-$daysAgo-$v"), 0, 16), $start);
+        // About two pages per visit, never after now
+        $visitorsToday = (int) ($pageviewsToday / 2);
+        for ($v = 0; $v < $visitorsToday; $v++) {
+            $start = strtotime("-{$daysAgo} days " . sprintf('%02d:%02d:%02d', pickWeighted($startHours), mt_rand(0, 59), mt_rand(0, 59)));
+            $addVisit($name, $sitePaths, substr(hash('sha256', "visitor-$name-$daysAgo-$v"), 0, 16), $start);
+        }
     }
-}
-// A few visitors in the last minutes, for the online-now badge
-for ($v = 0; $v < 4; $v++) {
-    $addVisit(substr(hash('sha256', "visitor-live-$v"), 0, 16), $now - mt_rand(30, 240));
+    // A few visitors in the last minutes, for the online-now badge
+    for ($v = 0; $v < $online; $v++) {
+        $addVisit($name, $sitePaths, substr(hash('sha256', "visitor-live-$name-$v"), 0, 16), $now - mt_rand(30, 240));
+    }
 }
 
 // Add some bot visits
@@ -262,6 +290,6 @@ $token = bin2hex(random_bytes(16));
 $db->prepare('INSERT INTO share_tokens (token, site, label, created_at) VALUES (?, ?, ?, ?)')
    ->execute([$token, $site, 'Demo', date('Y-m-d H:i:s')]);
 
-echo "Seeded $totalInserted pageviews to $dbPath\n";
+echo "Seeded $totalInserted pageviews on " . count($trafficSites) . " sites to $dbPath\n";
 echo "Share token: $token\n";
 echo "URL: http://localhost:8081/?share=$token\n";

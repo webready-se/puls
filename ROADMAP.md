@@ -252,6 +252,13 @@ From a site with 4 goals and 9 saved cards: the page got long, the chart ended u
 - [x] **Goals as KPI tiles** - conversions large, rate, trend arrow vs the previous period (colored: more conversions is good), sparkline; goals without hits dimmed instead of "No hits yet"
 - [x] **Goal target** - a count per day, week or month with a bar that fills, scaled to the period on screen (10 per week is 43 over 30 days); migration v24, `?goal_target`
 
+**Sections**
+- [ ] **Collapsible sections with a summary** - a section few look at every day (bots, pages to fix) folds to its header, and the header then says in one line what is inside ("1,240 bot visits, 3 pages to fix"), so a folded section still tells when it is worth opening. Each viewer's choice is remembered, as Compare is. Not an accordion on every section, and no settings page of toggles: the summary is what makes folding calm instead of hidden
+
+**Switching site**
+- [ ] **Sites in the CMD+K palette** - with nothing typed, the palette lists the viewer's sites (who is online, the current one marked); typing filters them in the browser, above the page search for the current site, and a query that starts with `/` searches pages only. One palette and no second shortcut: site names and paths rarely look alike, and today the palette stays empty until two characters are typed. A user with one site sees the palette as today
+- [ ] **Own site picker** - the native `<select>` becomes a button with a list anchored under it, sharing the palette's rows. Not the palette: a control that shows a value is expected to open a list in place, and the palette is for whoever asked to search. A filter field on top only with many sites; Escape or a click outside closes it and returns focus to the button; full width under the header on a phone, without focusing the filter there, so the keyboard does not cover the list. Worth it for search among many sites and the online count, not for looks alone: the native select is accessible and good on phones. Build it after the palette item, whose rows it reuses
+
 ## Maintenance
 
 - [x] **Release marker edge clipping** — `.chart-release` labels clip at the edge on narrow screens (fixed for chart notes, not for release markers)
