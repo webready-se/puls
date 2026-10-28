@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Bots & crawlers and Pages to fix are folded to their headers, which say what is inside ("1,128 visits from 8 bots", "2 not found, 3 redirects in the last 30 days"), so the dashboard ends calmly and a folded section still tells when it is worth opening. A click opens one, and each viewer's choice is remembered (`puls-bots-open` and `puls-broken-open` in local storage). Show tools became a Tools header like them, which the keyboard now reaches too.
 - The chart remembers whether it shows Pageviews or Visitors, as it already remembers Compare, so the dashboard opens on the tab you picked last (`puls-chart` in local storage). Contributed by @isaacgerg (#103).
 
 ### Fixed

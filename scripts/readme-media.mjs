@@ -141,9 +141,10 @@ async function main() {
 
   if (!onlySocial) {
     // 3. Log in (goals only show to signed-in users) and wait for the dashboard. The demo
-    // database has several sites, so pick the demo site, as the dashboard would remember it
+    // database has several sites, so pick the demo site, as the dashboard would remember it,
+    // and open the folded bots and pages to fix for bots.png
     await navigate(`${base}/`);
-    await run(`localStorage.setItem('puls-site', 'demo.example.com')`);
+    await run(`localStorage.setItem('puls-site', 'demo.example.com'); localStorage.setItem('puls-bots-open', '1'); localStorage.setItem('puls-broken-open', '1')`);
     const w = loaded();
     await run(`document.getElementById('username').value = 'demo'; document.getElementById('password').value = 'demo-pass'; document.querySelector('form[action="/?login"]').submit()`);
     await w;

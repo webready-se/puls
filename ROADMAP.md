@@ -253,7 +253,7 @@ From a site with 4 goals and 9 saved cards: the page got long, the chart ended u
 - [x] **Goal target** - a count per day, week or month with a bar that fills, scaled to the period on screen (10 per week is 43 over 30 days); migration v24, `?goal_target`
 
 **Sections**
-- [ ] **Collapsible sections with a summary** - a section few look at every day (bots, pages to fix) folds to its header, and the header then says in one line what is inside ("1,240 bot visits, 3 pages to fix"), so a folded section still tells when it is worth opening. Each viewer's choice is remembered, as Compare is. Not an accordion on every section, and no settings page of toggles: the summary is what makes folding calm instead of hidden
+- [x] **Collapsible sections with a summary** - a section few look at every day (bots, pages to fix) folds to its header, and the header then says in one line what is inside ("1,240 bot visits, 3 pages to fix"), so a folded section still tells when it is worth opening. Each viewer's choice is remembered, as Compare is. Not an accordion on every section, and no settings page of toggles: the summary is what makes folding calm instead of hidden
 
 **Switching site**
 - [ ] **Sites in the CMD+K palette** - with nothing typed, the palette lists the viewer's sites (who is online, the current one marked); typing filters them in the browser, above the page search for the current site, and a query that starts with `/` searches pages only. One palette and no second shortcut: site names and paths rarely look alike, and today the palette stays empty until two characters are typed. A user with one site sees the palette as today
