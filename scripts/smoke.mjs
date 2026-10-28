@@ -585,18 +585,34 @@ async function main() {
     q('.note-toggle').click();
     q('.note-form-hint button').click();
     if (!q('#note-form').hidden || !q('#menu-panel').classList.contains('open')) fails.push('note form hint closes the form and opens Settings');
+    if (q('#notes-body').hidden || q('[aria-controls="notes-body"]').getAttribute('aria-expanded') !== 'true' || !q('#goals-body').hidden) fails.push('the note form hint opens Settings on Chart notes alone');
+    window.closeMenu();
+
+    // Settings opens as an overview: notes, excluded IPs and goals folded to a summary each
+    window.openMenu();
+    const menuFolds = ['notes', 'excluded', 'goals'];
+    if (!menuFolds.every((k) => q(`#${k}-body`).hidden && q(`[aria-controls="${k}-body"]`).getAttribute('aria-expanded') === 'false')) fails.push('Settings opens with notes, excluded IPs and goals folded');
+    const menuSummary = (k) => q(`#${k}-summary`).textContent;
+    if (!/^(None in this period|[\d,]+ notes?)$/.test(menuSummary('notes')) || !/^(No goals yet|[\d,]+ goals?)$/.test(menuSummary('goals'))) fails.push(`folded notes and goals say how many (say ${menuSummary('notes')}, ${menuSummary('goals')})`);
+    if ((menuSummary('notes') === 'None in this period') === q('#notes-empty').hidden) fails.push('Chart notes says where to add one exactly when there are none');
+    await waitFor(() => /^Your IP is counted$/.test(menuSummary('excluded')), `folded excluded IPs say your IP is counted (say ${menuSummary('excluded')})`);
+    q('[aria-controls="excluded-body"]').click();
+    if (q('#excluded-body').hidden || !q('#excluded-mine').offsetParent) fails.push('a click on Excluded IPs opens it');
 
     // Excluded IPs: Settings shows your own address, Exclude it lists it, × counts it again
-    window.openMenu();
     if (await waitFor(() => q('#excluded-mine code') && q('#excluded-mine button'), 'your own address in Settings')) {
       const mine = q('#excluded-mine code').textContent;
       const row = () => [...document.querySelectorAll('#excluded-list .excluded-item')].find((i) => i.getAttribute('data-ip') === mine);
       q('#excluded-mine button').click();
       if (await waitFor(() => row() && /is not counted/.test(q('#excluded-mine').textContent), 'own address excluded and listed', 8000)) {
+        if (!/^1 excluded · your IP is not counted$/.test(menuSummary('excluded'))) fails.push(`the summary follows an exclusion (says ${menuSummary('excluded')})`);
         row().querySelector('button').click();
         await waitFor(() => !row() && q('#excluded-mine button'), 'own address counted again', 8000);
       }
     }
+    window.closeMenu();
+    window.openMenu();
+    if (!q('#excluded-body').hidden) fails.push('Settings folds again the next time it opens');
     window.closeMenu();
     return fails;
   };
@@ -723,7 +739,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (picker, site overview, a row opens the site and is remembered), sites in CMD+K (listed at once, filtered with names that start with the query first, / for pages only, Enter opens the first), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (picker, site overview, a row opens the site and is remembered), sites in CMD+K (listed at once, filtered with names that start with the query first, / for pages only, Enter opens the first), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 
