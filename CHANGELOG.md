@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Settings opens as an overview: Chart notes, Excluded IPs and Goals are folded to a line that says what is set ("1 goal", "2 excluded · your IP is counted"), and a click opens one. They fold again each time Settings opens, so it stays short; "Edit or remove notes in Settings" under a new chart note opens it on Chart notes. Appearance and Export stay as they are.
+- The site picker is a button with the sites in a list under it, in the ⌘K palette's look, instead of the browser's own dropdown. It opens on the site on screen, marked Current; the arrow keys, Home and End and Enter pick one, typing the start of a name moves to it (the same letter again to the next), and Escape or a click outside closes it. A screen reader hears it as the site picker, not only a domain. With 8 sites or more it has a filter field, where names that start with what you type come first. On a phone the list spans the screen, and the filter does not take focus, so the keyboard does not cover the list.
 
 ## [1.29.0] - 2026-10-28
 
