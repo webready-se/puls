@@ -60,6 +60,11 @@ async function waitForHttp(url, tries = 100) {
 
 async function main() {
   if (!onlySocial) execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+  // The demo's 7-day trend only rises once about half of today has passed (seed-demo.php), and
+  // the hero image shows it: red trends in a README are easy to commit without noticing
+  if (!onlySocial && new Date().getHours() < 12) {
+    console.warn('Note: before 12:00 the demo has few visits today, so the 7-day trends in the images come out red. Run again in the afternoon for the README.');
+  }
   mkdirSync(out, { recursive: true });
   const base = `http://localhost:${PHP_PORT}`;
 

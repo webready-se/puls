@@ -198,8 +198,9 @@ $addVisit = function (string $site, array $paths, string $visitor, int $start) u
 // The demo site and two smaller ones with their own pages and trends, so the site picker,
 // the site overview and All sites have something to show. Per site: pages, pageviews on a
 // weekday at the start of the period, growth over the period, visitors online now.
-// The demo site grows +90% with modest noise, so its last 7 days beat the 7 before even
-// though today has only just begun (README images show the 7-day trend); the blog declines.
+// The demo site grows +90% with modest noise, so its last 7 days beat the 7 before once about
+// half of today has passed: before midday today's few visits pull the 7-day trend below zero
+// (README images show it, so readme-media.mjs warns before 12:00); the blog declines.
 $trafficSites = [
     [$site, $paths, 220, 0.9, 4],
     ['shop.example.com', $shopPaths, 70, 0.5, 1],
