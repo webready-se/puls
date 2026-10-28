@@ -8,13 +8,22 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PHP_PORT = 8799;
-const CDP_PORT = 9333;
+// Ports nothing listens on, from the system, so a server another project runs on this
+// machine never answers in place of ours
+const freePort = () => new Promise((resolve, reject) => {
+  const srv = createServer().once('error', reject).listen(0, '127.0.0.1', () => {
+    const { port } = srv.address();
+    srv.close(() => resolve(port));
+  });
+});
+const PHP_PORT = await freePort();
+const CDP_PORT = await freePort();
 // Seed, server and browser run in a zone other than UTC, so a time read as UTC shows up
 const TIMEZONE = 'Europe/Stockholm';
 const tmp = mkdtempSync(join(tmpdir(), 'puls-smoke-'));
@@ -219,6 +228,17 @@ async function main() {
     // The dashboard rendered a little before this request, so it may show up to two minutes less
     expect([ago(age), ago(age - 120)].includes(shownAgo), `latest bot visit counts from the server's now (shows ${shownAgo}, expected ${ago(age)})`);
 
+    // Bots and Pages to fix start folded, with a header that says what is inside; a click opens
+    // one and remembers it (the refresh below keeps it open)
+    const fold = (k) => q(`[data-fold="${k}"]`);
+    const folded = (k) => fold(k)?.querySelector('.fold-toggle').getAttribute('aria-expanded') === 'false' && fold(k).querySelector('.fold-body').offsetParent === null;
+    const foldSummary = (k) => fold(k)?.querySelector('.fold-summary').textContent;
+    expect(folded('bots') && folded('broken'), 'bots and pages to fix start folded');
+    expect(/^[\d,]+ visits from \d+ bots$/.test(foldSummary('bots') || ''), `folded bots say what is inside (say ${foldSummary('bots')})`);
+    expect(foldSummary('broken') === '2 not found, 3 redirects in the last 30 days', `folded pages to fix say what is inside (say ${foldSummary('broken')})`);
+    fold('bots')?.querySelector('.fold-toggle').click();
+    expect(!folded('bots') && q('.bot-row-time')?.offsetParent && localStorage.getItem('puls-bots-open') === '1', 'a click opens the bots and remembers it');
+
     // Order: the chart right after the numbers, saved cards after pages and sources
     const isle = (k) => q(`#app [data-island="${k}"]`);
     const order = ['stats', 'chart', 'pages', 'traffic', 'breakdowns', 'bots'].map(isle);
@@ -235,6 +255,9 @@ async function main() {
     expect(q('.breakdown-card') === card && q('#chart-card') === chartCard, 'unchanged islands keep their DOM across a refresh');
     expect(q('.breakdown-card .event-detail') === cardDetail, 'open drill-down survives a refresh untouched');
     q('.breakdown-card .breakdown-open').click();
+    expect(!folded('bots') && folded('broken'), 'an opened section stays open across a refresh, the other stays folded');
+    fold('bots')?.querySelector('.fold-toggle').click();
+    expect(folded('bots') && localStorage.getItem('puls-bots-open') === '0', 'a second click folds it again');
 
     // Hostile event name and path: shown as text, attributes intact, clicking runs no injected code
     const hostile = 'x"><img src=x onerror="window.__xss=1">' + "');window.__xss=2;('";
@@ -428,6 +451,12 @@ async function main() {
     demoRow?.click();
     if (!await waitFor(() => q('#chart-card .card-subtitle')?.textContent.startsWith('demo.example.com') && !q('.site-overview-row') && q('.breakdown-card'), 'demo site opened from the site overview')) return fails;
     expect(localStorage.getItem('puls-site') === 'demo.example.com', 'the site picked in the overview is remembered');
+    // Tools fold like bots and pages to fix, behind a button a keyboard reaches
+    const tools = q('[data-fold="tools"] .fold-toggle');
+    expect(tools?.tagName === 'BUTTON' && tools.getAttribute('aria-expanded') === 'false' && q('#snippet-code')?.offsetParent === null, 'tools start folded behind a button');
+    tools?.click();
+    expect(q('#snippet-code')?.offsetParent && localStorage.getItem('puls-tools-open') === '1', 'a click on Tools shows the tracking snippet');
+    tools?.click();
 
     if (!await waitFor(() => q('#chart-card') && q('#goal-search'), 'logged-in dashboard')) return fails;
     const search = q('#goal-search');
@@ -669,7 +698,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (picker, site overview, a row opens the site and is remembered), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (picker, site overview, a row opens the site and is remembered), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 

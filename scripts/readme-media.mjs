@@ -11,14 +11,23 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, 'docs/screenshots');
-const PHP_PORT = 8766;
-const CDP_PORT = 9334;
+// Ports nothing listens on, from the system, so a server another project runs on this
+// machine never answers in place of ours
+const freePort = () => new Promise((resolve, reject) => {
+  const srv = createServer().once('error', reject).listen(0, '127.0.0.1', () => {
+    const { port } = srv.address();
+    srv.close(() => resolve(port));
+  });
+});
+const PHP_PORT = await freePort();
+const CDP_PORT = await freePort();
 const tmp = mkdtempSync(join(tmpdir(), 'puls-media-'));
 const children = [];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -141,9 +150,10 @@ async function main() {
 
   if (!onlySocial) {
     // 3. Log in (goals only show to signed-in users) and wait for the dashboard. The demo
-    // database has several sites, so pick the demo site, as the dashboard would remember it
+    // database has several sites, so pick the demo site, as the dashboard would remember it,
+    // and open the folded bots and pages to fix for bots.png
     await navigate(`${base}/`);
-    await run(`localStorage.setItem('puls-site', 'demo.example.com')`);
+    await run(`localStorage.setItem('puls-site', 'demo.example.com'); localStorage.setItem('puls-bots-open', '1'); localStorage.setItem('puls-broken-open', '1')`);
     const w = loaded();
     await run(`document.getElementById('username').value = 'demo'; document.getElementById('password').value = 'demo-pass'; document.querySelector('form[action="/?login"]').submit()`);
     await w;

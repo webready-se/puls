@@ -4,8 +4,26 @@
  * Helper to run HTTP requests against the built-in PHP server for integration tests.
  */
 
+/**
+ * A port nothing listens on, from the system. Each test server runs on one, so a server another
+ * project runs on this machine never answers the tests in its place.
+ */
+function freePort(): int
+{
+    $sock = stream_socket_server('tcp://127.0.0.1:0');
+    $name = stream_socket_get_name($sock, false);
+    fclose($sock);
+    return (int) substr($name, strrpos($name, ':') + 1);
+}
+
+/**
+ * Starts a test server. $port names it rather than being its port: the server runs on a free
+ * one, and http() with the same number reaches it.
+ */
 function startServer(int $port = 8089, array $env = []): mixed
 {
+    $GLOBALS['test_ports'][$port] = freePort();
+    $port = $GLOBALS['test_ports'][$port];
     $docRoot = escapeshellarg(__DIR__ . '/../../public');
     $cmd = "exec php -S localhost:{$port} -t {$docRoot}";
 
@@ -133,7 +151,7 @@ function runCli(string $tmpDir, string $command, array $args = [], ?string $stdi
 
 function http(string $method, string $path, array $options = [], int $port = 8089): array
 {
-    $url = "http://localhost:{$port}" . $path;
+    $url = 'http://localhost:' . ($GLOBALS['test_ports'][$port] ?? $port) . $path;
 
     $ctx = stream_context_create(['http' => array_merge([
         'method' => $method,

@@ -311,19 +311,23 @@
   .stat-trend.down { color: var(--down); }
   .stat-trend.flat { color: var(--text-3); }
 
-  /* Tools toggle */
-  .tools-toggle {
-    display: flex; align-items: center; justify-content: center;
-    gap: 6px; padding: 12px; margin-bottom: 14px;
-    font-size: 13px; color: var(--text-2); cursor: pointer;
-    background: var(--surface); border: 1px solid var(--line);
-    border-radius: var(--radius); transition: color 0.2s;
+  /* Folding sections (bots, pages to fix, tools): the header says in one line what is inside */
+  /* A hairline as thin as a card's border, as much space above it as below, so folded headers
+     read as one calm list rather than a row of section breaks */
+  .fold { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .fold-head { margin: 0; font-size: inherit; font-weight: inherit; }
+  .fold-row { display: flex; align-items: center; gap: 8px; width: 100%; color: var(--text); }
+  .fold-toggle { padding: 0; border: none; background: none; font: inherit; text-align: left; cursor: pointer; }
+  .fold-toggle svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-2); transition: transform 0.2s; }
+  .fold-toggle[aria-expanded="false"] svg { transform: rotate(-90deg); }
+  .fold-toggle:hover .fold-summary, .fold-toggle:hover svg { color: var(--text); }
+  .fold-title { font-size: 16px; font-weight: 700; }
+  .fold-summary { margin-left: auto; font-size: 13px; color: var(--text-2); text-align: right; }
+  .fold-body { margin-top: 16px; }
+  @media (max-width: 600px) {
+    .fold-toggle { flex-wrap: wrap; row-gap: 2px; }
+    .fold-toggle .fold-summary { flex-basis: 100%; margin-left: 24px; text-align: left; }
   }
-  .tools-toggle:hover { color: var(--text); }
-  .tools-toggle svg { width: 16px; height: 16px; transition: transform 0.3s; }
-  .tools-toggle.open svg { transform: rotate(180deg); }
-  .tools-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
-  .tools-content.open { max-height: 3000px; }
 
   /* Site overview */
   .site-overview-row {
@@ -2607,11 +2611,7 @@
     var pages = d.botPages || [];
     var totalVisits = bots.reduce(function(s, b) { return s + (+b.visits); }, 0);
 
-    if (!totalVisits) {
-      return '<div class="card" style="margin-bottom:14px">' +
-        '<span class="card-title" style="font-size:16px">Bots & crawlers</span>' +
-        '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No bot activity yet</p></div>';
-    }
+    if (!totalVisits) return foldSection('bots', 'Bots &amp; crawlers', 'No bot activity yet', '');
 
     var badges = '';
     cats.forEach(function(c) {
@@ -2620,12 +2620,7 @@
         esc(c.category) + ' <span style="opacity:0.7">' + num(c.visits) + '</span></span> ';
     });
 
-    var html = '<div style="margin-top:28px;margin-bottom:14px;padding-top:20px;border-top:2px solid var(--line)">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
-        '<span style="font-size:16px;font-weight:700">Bots & crawlers</span>' +
-        '<span style="font-size:13px;color:var(--text-2)">' + num(totalVisits) + ' total visits</span>' +
-      '</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' + badges + '</div>' +
+    var html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' + badges + '</div>' +
       '<div class="grid-2">';
 
     html += renderBotTable(bots, d.botsTotal);
@@ -2647,9 +2642,32 @@
       '</div>';
     }
 
-    html += '</div>';
-    return html;
+    return foldSection('bots', 'Bots &amp; crawlers', num(totalVisits) + ' visits from ' + num(d.botsTotal) + ' bot' + (+d.botsTotal === 1 ? '' : 's'), html);
   }
+
+  // A section few look at every day folds to its header, and the header says in one line what
+  // is inside, so a folded section still tells when it is worth opening. Folded until the viewer
+  // opens it; the choice is remembered per viewer, as Compare is. Without a body there is
+  // nothing to open, and the header only says so
+  var foldChevron = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+  function foldSection(key, title, summary, body) {
+    var row = '<span class="fold-title">' + title + '</span><span class="fold-summary">' + summary + '</span>';
+    if (!body) return '<section class="fold"><h2 class="fold-head"><span class="fold-row">' + row + '</span></h2></section>';
+    var open = localStorage.getItem('puls-' + key + '-open') === '1';
+    return '<section class="fold" data-fold="' + key + '">' +
+      '<h2 class="fold-head"><button class="fold-row fold-toggle" aria-expanded="' + open + '" aria-controls="fold-' + key + '">' + foldChevron + row + '</button></h2>' +
+      '<div class="fold-body" id="fold-' + key + '"' + (open ? '' : ' hidden') + '>' + body + '</div>' +
+    '</section>';
+  }
+
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.fold-toggle');
+    if (!btn) return;
+    var body = document.getElementById(btn.getAttribute('aria-controls'));
+    body.hidden = !body.hidden;
+    btn.setAttribute('aria-expanded', String(!body.hidden));
+    localStorage.setItem('puls-' + btn.closest('[data-fold]').getAttribute('data-fold') + '-open', body.hidden ? '0' : '1');
+  });
 
   var botCatColors = { 'AI': '#dc2626', 'Search engine': '#2563eb', 'Social': '#7c3aed', 'SEO': '#d97706', 'Monitor': '#059669', 'Other': '#94a3b8' };
 
@@ -2730,12 +2748,7 @@
     var links301 = links.filter(function(l) { return l.status === 301 || l.status === 302; });
     var linksOther = links.filter(function(l) { return l.status !== 404 && l.status !== 301 && l.status !== 302; });
 
-    var html = '<div style="margin-top:28px;margin-bottom:14px;padding-top:20px;border-top:2px solid var(--line)">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
-        '<span style="font-size:16px;font-weight:700">Pages to fix</span>' +
-        '<span style="font-size:13px;color:var(--text-2)">Last 30 days</span>' +
-      '</div>';
-
+    var html = '';
     var BROKEN_SHOW = 10;
 
     function renderGroup(title, color, items, showStatus) {
@@ -2757,19 +2770,16 @@
     html += renderGroup('404 Not found', '#dc2626', links404);
     html += renderGroup('301 Redirects', '#d97706', links301);
     html += renderGroup('Other errors', '#94a3b8', linksOther, true);
-    html += '</div>';
-    return html;
+
+    var counts = [];
+    if (links404.length) counts.push(links404.length + ' not found');
+    if (links301.length) counts.push(links301.length + ' redirect' + (links301.length === 1 ? '' : 's'));
+    if (linksOther.length) counts.push(linksOther.length + ' other error' + (linksOther.length === 1 ? '' : 's'));
+    return foldSection('broken', 'Pages to fix', counts.join(', ') + ' in the last 30 days', html);
   }
 
   function renderTools(site) {
-    var isOpen = localStorage.getItem('puls-tools-open') === '1';
-    var chevron = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>';
-    return '<div class="tools-toggle' + (isOpen ? ' open' : '') + '" onclick="toggleTools(this)">' +
-      chevron + '<span>' + (isOpen ? 'Hide tools' : 'Show tools') + '</span>' +
-    '</div>' +
-    '<div class="tools-content' + (isOpen ? ' open' : '') + '">' +
-      renderSnippet(site) +
-    '</div>';
+    return foldSection('tools', 'Tools', 'Tracking snippet, trackable links, server-side bot tracking', renderSnippet(site));
   }
 
   // Webready's open source family, for the footer credit. A tool's mark shows only once it is
@@ -3154,14 +3164,6 @@
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeOverlay();
   });
-
-  window.toggleTools = function(btn) {
-    var content = btn.nextElementSibling;
-    var isOpen = content.classList.toggle('open');
-    btn.classList.toggle('open', isOpen);
-    btn.querySelector('span').textContent = isOpen ? 'Hide tools' : 'Show tools';
-    localStorage.setItem('puls-tools-open', isOpen ? '1' : '0');
-  };
 
   window.toggleBrokenGroup = function(btn) {
     var id = btn.getAttribute('data-bl-toggle');
