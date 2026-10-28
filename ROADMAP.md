@@ -252,6 +252,9 @@ From a site with 4 goals and 9 saved cards: the page got long, the chart ended u
 - [x] **Goals as KPI tiles** - conversions large, rate, trend arrow vs the previous period (colored: more conversions is good), sparkline; goals without hits dimmed instead of "No hits yet"
 - [x] **Goal target** - a count per day, week or month with a bar that fills, scaled to the period on screen (10 per week is 43 over 30 days); migration v24, `?goal_target`
 
+**Sections**
+- [ ] **Collapsible sections with a summary** - a section few look at every day (bots, pages to fix) folds to its header, and the header then says in one line what is inside ("1,240 bot visits, 3 pages to fix"), so a folded section still tells when it is worth opening. Each viewer's choice is remembered, as Compare is. Not an accordion on every section, and no settings page of toggles: the summary is what makes folding calm instead of hidden
+
 ## Maintenance
 
 - [x] **Release marker edge clipping** — `.chart-release` labels clip at the edge on narrow screens (fixed for chart notes, not for release markers)
