@@ -312,7 +312,9 @@
   .stat-trend.flat { color: var(--text-3); }
 
   /* Folding sections (bots, pages to fix, tools): the header says in one line what is inside */
-  .fold { margin-top: 28px; margin-bottom: 14px; padding-top: 20px; border-top: 2px solid var(--line); }
+  /* A hairline as thin as a card's border, as much space above it as below, so folded headers
+     read as one calm list rather than a row of section breaks */
+  .fold { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
   .fold-head { margin: 0; font-size: inherit; font-weight: inherit; }
   .fold-row { display: flex; align-items: center; gap: 8px; width: 100%; color: var(--text); }
   .fold-toggle { padding: 0; border: none; background: none; font: inherit; text-align: left; cursor: pointer; }
