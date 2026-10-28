@@ -927,6 +927,9 @@
     font-weight: 500;
   }
   .cmd-item-stats { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); flex-shrink: 0; }
+  .cmd-group { padding: 10px 12px 4px; font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.09em; }
+  .cmd-group-scope { text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .cmd-item-current { font-size: 12px; color: var(--text-3); flex-shrink: 0; }
   .cmd-hint {
     padding: 12px 18px; font-size: 12px; color: var(--text-3);
     border-top: 1px solid var(--line); text-align: center;
@@ -1089,13 +1092,13 @@
 </div>
 
 <div class="cmd-overlay" id="cmd-overlay" onclick="if(event.target===this)closeSearch()">
-  <div class="cmd-dialog" role="dialog" aria-modal="true" aria-label="Search pages">
+  <div class="cmd-dialog" id="cmd-dialog" role="dialog" aria-modal="true" aria-label="Search pages">
     <div class="cmd-input-wrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input class="cmd-input" id="cmd-input" type="text" placeholder="Search pages..." aria-label="Search pages" autocomplete="off" spellcheck="false">
+      <input class="cmd-input" id="cmd-input" type="text" placeholder="Search pages..." aria-label="Search pages" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="cmd-results" aria-autocomplete="list">
     </div>
-    <div class="cmd-results" id="cmd-results"></div>
-    <div class="cmd-hint">↑↓ navigate · Enter open · Esc close</div>
+    <div class="cmd-results" id="cmd-results" role="listbox" aria-label="Results"></div>
+    <div class="cmd-hint" id="cmd-hint">↑↓ navigate · Enter open · Esc close</div>
   </div>
 </div>
 
@@ -4062,16 +4065,80 @@
   var cmdActive = -1;
   var cmdTimer = null;
   var cmdLastQuery = '';
+  var cmdPages = null; // the page search's results for the query in the box; null while there are none
+  var cmdFailed = false;
 
   window.openSearch = function() {
     dialogOpened(null);
     cmdOverlay.classList.add('open');
     cmdInput.value = '';
-    cmdResults.innerHTML = '';
     cmdActive = -1;
     cmdLastQuery = '';
+    cmdPages = null;
+    cmdFailed = false;
+    var withSites = cmdSites('').length > 0;
+    var label = withSites ? 'Search sites and pages' : 'Search pages';
+    cmdInput.placeholder = label + '...';
+    document.getElementById('cmd-hint').textContent = '↑↓ navigate · Enter open · ' + (withSites ? '/ pages only · ' : '') + 'Esc close';
+    cmdInput.setAttribute('aria-label', label);
+    document.getElementById('cmd-dialog').setAttribute('aria-label', label);
+    paintCmd();
     setTimeout(function() { cmdInput.focus(); }, 50);
   };
+
+  // Sites come first: with nothing typed the palette lists them, and typing filters them at once
+  // while pages are searched on the server. Paths start with /, so a query that does searches
+  // pages only. One palette and no second shortcut; a user with one site sees pages as before
+  function cmdSites(q) {
+    if (isShared || sites.length <= 1 || q.charAt(0) === '/') return [];
+    var needle = q.toLowerCase();
+    var at = function(s) { return (s || 'All sites').toLowerCase().indexOf(needle); };
+    var found = [''].concat(sites).filter(function(s) { return at(s) >= 0; });
+    // Names that start with what was typed come first: on a hub with many sites, they are the ones meant
+    return found.filter(function(s) { return at(s) === 0; }).concat(found.filter(function(s) { return at(s) > 0; }));
+  }
+
+  function paintCmd() {
+    var q = cmdInput.value.trim();
+    var siteList = cmdSites(q);
+    var html = '';
+    if (siteList.length) {
+      html += '<div role="group" aria-labelledby="cmd-group-sites"><div class="cmd-group" id="cmd-group-sites">Sites</div>';
+      siteList.forEach(function(s) {
+        html += '<div class="cmd-item" role="option" aria-selected="false" data-site="' + esc(s) + '">' +
+          '<span class="cmd-item-path">' + (s ? esc(s) : 'All sites') + '</span>' +
+          (s === currentSite ? '<span class="cmd-item-current">Current</span>' : '') +
+        '</div>';
+      });
+      html += '</div>';
+    }
+    if (cmdPages && cmdPages.length) {
+      html += '<div role="group" aria-labelledby="cmd-group-pages"><div class="cmd-group" id="cmd-group-pages">Pages <span class="cmd-group-scope">on ' + (currentSite ? esc(currentSite) : 'all sites') + '</span></div>';
+      cmdPages.forEach(function(r) {
+        html += '<div class="cmd-item" role="option" aria-selected="false" data-path="' + esc(r.path) + '">' +
+          '<span class="cmd-item-path" title="' + esc(r.path) + '">' + esc(decode(r.path)) + '</span>' +
+          '<span class="cmd-item-stats">' +
+            '<span>' + num(r.views) + ' views</span>' +
+            '<span>' + num(r.visitors) + ' vis.</span>' +
+          '</span>' +
+        '</div>';
+      });
+      html += '</div>';
+    } else if (cmdFailed) {
+      html += '<div class="cmd-empty">Could not search pages</div>';
+    } else if (cmdPages && !siteList.length) {
+      html += '<div class="cmd-empty">No pages found</div>';
+    }
+    cmdResults.innerHTML = html;
+    var items = cmdResults.querySelectorAll('.cmd-item');
+    items.forEach(function(el, i) { el.id = 'cmd-option-' + i; });
+    cmdInput.setAttribute('aria-expanded', String(items.length > 0));
+    // Page results arrive after the sites, so keep the highlighted row where it was. Once something
+    // is typed, the first result is highlighted, so Enter opens it
+    cmdActive = Math.min(cmdActive, items.length - 1);
+    if (cmdActive < 0 && q && items.length) cmdActive = 0;
+    updateCmdActive(items);
+  }
 
   window.closeSearch = function() {
     if (!cmdOverlay.classList.contains('open')) return;
@@ -4108,8 +4175,14 @@
   function updateCmdActive(items) {
     items.forEach(function(el, i) {
       el.classList.toggle('active', i === cmdActive);
+      el.setAttribute('aria-selected', String(i === cmdActive));
     });
-    if (items[cmdActive]) items[cmdActive].scrollIntoView({ block: 'nearest' });
+    if (items[cmdActive]) {
+      cmdInput.setAttribute('aria-activedescendant', items[cmdActive].id);
+      items[cmdActive].scrollIntoView({ block: 'nearest' });
+    } else {
+      cmdInput.removeAttribute('aria-activedescendant');
+    }
   }
 
   cmdInput.addEventListener('input', function() {
@@ -4117,13 +4190,12 @@
     if (q === cmdLastQuery) return;
     cmdLastQuery = q;
     cmdActive = -1;
-
-    if (q.length < 2) {
-      cmdResults.innerHTML = '';
-      return;
-    }
-
+    cmdPages = null;
+    cmdFailed = false;
     clearTimeout(cmdTimer);
+    paintCmd();
+    if (q.length < 2) return;
+
     cmdTimer = setTimeout(function() {
       var url = API + '?api&search=' + encodeURIComponent(q) + '&days=' + currentDays;
       if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
@@ -4135,39 +4207,26 @@
         })
         .then(function(data) {
           if (!data || data.query !== cmdInput.value.trim()) return;
-          renderCmdResults(data.results);
+          cmdPages = data.results || [];
+          paintCmd();
         })
-        .catch(function() { cmdResults.innerHTML = '<div class="cmd-empty">Could not search</div>'; });
+        .catch(function() { cmdFailed = true; paintCmd(); });
     }, 200);
   });
 
-  function renderCmdResults(results) {
-    if (!results || !results.length) {
-      cmdResults.innerHTML = '<div class="cmd-empty">No pages found</div>';
+  // A site opens that site; a page filters the dashboard on it
+  cmdResults.addEventListener('click', function(e) {
+    var item = e.target.closest('.cmd-item');
+    if (!item) return;
+    closeSearch();
+    if (item.hasAttribute('data-site')) {
+      selectSite(item.getAttribute('data-site'));
       return;
     }
-    var html = '';
-    results.forEach(function(r) {
-      html += '<div class="cmd-item" data-path="' + esc(r.path) + '">' +
-        '<span class="cmd-item-path" title="' + esc(r.path) + '">' + esc(decode(r.path)) + '</span>' +
-        '<span class="cmd-item-stats">' +
-          '<span>' + num(r.views) + ' views</span>' +
-          '<span>' + num(r.visitors) + ' vis.</span>' +
-        '</span>' +
-      '</div>';
-    });
-    cmdResults.innerHTML = html;
-    cmdActive = -1;
-
-    cmdResults.querySelectorAll('.cmd-item').forEach(function(el) {
-      el.addEventListener('click', function() {
-        currentPath = this.getAttribute('data-path');
-        closeSearch();
-        load(currentDays);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-    });
-  }
+    currentPath = item.getAttribute('data-path');
+    load(currentDays);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   // --- Pull to refresh (PWA standalone) ---
   if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {

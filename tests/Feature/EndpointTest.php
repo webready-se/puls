@@ -373,7 +373,9 @@ test('login page has security headers', function () {
 // =====================================================================
 
 test('collect rejects unknown origin when ALLOWED_ORIGINS is set', function () {
-    $pid = startServer(8090, ['ALLOWED_ORIGINS' => 'allowed.com']);
+    // The run's own database, as every test server has: without it this one wrote to the
+    // database configured in .env
+    $pid = startServer(8090, $GLOBALS['test_env'] + ['ALLOWED_ORIGINS' => 'allowed.com']);
     try {
         // Unknown domain — should be rejected
         $r = http('POST', '/?collect', [
