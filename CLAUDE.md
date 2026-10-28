@@ -142,7 +142,7 @@ All README images are generated from a seeded demo database:
 node scripts/readme-media.mjs    # Requires: Node 22+, Chrome, ffmpeg
 ```
 
-This seeds a temporary database with 30 days of fake data (`scripts/seed-demo.php`, sessions of one to five pages, nothing dated after now), adds goals with targets, saved cards, a release and a chart note, logs in and drives headless Chrome over the DevTools protocol. Every image is cut to a dashboard element (`[data-island=...]`), so layout changes do not shift the crops. The drill-down GIF is recorded frame by frame with a drawn pointer and encoded with ffmpeg.
+This seeds a temporary database with 30 days of fake data (`scripts/seed-demo.php`: `demo.example.com` and two smaller sites, sessions of one to five pages, nothing dated after now), adds goals with targets, saved cards, a release and a chart note, logs in, picks the demo site and drives headless Chrome over the DevTools protocol. Every image is cut to a dashboard element (`[data-island=...]`), so layout changes do not shift the crops. The drill-down GIF is recorded frame by frame with a drawn pointer and encoded with ffmpeg.
 
 Images in `docs/screenshots/`: `dashboard` and `dashboard-light` (README hero, picked by the reader's color scheme), `dashboard-compare`, `events`, `cards`, `bots`, `drill-down.gif`, and `social-preview` (1280x640, uploaded by hand in the repository settings: GitHub has no API for it).
 
