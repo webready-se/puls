@@ -286,7 +286,14 @@ Things to explore later — not committed to.
 - **Who is online per site in the site picker and CMD+K** - left out of both: the site list (`?api&sites`) gives names only, so it would take a query on every open or a change to a documented endpoint, and the site overview on All sites already shows it. Worth it if a hub's owner switches sites to find where visitors are now
 - **Slack/Discord notifications** — daily summary via webhook
 - **Aggregation tables** — daily rollups for faster queries at scale
-- **Backup/restore CLI** — `php puls backup` / `php puls restore` for SQLite snapshots
+- **Backup/restore CLI** - `php puls backup` / `php puls restore` for SQLite snapshots. Snoka has built `php snoka backup`, a shape to copy:
+  - `VACUUM INTO` a bound path: one consistent copy while tracking goes on writing, without the free space, and no `sqlite3` binary needed
+  - `umask(0077)` around it and `chmod 0600` after, since the copy holds all the data
+  - `PRAGMA integrity_check` on the copy; a copy that fails is removed and the older ones kept
+  - Named `puls-YYYY-MM-DD-HHMMSS.sqlite` so the newest sorts last; the newest 7 kept (`--keep=N`), deleting only files that match that pattern
+  - Off the server is not the tool's job: a storage bucket shared by all Webready tools' backups, copied by rclone in a scheduled job per tool, is likely but not decided, since it is a new monthly cost
+  - Restore differs from Snoka's: Puls writes on every tracking request, so stopping scheduled jobs is not enough. Writes have to stop (PHP-FPM or the site) before the database is copied over and `-wal`/`-shm` removed, or an open connection writes to the old file
+  - `docs/integrations.md` already says to take a backup before `sites:clean-paths` without saying how; the docs for this command answer that
 - **Funnels** — visualize visitor paths (landing → page → conversion)
 - **MySQL support** — optional driver via PDO adapter, SQLite remains default
 - **Numeric aggregates on event data** — sum, mean and median of a numeric key (today: send buckets)
