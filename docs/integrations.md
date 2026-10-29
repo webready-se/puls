@@ -147,7 +147,7 @@ const path = Astro.url.pathname
 ---
 <noscript>
   <img src={`https://your-puls-domain/?pixel&s=my-site&p=${path}`}
-       alt="" width="1" height="1" style="position:absolute;opacity:0" />
+       alt="" width="1" height="1" />
 </noscript>
 ```
 
@@ -180,7 +180,7 @@ In your Antlers layout (`resources/views/layout.antlers.html`):
     <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
     <noscript>
         <img src="https://your-puls-domain/?pixel&s=my-site&p={{ url }}"
-             alt="" width="1" height="1" style="position:absolute;opacity:0" />
+             alt="" width="1" height="1" />
     </noscript>
 </body>
 ```
@@ -398,10 +398,11 @@ Add a `<noscript>` pixel to catch bots and visitors that don't execute JavaScrip
     alt=""
     width="1"
     height="1"
-    style="position:absolute;opacity:0"
   />
 </noscript>
 ```
+
+The image is a transparent GIF, so it needs no inline style to hide it, and a strict [CSP](#content-security-policy-csp) has none to block. If the line it takes at the end of the page matters, hide it with a class from your own stylesheet.
 
 For server-rendered frameworks (Astro, Laravel, Statamic), you can inject the current path dynamically — see the framework examples above.
 

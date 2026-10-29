@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The CSP advice in `docs/integrations.md` covered only the tracking script. It now names `img-src` for the `<noscript>` pixel, and the hash that lets the `puls.track` stub run without `'unsafe-inline'` (or a file of your own for it).
+- The `<noscript>` pixel in the docs, the dashboard's tracking snippet and `php puls nginx:config` has no inline style any more, which a strict `style-src` blocked. The GIF is transparent, so it never showed.
 
 ## [1.29.0] - 2026-10-28
 
