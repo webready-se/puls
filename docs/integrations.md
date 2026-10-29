@@ -147,7 +147,7 @@ const path = Astro.url.pathname
 ---
 <noscript>
   <img src={`https://your-puls-domain/?pixel&s=my-site&p=${path}`}
-       alt="" width="1" height="1" style="position:absolute;opacity:0" />
+       alt="" width="1" height="1" />
 </noscript>
 ```
 
@@ -180,7 +180,7 @@ In your Antlers layout (`resources/views/layout.antlers.html`):
     <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
     <noscript>
         <img src="https://your-puls-domain/?pixel&s=my-site&p={{ url }}"
-             alt="" width="1" height="1" style="position:absolute;opacity:0" />
+             alt="" width="1" height="1" />
     </noscript>
 </body>
 ```
@@ -398,10 +398,11 @@ Add a `<noscript>` pixel to catch bots and visitors that don't execute JavaScrip
     alt=""
     width="1"
     height="1"
-    style="position:absolute;opacity:0"
   />
 </noscript>
 ```
+
+The image is a transparent GIF, so it needs no inline style to hide it, and a strict [CSP](#content-security-policy-csp) has none to block. If the line it takes at the end of the page matters, hide it with a class from your own stylesheet.
 
 For server-rendered frameworks (Astro, Laravel, Statamic), you can inject the current path dynamically — see the framework examples above.
 
@@ -501,4 +502,20 @@ If your site uses CSP headers, allow the Puls domain:
 ```text
 script-src https://your-puls-domain;
 connect-src https://your-puls-domain;
+img-src https://your-puls-domain;
+```
+
+`script-src` loads the tracking script and `connect-src` lets it send pageviews and events. `img-src` is for the [`<noscript>` pixel](#bot-tracking-pixel-optional); without it the pixel is blocked.
+
+The [stub for calling `puls.track` early](#calling-pulstrack-before-the-script-has-loaded) is an inline script, which a CSP without `'unsafe-inline'` blocks. Allow it by its hash:
+
+```text
+script-src https://your-puls-domain 'sha256-GAkijOUCDhWurpZ6NiC3T8Wnzrz6/IIAtXUhidMnKCE=';
+```
+
+The hash holds for the stub exactly as shown, on one line with nothing else between `<script>` and `</script>`. A line break, an indent or one changed space gives another hash, so a framework that reformats the stub needs its own (Chrome's console names the hash of an inline script it blocked). If your CSP uses a nonce, give the stub the nonce instead. Or put the line in a file on your own site, loaded before the Puls script, which `script-src 'self'` covers:
+
+```html
+<script src="/puls-stub.js"></script>
+<script src="https://your-puls-domain/?js" data-site="my-site" defer></script>
 ```
