@@ -239,6 +239,8 @@ From customer integrations. Traffic per channel and campaign exists; what happen
 
 From a site with 4 goals and 9 saved cards: the page got long, the chart ended up below every card, a removed card could not be brought back, and the 60 s refresh redrew the whole page, so content jumped and a click could land on the wrong card.
 
+- [x] **Goals and saved cards stay on their site** - All sites showed every site's goals, with the rate counted against every site's visitors, and every site's cards. Now they show only when the view is one site anyway (an install with a single site, a user limited to one); otherwise they are on their site, where the site overview leads
+
 **Order and a calm refresh**
 - [x] **Order** - the numbers and the chart first, then goals, pages and sources; saved cards after them
 - [x] **Islands** - the refresh replaces only the sections and saved cards whose HTML changed; the rest keep their DOM (hover, focus, open drill-down, tab, chart scroll). Held while the tab is hidden or the viewer used the page in the last 10 s

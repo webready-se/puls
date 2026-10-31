@@ -1660,20 +1660,23 @@ function get_api_data(array $config, array $user): string
         }
     }
 
+    // Goals and saved cards belong to a site. On All sites they show only when that view is
+    // one site anyway: an install that tracks a single site (a user limited to one site has
+    // $site set above). Across several sites a goal's rate would be counted against every
+    // site's visitors, and the cards would pile up far from the site they explain.
+    $cardSite = $site;
+    if (!$cardSite && empty($allowedSites)) {
+        // Two index seeks: the first site, and whether there is a second
+        [$first, $second] = $db->query('SELECT (SELECT MIN(site) FROM pageviews), (SELECT MIN(site) FROM pageviews WHERE site > (SELECT MIN(site) FROM pageviews))')->fetch(PDO::FETCH_NUM);
+        if ($first !== null && $second === null) $cardSite = $first;
+    }
+
     // Goals with conversion rates
     $goals = [];
     $goalsTable = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='goals'")->fetch();
-    if ($goalsTable && !$path && !$channel) {
+    if ($goalsTable && $cardSite && !$path && !$channel) {
         $stmt = $db->prepare("SELECT path, label, type, target, target_period FROM goals WHERE site = ? ORDER BY created_at");
-        $goalSite = $site ?: '';
-        if ($goalSite) {
-            $stmt->execute([$goalSite]);
-        } else {
-            // Across the user's sites a goal has a single target only when one site has
-            // that goal (the dashboard of a hub with one site asks without a site)
-            $stmt = $db->prepare("SELECT path, label, type, CASE WHEN COUNT(*) = 1 THEN MAX(target) END AS target, CASE WHEN COUNT(*) = 1 THEN MAX(target_period) END AS target_period FROM goals WHERE 1 {$siteFilter} GROUP BY path, label, type ORDER BY MIN(created_at)");
-            $stmt->execute($siteParams);
-        }
+        $stmt->execute([$cardSite]);
         $goalRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $totalVisitors = (int) ($totals['visitors'] ?? 0);
         foreach ($goalRows as $g) {
@@ -1704,12 +1707,12 @@ function get_api_data(array $config, array $user): string
         }
     }
 
-    // Saved breakdowns, each computed on its own site
+    // Saved breakdowns of the site on screen (see $cardSite above)
     $breakdowns = [];
-    if (!$path && !$channel) {
-        // In the order set per site; cards never moved keep the order they were saved in
-        $stmt = $db->prepare("SELECT id, site, label, event_name, group_key FROM breakdowns WHERE 1 {$siteFilter} ORDER BY site, position, created_at, id");
-        $stmt->execute($siteParams);
+    if ($cardSite && !$path && !$channel) {
+        // In the order set for the site; cards never moved keep the order they were saved in
+        $stmt = $db->prepare("SELECT id, site, label, event_name, group_key FROM breakdowns WHERE site = ? ORDER BY position, created_at, id");
+        $stmt->execute([$cardSite]);
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $bd) {
             [$rows, $new] = event_group($db, $bd['event_name'], $bd['group_key'], $dateFilter, $dateParams, 'AND site = ?', [$bd['site']], $prevSince, $since, 200);
             $perDay = event_group_days($db, $bd['event_name'], $bd['group_key'], $prevSince, $until, $bd['site']);
