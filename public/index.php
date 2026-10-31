@@ -764,7 +764,7 @@ function handle_collect(array $config): void
     $ip = client_ip($_SERVER, $config['trusted_proxies'] ?? []);
     if (is_excluded_ip($db, $site, $ip)) return;
 
-    $hash = visitor_hash($db, $ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
+    $hash = visitor_hash($db, $site, $ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
 
     $browser = detect_browser($ua);
     $device = detect_device((int)($input['w'] ?? 0));
@@ -858,7 +858,7 @@ function handle_event(array $config): void
         $eventData = substr(json_encode($input['event_data']), 0, 1000);
     }
 
-    $hash = visitor_hash($db, $ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
+    $hash = visitor_hash($db, $site, $ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
 
     // Dedup: skip same event with same data from same visitor within 10 seconds.
     // IS (not =) so two events without data also match each other (NULL IS NULL).
@@ -919,9 +919,13 @@ function client_ip(array $server, array $trustedProxies): string
  * Once the salt is deleted the hash can never be computed again, not even with
  * server access, so stored rows cannot be tied back to a visitor.
  */
-function visitor_hash(PDO $db, string $ip, string $ua): string
+/**
+ * The site is part of the hash, so one person's visits to two sites of the same
+ * install get different hashes and cannot be joined across sites.
+ */
+function visitor_hash(PDO $db, string $site, string $ip, string $ua): string
 {
-    return hash('sha256', $ip . $ua . daily_salt($db));
+    return hash('sha256', $site . "\0" . $ip . $ua . daily_salt($db));
 }
 
 /**
