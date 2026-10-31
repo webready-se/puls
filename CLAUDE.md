@@ -78,7 +78,7 @@ docker-compose.yml      — One-command setup with volume for /app/data
 .claude/hooks/no-real-names.sh - PreToolUse hook: stops a gh command whose text for GitHub names a real site, customer, server or person
 ```
 
-**Sensitive files:** `users.json` (accounts, password hashes), `data/*.sqlite` (visitor data, the local copy may be production data) and `.env` are gitignored and must stay that way. Change users and data only through the `puls` CLI. Don't print their contents, query real visitor data, or overwrite or delete them without asking first. Use `data/demo.sqlite` (`scripts/seed-demo.php`) for demos and experiments.
+**Sensitive files:** `users.json` (accounts, password hashes), `data/*.sqlite` (visitor data) and `.env` are gitignored and must stay that way. Change users and data only through the `puls` CLI. Don't print their contents, query real visitor data, or overwrite or delete them without asking first. Demos, experiments and benchmarks run on seeded data (`data/demo.sqlite` from `scripts/seed-demo.php`). A copy of a real install, when a bug needs one, goes in `.private/` (gitignored) and is deleted afterwards.
 
 ### Key Design Decisions
 
@@ -163,6 +163,7 @@ Puls is designed as a central hub for multiple sites. Add `data-site="name"` on 
 - 4-space indentation in PHP, 2-space in HTML/CSS/JS
 - All user input is truncated/sanitized before storage
 - Pest for testing (dev dependency only)
+- Public text (ROADMAP, docs, changelog) records decisions about Puls and their reasons, not what prompted them. Another tool, a sibling (Vaka, Snoka, Hamstra) as much as Plausible, is named when it explains a Puls decision; coordination between the repos and what was learned in them stays out of the repository's text
 
 ## Testing
 
