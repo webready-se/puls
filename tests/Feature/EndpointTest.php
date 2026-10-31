@@ -48,6 +48,13 @@ test('js endpoint returns javascript', function () {
     expect($contentType)->toContain('javascript');
 });
 
+test('the tracking script skips a pageview for the same URL as the last one', function () {
+    // A pushState that changes only the hash or the history state must not count again
+    $body = http('GET', '/?js')['body'];
+    expect($body)->toContain('if(u===last)')
+        ->and($body)->toContain('last=u');
+});
+
 test('js endpoint is cached for an hour and revalidated with an etag', function () {
     $r = http('GET', '/?js');
     $header = fn ($name) => collect($r['headers'])->first(fn ($h) => stripos($h, "{$name}:") === 0);

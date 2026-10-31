@@ -701,9 +701,11 @@ function get_tracking_script(): string
       opt();addEventListener('hashchange',opt);
       function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});if(!o.source&&p.get('gad_source')){o.source='google';o.medium='cpc';var c=p.get('gad_campaignid');if(c)o.campaign=c}return Object.keys(o).length?o:null}
       function url(){var s=location.search;if(qk!==undefined&&s){var k=qk==='none'?[]:qk.split(',').map(function(x){return x.trim()}),p=new URLSearchParams(s),o=new URLSearchParams();p.forEach(function(v,n){if(k.indexOf(n)>=0)o.append(n,v)});s=o.toString();s=s?'?'+s:''}return pth()+s}
+      var last;
       function s(){
         if(off()){log('ignored: this browser is excluded');return}
-        var u=url(),d=JSON.stringify({u:u,r:document.referrer,w:innerWidth,site:site,utm:utm(),v:ver});
+        var u=url();if(u===last){log('skipped: same URL as the last pageview');return}last=u;
+        var d=JSON.stringify({u:u,r:document.referrer,w:innerWidth,site:site,utm:utm(),v:ver});
         log('pageview',u);
         navigator.sendBeacon?navigator.sendBeacon(ep,d):0;
       }

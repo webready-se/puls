@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **A single-page app no longer counts a pageview twice for the same URL.** The tracker sent one on every `pushState` and `popstate`, also when only the hash or the history state changed; it now remembers the last URL sent and skips an unchanged one
 - **The Nginx mirror snippet in `docs/integrations.md` has the `$is_bot` map and the `if` line it lacked.** Without them `mirror` copies every request, so a site set up from the docs sent every visitor's page and asset requests to Puls, where they were listed as "Unknown client". `php puls nginx:config` already printed them; the docs did not
 - **The CSP advice in `docs/integrations.md` covers the `<noscript>` pixel and the `puls.track` stub, not only the tracking script.** It names `img-src` for the pixel, and the hash that lets the stub run without `'unsafe-inline'` (or a file of your own for it)
 - **The `<noscript>` pixel has no inline style any more, which a strict `style-src` blocked.** In the docs, the dashboard's tracking snippet and `php puls nginx:config`. The GIF is transparent, so it never showed
