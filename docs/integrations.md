@@ -439,6 +439,14 @@ Caddy and Traefik send `X-Forwarded-For` by default.
 The JavaScript tracking script only runs in browsers. To also capture bots, crawlers, and automated clients, use Nginx's `mirror` directive to send a copy of each request to Puls:
 
 ```nginx
+# Outside the server block: which user agents are sent to Puls
+map $http_user_agent $is_bot {
+    default 0;
+    ~*(bot|crawl|spider|GPTBot|ClaudeBot|Bytespider|Meta-ExternalAgent|Applebot|Ahrefs|Semrush|facebookexternalhit) 1;
+    ~*(axios|python-requests|Go-http-client|curl/|wget/|httpie|node-fetch|undici|ruby|perl|java/|scrapy|puppeteer|playwright|HeadlessChrome|PhantomJS|Pingdom) 1;
+}
+
+# Inside the server block
 location / {
     mirror /_puls_log;
     # ...your existing proxy_pass or try_files
@@ -446,10 +454,13 @@ location / {
 
 location = /_puls_log {
     internal;
+    if ($is_bot = "0") { return 204; }
     proxy_pass https://your-puls-domain/?log&s=my-site&p=$request_uri;
     proxy_set_header Host your-puls-domain;
 }
 ```
+
+The `map` and the `if` line matter: `mirror` copies every request, and without them every visitor's page and asset requests reach Puls and are listed as "Unknown client". `php puls nginx:config` prints the whole block for a site, with the map.
 
 This happens server-side with zero latency impact on your visitors. Puls deduplicates requests automatically.
 

@@ -2219,7 +2219,7 @@ function meta_ad_params(): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 24; // Bump this when adding new migrations
+    $currentVersion = 25; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -2671,6 +2671,13 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
         }
     }
 
+    // v25: a bot's name is decided when its visit is stored, so visits that came in
+    // as "Unknown bot/crawler/spider/client" get the name detect_bot() has for them
+    // now. Repeat this step as a new version whenever detect_bot() learns names.
+    if ($version < 25) {
+        rename_unknown_bots($db);
+    }
+
     $db->exec('PRAGMA user_version = ' . $currentVersion);
 }
 
@@ -2774,28 +2781,62 @@ function detect_bot(string $ua): ?array
         ['pattern' => 'cohere-ai',         'name' => 'Cohere',           'category' => 'AI'],
         ['pattern' => 'Meta-ExternalAgent','name' => 'Meta AI',          'category' => 'AI'],
         ['pattern' => 'OAI-SearchBot',    'name' => 'OAI-SearchBot',   'category' => 'AI'],
+        ['pattern' => 'Amazonbot',        'name' => 'Amazonbot',       'category' => 'AI'],
+        ['pattern' => 'ExaSearchBot',     'name' => 'Exa',             'category' => 'AI'],
+        ['pattern' => 'ElevenlabsCrawler','name' => 'ElevenLabs',      'category' => 'AI'],
+        ['pattern' => 'Reflectionbot',    'name' => 'Reflection AI',   'category' => 'AI'],
+        ['pattern' => 'AzureAI-SearchBot','name' => 'Azure AI Search', 'category' => 'AI'],
+        ['pattern' => 'Google-CloudVertexBot','name' => 'Google Vertex AI','category' => 'AI'],
+        ['pattern' => 'DuckAssistBot',    'name' => 'DuckAssist',      'category' => 'AI'],
+        ['pattern' => 'LinkupBot',        'name' => 'Linkup',          'category' => 'AI'],
+        ['pattern' => 'img2dataset',      'name' => 'img2dataset',     'category' => 'AI'],
         // Search engines
         ['pattern' => 'Googlebot',         'name' => 'Googlebot',        'category' => 'Search engine'],
+        ['pattern' => 'AdsBot-Google',     'name' => 'AdsBot-Google',    'category' => 'Search engine'],
         ['pattern' => 'bingbot',           'name' => 'Bingbot',          'category' => 'Search engine'],
         ['pattern' => 'YandexBot',         'name' => 'YandexBot',        'category' => 'Search engine'],
         ['pattern' => 'DuckDuckBot',       'name' => 'DuckDuckBot',      'category' => 'Search engine'],
         ['pattern' => 'Baiduspider',       'name' => 'Baiduspider',      'category' => 'Search engine'],
         ['pattern' => 'Applebot',          'name' => 'Applebot',         'category' => 'Search engine'],
+        ['pattern' => 'PetalBot',          'name' => 'PetalBot',         'category' => 'Search engine'],
+        ['pattern' => 'Sogou web spider',  'name' => 'Sogou',            'category' => 'Search engine'],
+        ['pattern' => 'SeznamBot',         'name' => 'SeznamBot',        'category' => 'Search engine'],
+        ['pattern' => 'YisouSpider',       'name' => 'Yisou',            'category' => 'Search engine'],
+        ['pattern' => 'SeekportBot',       'name' => 'Seekport',         'category' => 'Search engine'],
         // Social
         ['pattern' => 'facebookexternalhit','name' => 'Facebook',        'category' => 'Social'],
         ['pattern' => 'Twitterbot',        'name' => 'Twitterbot',       'category' => 'Social'],
         ['pattern' => 'LinkedInBot',       'name' => 'LinkedInBot',      'category' => 'Social'],
         ['pattern' => 'Slackbot',          'name' => 'Slackbot',         'category' => 'Social'],
         ['pattern' => 'TelegramBot',       'name' => 'TelegramBot',      'category' => 'Social'],
+        ['pattern' => 'KakaoBot',          'name' => 'KakaoTalk',        'category' => 'Social'],
+        ['pattern' => 'snapchat',          'name' => 'Snapchat',         'category' => 'Social'],
         // SEO
         ['pattern' => 'AhrefsBot',         'name' => 'AhrefsBot',        'category' => 'SEO'],
         ['pattern' => 'SemrushBot',        'name' => 'SemrushBot',       'category' => 'SEO'],
+        ['pattern' => 'SiteAuditBot',      'name' => 'Semrush Site Audit','category' => 'SEO'],
         ['pattern' => 'MJ12bot',           'name' => 'Majestic',         'category' => 'SEO'],
         ['pattern' => 'DotBot',            'name' => 'DotBot',           'category' => 'SEO'],
+        ['pattern' => 'SERankingBacklinksBot','name' => 'SE Ranking',    'category' => 'SEO'],
+        ['pattern' => 'DataForSeoBot',     'name' => 'DataForSEO',       'category' => 'SEO'],
+        ['pattern' => 'Barkrowler',        'name' => 'Babbar',           'category' => 'SEO'],
+        ['pattern' => 'serpstatbot',       'name' => 'Serpstat',         'category' => 'SEO'],
+        ['pattern' => 'AwarioBot',         'name' => 'Awario',           'category' => 'SEO'],
+        ['pattern' => 'DomainStatsBot',    'name' => 'DomainStats',      'category' => 'SEO'],
+        ['pattern' => 'SnokaBot',          'name' => 'Snoka',            'category' => 'SEO'],
+        // Monitors
         ['pattern' => 'UptimeRobot',       'name' => 'UptimeRobot',      'category' => 'Monitor'],
         ['pattern' => 'CensysInspect',    'name' => 'CensysInspect',   'category' => 'Monitor'],
         ['pattern' => 'uptime checker',   'name' => 'Uptime Checker',  'category' => 'Monitor'],
         ['pattern' => 'Pingdom',          'name' => 'Pingdom',         'category' => 'Monitor'],
+        ['pattern' => 'Cookiebot',        'name' => 'Cookiebot',       'category' => 'Monitor'],
+        ['pattern' => 'Stripebot',        'name' => 'Stripe',          'category' => 'Monitor'],
+        ['pattern' => 'VakaBot',          'name' => 'Vaka',            'category' => 'Monitor'],
+        ['pattern' => 'Vaka/',            'name' => 'Vaka',            'category' => 'Monitor'],
+        // Other crawlers with a name
+        ['pattern' => 'AttractCarsBot',   'name' => 'AttractCarsBot',  'category' => 'Other'],
+        ['pattern' => 'Taloustutka',      'name' => 'Taloustutka',     'category' => 'Other'],
+        ['pattern' => 'FirmCredBot',      'name' => 'FirmCred',        'category' => 'Other'],
         // Automated clients
         ['pattern' => 'axios/',           'name' => 'Axios',           'category' => 'Client'],
         ['pattern' => 'python-requests',  'name' => 'Python Requests', 'category' => 'Client'],
@@ -2826,6 +2867,23 @@ function detect_bot(string $ua): ?array
         }
     }
     return null;
+}
+
+/**
+ * Give stored visits under an unknown name the name detect_bot() has for them now.
+ * A visit whose user agent still matches nothing keeps its name. Runs inside a
+ * migration's write transaction, so it opens none of its own.
+ */
+function rename_unknown_bots(PDO $db): void
+{
+    $rows = $db->query("SELECT id, user_agent FROM bot_visits WHERE bot_name LIKE 'Unknown %'")->fetchAll(PDO::FETCH_ASSOC);
+    $update = $db->prepare('UPDATE bot_visits SET bot_name = ?, bot_category = ? WHERE id = ?');
+    foreach ($rows as $row) {
+        $bot = detect_bot((string) $row['user_agent']);
+        if ($bot && strpos($bot['name'], 'Unknown ') !== 0) {
+            $update->execute([$bot['name'], $bot['category'], $row['id']]);
+        }
+    }
 }
 
 function detect_browser(string $ua): string
