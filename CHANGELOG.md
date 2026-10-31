@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- 30 more bots have a name instead of "Unknown bot", "Unknown crawler" or "Unknown client", from a pass over three months of two installs' unknown visits: Amazonbot, Exa, ElevenLabs, Reflection AI, Azure AI Search, Google Vertex AI, DuckAssist, Linkup and img2dataset (AI); AdsBot-Google, PetalBot, Sogou, SeznamBot, Yisou and Seekport (search engines); KakaoTalk and Snapchat (link previews); Semrush Site Audit, SE Ranking, DataForSEO, Babbar, Serpstat, Awario and DomainStats (SEO); Cookiebot and Stripe (monitors); and Webready's own Snoka and Vaka. Visits already stored under an unknown name are renamed on the first request after the upgrade, so the Bots tab shows the new names for the whole retention period, not only from today
+
 ### Changed
 
 - Settings opens as an overview: Chart notes, Excluded IPs and Goals are folded to a line that says what is set ("1 goal", "2 excluded · your IP is counted"), and a click opens one. They fold again each time Settings opens, so it stays short; "Edit or remove notes in Settings" under a new chart note opens it on Chart notes. Appearance and Export stay as they are.
