@@ -701,9 +701,11 @@ function get_tracking_script(): string
       opt();addEventListener('hashchange',opt);
       function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});if(!o.source&&p.get('gad_source')){o.source='google';o.medium='cpc';var c=p.get('gad_campaignid');if(c)o.campaign=c}return Object.keys(o).length?o:null}
       function url(){var s=location.search;if(qk!==undefined&&s){var k=qk==='none'?[]:qk.split(',').map(function(x){return x.trim()}),p=new URLSearchParams(s),o=new URLSearchParams();p.forEach(function(v,n){if(k.indexOf(n)>=0)o.append(n,v)});s=o.toString();s=s?'?'+s:''}return pth()+s}
+      var last;
       function s(){
         if(off()){log('ignored: this browser is excluded');return}
-        var u=url(),d=JSON.stringify({u:u,r:document.referrer,w:innerWidth,site:site,utm:utm(),v:ver});
+        var u=url();if(u===last){log('skipped: same URL as the last pageview');return}last=u;
+        var d=JSON.stringify({u:u,r:document.referrer,w:innerWidth,site:site,utm:utm(),v:ver});
         log('pageview',u);
         navigator.sendBeacon?navigator.sendBeacon(ep,d):0;
       }
@@ -764,7 +766,7 @@ function handle_collect(array $config): void
     $ip = client_ip($_SERVER, $config['trusted_proxies'] ?? []);
     if (is_excluded_ip($db, $site, $ip)) return;
 
-    $hash = visitor_hash($db, $ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
+    $hash = visitor_hash($db, $site, $ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
 
     $browser = detect_browser($ua);
     $device = detect_device((int)($input['w'] ?? 0));
@@ -858,7 +860,7 @@ function handle_event(array $config): void
         $eventData = substr(json_encode($input['event_data']), 0, 1000);
     }
 
-    $hash = visitor_hash($db, $ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
+    $hash = visitor_hash($db, $site, $ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
 
     // Dedup: skip same event with same data from same visitor within 10 seconds.
     // IS (not =) so two events without data also match each other (NULL IS NULL).
@@ -919,9 +921,13 @@ function client_ip(array $server, array $trustedProxies): string
  * Once the salt is deleted the hash can never be computed again, not even with
  * server access, so stored rows cannot be tied back to a visitor.
  */
-function visitor_hash(PDO $db, string $ip, string $ua): string
+/**
+ * The site is part of the hash, so one person's visits to two sites of the same
+ * install get different hashes and cannot be joined across sites.
+ */
+function visitor_hash(PDO $db, string $site, string $ip, string $ua): string
 {
-    return hash('sha256', $ip . $ua . daily_salt($db));
+    return hash('sha256', $site . "\0" . $ip . $ua . daily_salt($db));
 }
 
 /**
@@ -1654,20 +1660,23 @@ function get_api_data(array $config, array $user): string
         }
     }
 
+    // Goals and saved cards belong to a site. On All sites they show only when that view is
+    // one site anyway: an install that tracks a single site (a user limited to one site has
+    // $site set above). Across several sites a goal's rate would be counted against every
+    // site's visitors, and the cards would pile up far from the site they explain.
+    $cardSite = $site;
+    if (!$cardSite && empty($allowedSites)) {
+        // Two index seeks: the first site, and whether there is a second
+        [$first, $second] = $db->query('SELECT (SELECT MIN(site) FROM pageviews), (SELECT MIN(site) FROM pageviews WHERE site > (SELECT MIN(site) FROM pageviews))')->fetch(PDO::FETCH_NUM);
+        if ($first !== null && $second === null) $cardSite = $first;
+    }
+
     // Goals with conversion rates
     $goals = [];
     $goalsTable = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='goals'")->fetch();
-    if ($goalsTable && !$path && !$channel) {
+    if ($goalsTable && $cardSite && !$path && !$channel) {
         $stmt = $db->prepare("SELECT path, label, type, target, target_period FROM goals WHERE site = ? ORDER BY created_at");
-        $goalSite = $site ?: '';
-        if ($goalSite) {
-            $stmt->execute([$goalSite]);
-        } else {
-            // Across the user's sites a goal has a single target only when one site has
-            // that goal (the dashboard of a hub with one site asks without a site)
-            $stmt = $db->prepare("SELECT path, label, type, CASE WHEN COUNT(*) = 1 THEN MAX(target) END AS target, CASE WHEN COUNT(*) = 1 THEN MAX(target_period) END AS target_period FROM goals WHERE 1 {$siteFilter} GROUP BY path, label, type ORDER BY MIN(created_at)");
-            $stmt->execute($siteParams);
-        }
+        $stmt->execute([$cardSite]);
         $goalRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $totalVisitors = (int) ($totals['visitors'] ?? 0);
         foreach ($goalRows as $g) {
@@ -1698,12 +1707,12 @@ function get_api_data(array $config, array $user): string
         }
     }
 
-    // Saved breakdowns, each computed on its own site
+    // Saved breakdowns of the site on screen (see $cardSite above)
     $breakdowns = [];
-    if (!$path && !$channel) {
-        // In the order set per site; cards never moved keep the order they were saved in
-        $stmt = $db->prepare("SELECT id, site, label, event_name, group_key FROM breakdowns WHERE 1 {$siteFilter} ORDER BY site, position, created_at, id");
-        $stmt->execute($siteParams);
+    if ($cardSite && !$path && !$channel) {
+        // In the order set for the site; cards never moved keep the order they were saved in
+        $stmt = $db->prepare("SELECT id, site, label, event_name, group_key FROM breakdowns WHERE site = ? ORDER BY position, created_at, id");
+        $stmt->execute([$cardSite]);
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $bd) {
             [$rows, $new] = event_group($db, $bd['event_name'], $bd['group_key'], $dateFilter, $dateParams, 'AND site = ?', [$bd['site']], $prevSince, $since, 200);
             $perDay = event_group_days($db, $bd['event_name'], $bd['group_key'], $prevSince, $until, $bd['site']);

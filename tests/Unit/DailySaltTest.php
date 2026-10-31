@@ -21,15 +21,17 @@ test('creating today\'s salt deletes the salts of earlier days', function () {
     expect($db->query('SELECT date FROM salts')->fetchAll(PDO::FETCH_COLUMN))->toBe([date('Y-m-d')]);
 });
 
-test('the visitor hash depends on IP, user agent and the salt only', function () {
+test('the visitor hash depends on site, IP, user agent and the salt only', function () {
     $db = saltTestDb();
-    $hash = visitor_hash($db, '198.51.100.1', 'Mozilla/5.0');
-    expect($hash)->toBe(hash('sha256', '198.51.100.1' . 'Mozilla/5.0' . daily_salt($db)))
-        ->and(visitor_hash($db, '198.51.100.2', 'Mozilla/5.0'))->not->toBe($hash);
+    $hash = visitor_hash($db, 'shop.example', '198.51.100.1', 'Mozilla/5.0');
+    expect($hash)->toBe(hash('sha256', 'shop.example' . "\0" . '198.51.100.1' . 'Mozilla/5.0' . daily_salt($db)))
+        ->and(visitor_hash($db, 'shop.example', '198.51.100.2', 'Mozilla/5.0'))->not->toBe($hash)
+        // The same person on another site of the install is another hash, so visits cannot be joined across sites
+        ->and(visitor_hash($db, 'blog.example', '198.51.100.1', 'Mozilla/5.0'))->not->toBe($hash);
 
     // A new salt (the next day) gives the same visitor a hash unrelated to the old one
     $db->exec('UPDATE salts SET salt = ' . $db->quote(str_repeat('0', 64)));
-    expect(visitor_hash($db, '198.51.100.1', 'Mozilla/5.0'))->not->toBe($hash);
+    expect(visitor_hash($db, 'shop.example', '198.51.100.1', 'Mozilla/5.0'))->not->toBe($hash);
 });
 
 test('migration v22 replaces old visitor hashes but keeps rows of one visitor together', function () {

@@ -48,6 +48,13 @@ test('js endpoint returns javascript', function () {
     expect($contentType)->toContain('javascript');
 });
 
+test('the tracking script skips a pageview for the same URL as the last one', function () {
+    // A pushState that changes only the hash or the history state must not count again
+    $body = http('GET', '/?js')['body'];
+    expect($body)->toContain('if(u===last)')
+        ->and($body)->toContain('last=u');
+});
+
 test('js endpoint is cached for an hour and revalidated with an etag', function () {
     $r = http('GET', '/?js');
     $header = fn ($name) => collect($r['headers'])->first(fn ($h) => stripos($h, "{$name}:") === 0);
@@ -908,22 +915,27 @@ test('a goal target can be set and cleared on the user\'s sites', function () {
     }
 });
 
-test('across sites a goal shows its target only when one site has that goal', function () {
-    $one = '/one-site-' . uniqid();
-    $both = '/two-sites-' . uniqid();
+test('the all-sites view of several sites carries no goals and no saved cards', function () {
+    // A goal's rate would be counted against every site's visitors, and the cards belong to their site
+    $path = '/goal-' . uniqid();
+    $event = 'card_' . uniqid();
     $db = getTestDb();
-    $goal = $db->prepare("INSERT INTO goals (site, path, label, type, created_at, target, target_period) VALUES (?, ?, '', 'page', ?, ?, 'week')");
-    $goal->execute(['test', $one, date('Y-m-d H:i:s'), 5]);
-    $goal->execute(['test', $both, date('Y-m-d H:i:s'), 5]);
-    $goal->execute(['other', $both, date('Y-m-d H:i:s'), 8]);
+    $db->prepare("INSERT INTO goals (site, path, label, type, created_at, target, target_period) VALUES ('test', ?, '', 'page', ?, 5, 'week')")->execute([$path, date('Y-m-d H:i:s')]);
+    $db->prepare("INSERT INTO breakdowns (site, label, event_name, group_key, created_at) VALUES ('test', 'Card', ?, 'k', ?)")->execute([$event, date('Y-m-d H:i:s')]);
 
     try {
-        $data = json_decode(http('GET', '/?api&days=7', ['header' => restrictedSession('full')], 8090)['body'], true);
-        $target = fn ($path) => collect($data['goals'])->first(fn ($g) => $g['path'] === $path)['target'];
-        expect($target($one))->toBe(5)
-            ->and($target($both))->toBeNull();
+        // Every site, and two of them: no goals, no cards
+        foreach (['full', 'pair'] as $user) {
+            $data = json_decode(http('GET', '/?api&days=7', ['header' => restrictedSession($user)], 8090)['body'], true);
+            expect($data['goals'])->toBe([])->and($data['breakdowns'])->toBe([]);
+        }
+        // The site itself still has them
+        $data = json_decode(http('GET', '/?api&days=7&site=test', ['header' => restrictedSession('full')], 8090)['body'], true);
+        expect(array_column($data['goals'], 'path'))->toContain($path)
+            ->and(array_column($data['breakdowns'], 'event'))->toContain($event);
     } finally {
-        $db->prepare('DELETE FROM goals WHERE path IN (?, ?)')->execute([$one, $both]);
+        $db->prepare('DELETE FROM goals WHERE path = ?')->execute([$path]);
+        $db->prepare('DELETE FROM breakdowns WHERE event_name = ?')->execute([$event]);
     }
 });
 
@@ -933,22 +945,6 @@ test('a user with several sites can load the all-sites view, limited to those si
     $data = json_decode($r['body'], true);
     expect($data)->toBeArray()
         ->and(array_column($data['siteOverview'], 'site'))->toContain('test', 'other')->not->toContain('not-theirs');
-});
-
-test('across sites a user sees only the goals of the sites they can access', function () {
-    $mine = '/mine-' . uniqid();
-    $theirs = '/theirs-' . uniqid();
-    $db = getTestDb();
-    $goal = $db->prepare("INSERT INTO goals (site, path, label, type, created_at) VALUES (?, ?, 'Goal', 'page', ?)");
-    $goal->execute(['other', $mine, date('Y-m-d H:i:s')]);
-    $goal->execute(['not-theirs', $theirs, date('Y-m-d H:i:s')]);
-
-    try {
-        $data = json_decode(http('GET', '/?api&days=7', ['header' => restrictedSession('pair')], 8090)['body'], true);
-        expect(array_column($data['goals'], 'path'))->toContain($mine)->not->toContain($theirs);
-    } finally {
-        $db->prepare('DELETE FROM goals WHERE path IN (?, ?)')->execute([$mine, $theirs]);
-    }
 });
 
 test('goals table has a type column after migration', function () {
