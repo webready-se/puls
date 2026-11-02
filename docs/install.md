@@ -119,6 +119,14 @@ cd $FORGE_RELEASE_DIRECTORY
 $ACTIVATE_RELEASE()
 ```
 
+**OPTIONS requests.** Forge's default site config routes with `try_files $uri $uri/ /index.php?$query_string`. For `/` the `$uri/` branch matches the document root as a directory, and Nginx answers an `OPTIONS` request there with 405 before PHP runs. The tracking script is not affected (`sendBeacon` never preflights), but a `fetch()` or XHR to `?collect` or `?event` with a JSON content type is: its preflight gets 405 instead of Puls's CORS answer. Edit the site's Nginx config in Forge and drop `$uri/`, as the config above has it:
+
+```nginx
+location / {
+    try_files $uri /index.php?$query_string;
+}
+```
+
 ## Docker
 
 ```bash
