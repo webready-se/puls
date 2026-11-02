@@ -151,9 +151,7 @@ if ($shareToken !== null) {
     $dashboard = __DIR__ . '/dashboard.html';
     if (file_exists($dashboard)) {
         $html = str_replace('__PULS_VERSION__', PULS_VERSION, file_get_contents($dashboard));
-        $shareJson = json_encode(['token' => $share['token'], 'site' => $share['site']]);
-        $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent'], 'accentText' => accent_text_colours($config['app_accent']), 'version' => PULS_VERSION, 'credit' => $config['footer_credit'], 'timeFormat' => $config['time_format']]);
-        $html = inject_after_title($html, '<script>window.PULS_SHARE=' . $shareJson . ';window.PULS_BRANDING=' . $brandingJson . ';</script>');
+        $html = inject_after_title($html, config_block($config, ['token' => $share['token'], 'site' => $share['site']]));
         respond($html, 200, 'text/html', security_headers());
     }
     respond('Dashboard file not found.', 404, 'text/plain');
@@ -322,8 +320,7 @@ $dashboard = __DIR__ . '/dashboard.html';
 if (file_exists($dashboard)) {
     // The version in the stylesheet and script URLs, so a new release is fetched and not read from cache
     $html = str_replace('__PULS_VERSION__', PULS_VERSION, file_get_contents($dashboard));
-    $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent'], 'accentText' => accent_text_colours($config['app_accent']), 'version' => PULS_VERSION, 'credit' => $config['footer_credit'], 'timeFormat' => $config['time_format']]);
-    $html = inject_after_title($html, '<script>window.PULS_BRANDING=' . $brandingJson . ';</script>');
+    $html = inject_after_title($html, config_block($config));
     respond($html, 200, 'text/html', security_headers());
 }
 respond('Dashboard file not found.', 404, 'text/plain');
@@ -548,7 +545,8 @@ function show_login(array $config, ?string $error = null): void
     $tagline = htmlspecialchars($config['app_tagline']);
     $accent = htmlspecialchars($config['app_accent']);
     $accentEnc = str_replace('#', '%23', $accent);
-    $accentText = array_map('htmlspecialchars', accent_text_colours($config['app_accent']));
+    $configBlock = config_block($config);
+    $v = PULS_VERSION;
 
     respond(<<<HTML
     <!DOCTYPE html>
@@ -563,89 +561,10 @@ function show_login(array $config, ?string $error = null): void
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <link rel="manifest" href="/?manifest">
     <link rel="apple-touch-icon" href="/icon-180.png">
-    <title>{$name} — Log in</title>
+    <title>{$name} — Log in</title>{$configBlock}
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='{$accentEnc}'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
-    <script>
-      (function() {
-        var s = localStorage.getItem('puls-theme') || 'system';
-        if (s === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-        else if (s === 'light') document.documentElement.setAttribute('data-theme', 'light');
-      })();
-    </script>
-    <style>
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      /* The design kit's tokens that this page uses, and Puls's accent (see dashboard.html) */
-      :root {
-        --bg: #f8fafc; --surface: #fff; --line: #e2e8f0;
-        --text: #1e293b; --text-2: #475569; --text-3: #64748b;
-        --accent: {$accentText['light']}; --accent-tile: {$accent}; --on-accent: #fff;
-        --down: #b91c1c; --down-soft: #fef2f2; --down-line: #fecaca;
-        color-scheme: light;
-      }
-      [data-theme="dark"] {
-        --bg: #0f172a; --surface: #1e293b; --line: #334155;
-        --text: #f1f5f9; --text-2: #cbd5e1; --text-3: #94a3b8;
-        --accent: {$accentText['dark']}; --on-accent: #0f172a;
-        --down: #f87171; --down-soft: rgb(248 113 113 / 0.12); --down-line: rgb(248 113 113 / 0.2);
-        color-scheme: dark;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root:not([data-theme="light"]) {
-          --bg: #0f172a; --surface: #1e293b; --line: #334155;
-          --text: #f1f5f9; --text-2: #cbd5e1; --text-3: #94a3b8;
-          --accent: {$accentText['dark']}; --on-accent: #0f172a;
-          --down: #f87171; --down-soft: rgb(248 113 113 / 0.12); --down-line: rgb(248 113 113 / 0.2);
-          color-scheme: dark;
-        }
-      }
-      @font-face {
-        font-family: "Figtree";
-        src: url("fonts/figtree-latin.woff2") format("woff2");
-        font-weight: 300 900;
-        font-style: normal;
-        font-display: swap;
-      }
-      body {
-        font-family: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
-        background: var(--bg); color: var(--text); min-height: 100vh;
-        display: flex; align-items: center; justify-content: center;
-      }
-      .login-card {
-        background: var(--surface); border-radius: 16px; padding: 40px;
-        border: 1px solid var(--line); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        width: 100%; max-width: 380px;
-      }
-      .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; justify-content: center; }
-      .logo-icon {
-        width: 40px; height: 40px; border-radius: 9px;
-        background: var(--accent-tile);
-        display: flex; align-items: center; justify-content: center;
-      }
-      .logo-icon svg { width: 20px; height: 20px; }
-      .logo-text { font-weight: 800; font-size: 24px; letter-spacing: -0.03em; }
-      .tagline { text-align: center; font-size: 13px; color: var(--text-3); margin-top: -20px; margin-bottom: 28px; }
-      label { display: block; font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
-      input[type="text"], input[type="password"] {
-        width: 100%; padding: 10px 14px; border-radius: 10px;
-        border: 1px solid var(--line); background: var(--bg); color: var(--text);
-        font-size: 14px; outline: none;
-        margin-bottom: 16px; transition: border-color 0.15s;
-      }
-      input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
-      button {
-        width: 100%; padding: 12px; border-radius: 10px; border: none;
-        background: var(--accent);
-        color: var(--on-accent); font-size: 14px; font-weight: 600; cursor: pointer;
-        transition: opacity 0.15s;
-      }
-      button:hover { opacity: 0.9; }
-      .error {
-        background: var(--down-soft); color: var(--down); padding: 10px 14px;
-        border-radius: 10px; font-size: 13px; margin-bottom: 16px;
-        border: 1px solid var(--down-line);
-      }
-    </style>
+    <script src="theme.js?v={$v}"></script>
+    <link rel="stylesheet" href="login.css?v={$v}">
     </head>
     <body>
     <div class="login-card">
@@ -669,7 +588,7 @@ function show_login(array $config, ?string $error = null): void
         <button type="submit">Log in</button>
       </form>
     </div>
-    <script>setInterval(function(){fetch('/?csrf').then(function(r){return r.json()}).then(function(d){if(d.token)document.querySelector('[name=_token]').value=d.token}).catch(function(){})},600000)</script>
+    <script src="login.js?v={$v}" defer></script>
     </body>
     </html>
     HTML, 200, 'text/html', security_headers());
@@ -1924,6 +1843,29 @@ function fill_days(array $rows, string $start, int $days): array
  * Insert markup right after the page's own </title>. Only the first one: the dashboard's
  * scripts can contain "</title>" in strings (SVG tooltips), and markup injected there breaks them.
  */
+/**
+ * The branding and, on a shared link, the share, as a JSON data block for theme.js and
+ * dashboard.js to read. Data, not script: a strict Content Security Policy does not govern
+ * a script element of type application/json, so nothing has to be allowed for it. < > & are
+ * escaped, so a value can never close the block.
+ */
+function config_block(array $config, ?array $share = null): string
+{
+    $data = [
+        'branding' => [
+            'name' => $config['app_name'],
+            'tagline' => $config['app_tagline'],
+            'accent' => $config['app_accent'],
+            'accentText' => accent_text_colours($config['app_accent']),
+            'version' => PULS_VERSION,
+            'credit' => $config['footer_credit'],
+            'timeFormat' => $config['time_format'],
+        ],
+        'share' => $share,
+    ];
+    return '<script type="application/json" id="puls-config">' . json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';
+}
+
 function inject_after_title(string $html, string $markup): string
 {
     $at = strpos($html, '</title>');
@@ -1933,7 +1875,7 @@ function inject_after_title(string $html, string $markup): string
 function security_headers(): array
 {
     return [
-        'Content-Security-Policy' => "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'",
+        'Content-Security-Policy' => "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'",
         'X-Content-Type-Options' => 'nosniff',
         'X-Frame-Options' => 'DENY',
         'Referrer-Policy' => 'strict-origin-when-cross-origin',

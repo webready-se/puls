@@ -51,6 +51,8 @@ public/index.php        — All backend logic (routing, tracking, API, auth, bot
 public/dashboard.html   — The dashboard's markup; PHP serves it with the branding injected and the version in the asset URLs
 public/dashboard.css    - The dashboard's styles (the kit's tokens at the top), no build step
 public/dashboard.js     - The dashboard's script: fetches the API, renders islands, drill-downs, settings
+public/theme.js         - Runs in <head> on the dashboard and the login page: theme before the first paint, the install's accent from the config block
+public/login.css, login.js - The login page's styles and its CSRF refresh
 public/fonts/           - Figtree (variable woff2) and its SIL Open Font License, copied from the design kit
 config.php              — Configuration (loads .env, auto-detects Forge paths)
 .env.example            — Environment template (checked in)
@@ -60,7 +62,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (359 tests, unit + feature)
+tests/                  — Pest test suite (360 tests, unit + feature)
 docs/integrations.md    - Tracking setup: script attributes, events, keeping personal data out of URLs, excluding own visits, reverse proxies
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading
@@ -91,7 +93,7 @@ docker-compose.yml      — One-command setup with volume for /app/data
 - **One covering index on pageviews** - `(site, created_at, visitor_hash)`: the dashboard's visitor counts, bounces and sessions read it, not the rows. No index on the hash alone: nothing looks a visitor up, and the planner used it to scan the whole table for All sites. A sampled `ANALYZE` once a day (`refresh_statistics`) lets the planner walk the index site by site. Measure a query or index change with `scripts/seed-benchmark.php` and `scripts/benchmark.php` before and after
 - **Session-based auth** — CSRF-protected, brute-force lockout per IP (failed logins counted in `audit_log`), bcrypt passwords; a new session id every hour, the old one leading to it for a minute so requests in flight stay logged in; session files in `data/sessions` deleted once a day (PHP's own clean-up does not reach them on Forge)
 - **Per-user site access** — users can be restricted to specific sites
-- **Self-contained dashboard** — no build tools, no CDN, works offline after load
+- **Self-contained dashboard** — no build tools, no CDN, works offline after load; three files (`dashboard.html`, `.css`, `.js`) plus `theme.js`, with the version in their URLs so a release is fetched and not read from cache
 - **Dashboard islands** - `render()` wraps each section in `island(key, html)`, and `patchIslands()` replaces only the islands whose HTML changed since the last render of the same view, so the 60 s refresh leaves the rest of the DOM alone (hover, focus, open drill-downs, tabs, chart scroll). A new section goes through `island()` with a unique key; a list of cards is one `data-island-list` element with a `data-island` key per card
 - **Privacy-first** - visitor hash of IP + UA + a random salt per day (`salts` table, deleted at the first request of the next day), so old hashes can never be recomputed; no cookies, no PII stored
 - **Forge auto-detection** — `resolve_path()` in config.php detects `/releases/\d+/` pattern and resolves to site root
@@ -112,7 +114,7 @@ tool disagree, the kit wins, unless this tool's docs say why it differs.
 
 Puls's copy of the kit's tokens is at the top of `public/dashboard.css`, with the kit version it was copied from. Where Puls differs on purpose:
 
-- **Strict CSP comes in steps.** The kit asks for `script-src 'self'` and `style-src 'self'`; the dashboard is three files now, and the inline handlers, inline styles and the injected branding script go next (ROADMAP, Epic 3)
+- **Strict CSP, as the kit asks:** `script-src 'self'; style-src 'self'` on every page Puls serves. No inline script, style or handler anywhere: an element names its action in `data-action` (click) or `data-on-<event>` and carries its arguments in `data-*` attributes, one listener per event type dispatches (`actions` in dashboard.js); a bar's width, height or colour travels as `data-w` (percent), `data-h` (pixels), `data-bg` or `data-color` and is applied through the CSSOM by a MutationObserver; fixed values are classes at the end of dashboard.css; the branding and the share reach the page as a JSON data block (`#puls-config`), which the policy does not govern. The smoke test fails on any violation, so a new inline bit never ships
 - **White-label.** `APP_ACCENT` sets `--accent-tile` (logo, bars, charts), and `--accent` (text, links, buttons) only where `accent_text_colours()` finds it readable, through `--brand-text` and `--brand-text-dark`
 - **`--on-accent`** is Puls's own token for text on a filled `--accent` button: white in light mode, dark in dark mode, since the dark accent is light
 - **Chart markers.** Releases are coral and notes teal, so the two can be told apart (the kit draws both as slate lines)

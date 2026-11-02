@@ -970,3 +970,57 @@ body {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* --- Classes that replace inline styles, so style-src can be 'self' --- */
+/* Hidden elements use the HTML attribute and are shown with el.hidden = false; !important so a
+   display rule on the element (.live-badge { display: inline-flex }) does not show it anyway */
+[hidden] { display: none !important; }
+.muted { color: var(--text-2); }
+.faint { color: var(--text-3); }
+.t-light { color: #f1f5f9; }
+.t-up { color: var(--green); }
+.t-down { color: var(--red); }
+.fs-11 { font-size: 11px; }
+.fs-12 { font-size: 12px; }
+.fs-13 { font-size: 13px; }
+.fw-400 { font-weight: 400; }
+.fw-600 { font-weight: 600; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-14 { margin-top: 14px; }
+.mb-0 { margin-bottom: 0; }
+.mb-14 { margin-bottom: 14px; }
+.mr-6 { margin-right: 6px; }
+.ml-auto { margin-left: auto; }
+.flex-1 { flex: 1; }
+.min-w-0 { min-width: 0; }
+.w-45 { width: 45%; }
+.nowrap { white-space: nowrap; }
+.ta-center { text-align: center; }
+.op-70 { opacity: 0.7; }
+.pointer { cursor: pointer; }
+.row { display: flex; align-items: center; }
+.gap-8 { gap: 8px; }
+.icon-14 { width: 14px; height: 14px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot-10 { width: 10px; height: 10px; }
+.flag { margin-right: 6px; font-size: 18px; line-height: 1; }
+.trow-label-flag { display: flex; align-items: center; }
+.summary-card-path { font-size: 13px; word-break: break-all; }
+.site-overview-since { font-size: 10px; color: var(--text-2); font-weight: 400; margin-top: 1px; opacity: 0.6; }
+.card-tabs-bare { margin: 0; border: 0; padding: 0; }
+.chart-legend-top { padding: 0 4px 10px; }
+.chart-legend-dot.current { background: var(--accent-tile); }
+.chart-legend-dot.prev { background: var(--line); }
+.tip-left { text-align: left; }
+.tip-head { font-weight: 600; margin-bottom: 4px; }
+.tip-delta { font-weight: 500; }
+.tip-prev { color: var(--text-3); margin-top: 2px; }
+.bot-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.bot-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.bl-row { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.bl-line { display: flex; align-items: center; gap: 10px; font-size: 13px; overflow: hidden; }
+.bl-path { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bl-refs { margin-left: 18px; margin-top: 4px; font-size: 12px; color: var(--text-3); }
+.more-note { padding: 4px 0; color: var(--text-2); font-size: 11px; }
+.utm-ch-other { display: inline-block; width: auto; padding: 6px 16px; font-size: 11px; }
