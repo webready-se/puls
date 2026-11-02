@@ -830,6 +830,25 @@ function handle_collect(array $config): void
         $appVersion,
         date('Y-m-d H:i:s'),
     ]);
+
+    refresh_statistics($db);
+}
+
+/**
+ * Give the query planner current statistics on the tables, once a day. Without them it
+ * picks plans as if every index were equally selective; with them it knows that pageviews
+ * has few distinct sites and many rows each, and walks the covering index one site at a
+ * time for All sites instead of scanning the table. analysis_limit samples about a
+ * thousand rows per index, so this takes milliseconds on millions of rows.
+ */
+function refresh_statistics(PDO $db): void
+{
+    $marker = dirname($db->query("PRAGMA database_list")->fetch()['file'] ?? __DIR__) . '/.analyze';
+    if (file_exists($marker) && file_get_contents($marker) === date('Y-m-d')) return;
+
+    $db->exec('PRAGMA analysis_limit = 1000');
+    $db->exec('ANALYZE');
+    file_put_contents($marker, date('Y-m-d'));
 }
 
 // =====================================================================
@@ -1031,7 +1050,7 @@ function get_api_data(array $config, array $user): string
 
     // List all sites (filtered by user access)
     if (isset($_GET['sites'])) {
-        // Loose index scan: walk idx_site_date one distinct site at a time
+        // Loose index scan: walk idx_site_date_visitor one distinct site at a time
         // instead of scanning every row. Cost follows the number of sites,
         // not the size of the table, so it stays flat as history accumulates.
         $stmt = $db->query('WITH RECURSIVE tracked(site) AS (
@@ -1357,15 +1376,19 @@ function get_api_data(array $config, array $user): string
         $prevBounce = $stmt->fetch(PDO::FETCH_ASSOC);
         $previousBounceRate = $prevBounce['total'] > 0 ? round(100 * $prevBounce['bounced'] / $prevBounce['total'], 1) : null;
 
-        $stmt = $db->prepare("SELECT duration FROM (SELECT (julianday(MAX(created_at)) - julianday(MIN(created_at))) * 86400 as duration FROM pageviews WHERE {$dateFilter} {$siteFilter} {$channelFilter} GROUP BY visitor_hash HAVING COUNT(*) > 1) ORDER BY duration");
+        // Median session length in SQL: the row at position n/2 (0-based) of the sorted
+        // durations, as a window over one pass, so a year of a busy site does not come
+        // into PHP as hundreds of thousands of rows. Visits of one page have no length.
+        // Whole seconds from strftime: julianday differences come out as 59.999...
+        $medianSql = fn (string $where) => "SELECT duration FROM (SELECT duration, ROW_NUMBER() OVER (ORDER BY duration) AS rn, COUNT(*) OVER () AS n FROM (SELECT strftime('%s', MAX(created_at)) - strftime('%s', MIN(created_at)) as duration FROM pageviews WHERE {$where} GROUP BY visitor_hash HAVING COUNT(*) > 1)) WHERE rn = n / 2 + 1";
+        $stmt = $db->prepare($medianSql("{$dateFilter} {$siteFilter} {$channelFilter}"));
         $stmt->execute(array_merge($dateParams, $siteParams, $channelParams));
-        $durations = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        $medianSession = !empty($durations) ? (int) $durations[intval(count($durations) / 2)] : 0;
+        $medianSession = (int) $stmt->fetchColumn();
 
-        $stmt = $db->prepare("SELECT duration FROM (SELECT (julianday(MAX(created_at)) - julianday(MIN(created_at))) * 86400 as duration FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$channelFilter} GROUP BY visitor_hash HAVING COUNT(*) > 1) ORDER BY duration");
+        $stmt = $db->prepare($medianSql("created_at >= ? AND created_at < ? {$siteFilter} {$channelFilter}"));
         $stmt->execute(array_merge([$prevSince, $since], $siteParams, $channelParams));
-        $prevDurations = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        $previousMedianSession = !empty($prevDurations) ? (int) $prevDurations[intval(count($prevDurations) / 2)] : null;
+        $median = $stmt->fetchColumn();
+        $previousMedianSession = $median !== false ? (int) $median : null;
     }
 
     // Entry/exit pages (skip when filtered to a single path)
@@ -1947,8 +1970,9 @@ function get_db(string $path): PDO
             app_version TEXT,
             created_at TEXT NOT NULL
         )');
-        $db->exec('CREATE INDEX idx_site_date ON pageviews (site, created_at)');
-        $db->exec('CREATE INDEX idx_visitor ON pageviews (visitor_hash)');
+        // Covers the dashboard's visitor counts, bounces and sessions (filter by site and period,
+        // count or group by visitor) without reading the table rows; see migration v26
+        $db->exec('CREATE INDEX idx_site_date_visitor ON pageviews (site, created_at, visitor_hash)');
         $db->exec('CREATE TABLE bot_visits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             site TEXT NOT NULL,
@@ -2228,7 +2252,7 @@ function meta_ad_params(): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 25; // Bump this when adding new migrations
+    $currentVersion = 26; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -2685,6 +2709,21 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
     // now. Repeat this step as a new version whenever detect_bot() learns names.
     if ($version < 25) {
         rename_unknown_bots($db);
+    }
+
+    // v26: one covering index on pageviews (site, created_at, visitor_hash) replaces
+    // idx_site_date (its prefix) and idx_visitor. The dashboard's visitor counts, bounces
+    // and sessions filter by site and period and count or group by visitor, so they read
+    // only the index now, not the rows. idx_visitor served no query: nothing looks a
+    // visitor up by hash, and for All sites the planner walked it over the whole table
+    // to avoid sorting, which was most of that view's time. Statistics follow, so the
+    // planner knows an install has few sites and many rows per site (refresh_statistics)
+    if ($version < 26) {
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_site_date_visitor ON pageviews (site, created_at, visitor_hash)');
+        $db->exec('DROP INDEX IF EXISTS idx_visitor');
+        $db->exec('DROP INDEX IF EXISTS idx_site_date');
+        $db->exec('PRAGMA analysis_limit = 1000');
+        $db->exec('ANALYZE');
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);
