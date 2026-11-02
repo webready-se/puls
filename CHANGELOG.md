@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `docs/install.md` says that Forge's default `try_files $uri $uri/ ...` answers an `OPTIONS` request with 405 before PHP runs, so a `fetch()` with a JSON content type fails its preflight (`sendBeacon` and the tracking script are not affected), and how to change the line.
 - `docs/integrations.md` says that a site name in punycode and the same name in Unicode are one site.
 
+### Fixed
+
+- `php puls sites:list` ran a site name of 22 characters or more into its first date ("a-long-shop-name.example2026-11-02"). The site column is now as wide as the longest name needs, under a group too, so every column stays under its header.
+
 ## [1.30.0] - 2026-11-02
 
 ### Added
