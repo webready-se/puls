@@ -150,7 +150,7 @@ if ($shareToken !== null) {
     // Serve dashboard in shared mode
     $dashboard = __DIR__ . '/dashboard.html';
     if (file_exists($dashboard)) {
-        $html = file_get_contents($dashboard);
+        $html = str_replace('__PULS_VERSION__', PULS_VERSION, file_get_contents($dashboard));
         $shareJson = json_encode(['token' => $share['token'], 'site' => $share['site']]);
         $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent'], 'accentText' => accent_text_colours($config['app_accent']), 'version' => PULS_VERSION, 'credit' => $config['footer_credit'], 'timeFormat' => $config['time_format']]);
         $html = inject_after_title($html, '<script>window.PULS_SHARE=' . $shareJson . ';window.PULS_BRANDING=' . $brandingJson . ';</script>');
@@ -320,7 +320,8 @@ if (!is_authenticated()) {
 // Serve dashboard
 $dashboard = __DIR__ . '/dashboard.html';
 if (file_exists($dashboard)) {
-    $html = file_get_contents($dashboard);
+    // The version in the stylesheet and script URLs, so a new release is fetched and not read from cache
+    $html = str_replace('__PULS_VERSION__', PULS_VERSION, file_get_contents($dashboard));
     $brandingJson = json_encode(['name' => $config['app_name'], 'tagline' => $config['app_tagline'], 'accent' => $config['app_accent'], 'accentText' => accent_text_colours($config['app_accent']), 'version' => PULS_VERSION, 'credit' => $config['footer_credit'], 'timeFormat' => $config['time_format']]);
     $html = inject_after_title($html, '<script>window.PULS_BRANDING=' . $brandingJson . ';</script>');
     respond($html, 200, 'text/html', security_headers());
@@ -1932,7 +1933,7 @@ function inject_after_title(string $html, string $markup): string
 function security_headers(): array
 {
     return [
-        'Content-Security-Policy' => "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'",
+        'Content-Security-Policy' => "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'",
         'X-Content-Type-Options' => 'nosniff',
         'X-Frame-Options' => 'DENY',
         'Referrer-Policy' => 'strict-origin-when-cross-origin',
