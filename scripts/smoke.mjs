@@ -77,6 +77,8 @@ async function main() {
   const usersFile = join(tmp, 'users.json');
   execFileSync('php', ['-r', 'file_put_contents($argv[1], json_encode(["smoke" => ["password" => password_hash("smoke-pass", PASSWORD_BCRYPT, ["cost" => 4]), "sites" => []]]));', usersFile]);
   const env = { ...process.env, DB_PATH: dbPath, USERS_FILE: usersFile, TIMEZONE };
+  // Two sites in a group and one without: the picker and the overview list them under group headers
+  execFileSync('php', [join(root, 'puls'), 'sites:group', 'Shops', 'demo.example.com', 'shop.example.com'], { env });
   children.push(spawn('php', ['-S', `localhost:${PHP_PORT}`, '-t', join(root, 'public')], { env, stdio: 'ignore' }));
   const base = `http://localhost:${PHP_PORT}`;
   await waitForHttp(`${base}/?health`);
@@ -419,7 +421,7 @@ async function main() {
     returnByValue: true,
   });
   if (result.exceptionDetails) errors.push(`Smoke steps threw: ${result.exceptionDetails.exception?.description}`);
-  const failures = [...(result.result?.value || [])];
+  const failures = [...(Array.isArray(result.result?.value) ? result.result.value : [])];
 
   // 6. Logged in: All sites first, then the demo site, where a goal can be added for an event
   // that has not happened yet
@@ -449,13 +451,15 @@ async function main() {
     const pickerKey = (k) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
     siteBtn?.click();
     const picker = [...document.querySelectorAll('#site-list [data-site]')].map((el) => el.getAttribute('data-site'));
-    expect(siteBtn?.offsetParent && siteBtn.getAttribute('aria-expanded') === 'true' && picker.join() === ['', ...seeded].join() && q('#site-filter').hidden, `site picker lists All sites and each site, without a filter for three (lists ${picker.join(', ')})`);
+    const pickerGroups = [...document.querySelectorAll('#site-list .cmd-group')].map((el) => el.textContent);
+    expect(siteBtn?.offsetParent && siteBtn.getAttribute('aria-expanded') === 'true' && picker.join() === ',demo.example.com,shop.example.com,blog.example.com' && q('#site-filter').hidden, `site picker lists All sites, then the sites under their group, without a filter for three (lists ${picker.join(', ')})`);
+    expect(pickerGroups.join() === 'Shops,Other sites' && q('#site-list [role="group"]')?.getAttribute('aria-labelledby') === q('#site-list .cmd-group').id, `the picker's groups are headed and named for screen readers (has ${pickerGroups.join(', ')})`);
     expect(document.activeElement === q('#site-list') && q('#site-list').getAttribute('aria-activedescendant') === q('#site-list [data-site=""]')?.id, 'the picker opens on the site on screen, its list focused');
     expect(siteBtn.textContent.startsWith('Site: All sites'), `the picker button tells a screen reader it is the site (says ${siteBtn.textContent})`);
     q('#site-list [data-site="blog.example.com"]').dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
     expect(q('#site-list .cmd-item.active')?.getAttribute('data-site') === 'blog.example.com' && document.querySelectorAll('#site-list .cmd-item.active').length === 1, 'the mouse moves the one highlight');
     pickerKey('End');
-    expect(q('#site-list .cmd-item.active')?.getAttribute('data-site') === 'shop.example.com', 'End moves to the last site');
+    expect(q('#site-list .cmd-item.active')?.getAttribute('data-site') === 'blog.example.com', 'End moves to the last site');
     pickerKey('Home');
     expect(q('#site-list .cmd-item.active')?.getAttribute('data-site') === '', 'Home moves to All sites');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
@@ -470,6 +474,21 @@ async function main() {
     const rows = [...document.querySelectorAll('.site-overview-row')];
     const rowNames = rows.map((r) => r.querySelector('.site-overview-name').firstChild.textContent);
     expect(seeded.every((s) => rowNames.includes(s)), `site overview lists every site (lists ${rowNames.join(', ')})`);
+    const groupHeads = [...document.querySelectorAll('.site-overview-group')].map((g) => g.querySelector('.site-overview-group-name').firstChild.textContent.trim());
+    expect(groupHeads.join() === 'Shops,Other sites' && rowNames.join() === 'demo.example.com,shop.example.com,blog.example.com', `the overview lists sites under their group, the ones without one last (has ${groupHeads.join(', ')}; rows ${rowNames.join(', ')})`);
+    const firstStat = (el) => parseInt(el.querySelector('.site-overview-stat').textContent.replace(/\D/g, ''), 10);
+    const shopsVisitors = rows.filter((r) => r.classList.contains('in-group') && ['demo.example.com', 'shop.example.com'].includes(r.getAttribute('data-site'))).reduce((n, r) => n + firstStat(r), 0);
+    expect(firstStat(q('.site-overview-group')) === shopsVisitors && q('.site-overview-group .site-overview-trend'), `a group's header sums its sites' visitors and shows a trend (${firstStat(q('.site-overview-group'))} vs ${shopsVisitors})`);
+    expect(!q('.site-overview-group:last-of-type .site-overview-stat'), 'the Other sites header carries its count only, no sum');
+    // A click on a group's header folds it to the header, remembered per viewer; a second click opens it
+    const shopsHead = q('.site-overview-group');
+    const shopsBody = () => q('#' + shopsHead.getAttribute('aria-controls'));
+    const foldedGroups = () => JSON.parse(localStorage.getItem('puls-site-groups-folded') || '[]');
+    expect(shopsHead?.tagName === 'BUTTON' && shopsHead.getAttribute('aria-expanded') === 'true' && shopsBody() && !shopsBody().hidden, 'a group header is a button, open at first');
+    shopsHead?.click();
+    expect(shopsHead?.getAttribute('aria-expanded') === 'false' && shopsBody()?.hidden && foldedGroups().includes('Shops') && shopsHead.querySelector('.site-overview-stat'), 'a click folds the group to its header, keeping its sums, and remembers it');
+    shopsHead?.click();
+    expect(shopsHead?.getAttribute('aria-expanded') === 'true' && !shopsBody()?.hidden && !foldedGroups().includes('Shops'), 'a second click opens the group again');
     const demoRow = rows.find((r) => r.querySelector('.site-overview-name').firstChild.textContent === 'demo.example.com');
     expect(demoRow?.querySelector('.site-overview-live'), 'site overview shows who is online on a site');
     demoRow?.click();
@@ -487,8 +506,7 @@ async function main() {
     pickerKey('a');
     expect(pickerActive() === '', `a moves to All sites (on ${pickerActive()})`);
     await sleep(700);
-    pickerKey('b');
-    pickerKey('ArrowDown');
+    pickerKey('d');
     pickerKey('ArrowDown');
     pickerKey('Enter');
     if (!await waitFor(() => q('#chart-card .card-subtitle')?.textContent.startsWith('shop.example.com') && q('#site-btn-label').textContent === 'shop.example.com' && document.activeElement === siteBtn, 'ArrowDown and Enter in the picker open the next site')) return fails;
@@ -517,9 +535,11 @@ async function main() {
     if (await waitFor(() => q('#cmd-group-pages'), 'page results in the palette')) {
       expect(q('#cmd-results [data-path="/pricing"]'), 'the page search finds /pricing');
     }
-    // "s" is in shop.example.com and in All sites; the name that starts with it comes first
+    // "s" is in shop.example.com and in All sites, and in the group Shops, which lists demo too;
+    // the name that starts with it comes first
     typeCmd('s');
-    expect(cmdSiteNames().join() === 'shop.example.com,', `typing filters the sites, names that start with it first (shows ${cmdSiteNames().join(', ')})`);
+    expect(cmdSiteNames().join() === 'shop.example.com,,demo.example.com', `typing filters the sites by name and group, names that start with it first (shows ${cmdSiteNames().join(', ')})`);
+    expect(q('#cmd-results [data-site="demo.example.com"] .cmd-item-group')?.textContent === 'Shops', 'a site in a group is named with its group in the palette');
     expect(q('#cmd-input').getAttribute('aria-activedescendant') === q('#cmd-results [data-site="shop.example.com"]')?.id, 'typing highlights the first result, so Enter opens it');
     key('Enter');
     if (!await waitFor(() => !q('#cmd-overlay.open') && q('#chart-card .card-subtitle')?.textContent.startsWith('shop.example.com'), 'Enter opens the site from the palette')) return fails;
@@ -661,7 +681,7 @@ async function main() {
   };
   const result2 = await send('Runtime.evaluate', { expression: `(${loggedIn.toString()})()`, awaitPromise: true, returnByValue: true });
   if (result2.exceptionDetails) errors.push(`Logged-in steps threw: ${result2.exceptionDetails.exception?.description}`);
-  failures.push(...(result2.result?.value || []));
+  failures.push(...(Array.isArray(result2.result?.value) ? result2.result.value : []));
 
   // 7. A hostile site name already in the database renders as text in the chart and the site overview
   const hostileSite = 'x"><img src=x onerror="window.__xss=1">' + "');window.__xss=2;('";
@@ -696,7 +716,34 @@ async function main() {
   };
   const result4 = await send('Runtime.evaluate', { expression: `(${hostileSiteSteps.toString()})(${JSON.stringify(hostileSite)})`, awaitPromise: true, returnByValue: true });
   if (result4.exceptionDetails) errors.push(`Hostile site steps threw: ${result4.exceptionDetails.exception?.description}`);
-  failures.push(...(result4.result?.value || []));
+  failures.push(...(Array.isArray(result4.result?.value) ? result4.result.value : []));
+
+  // 8. At phone width (the hostile steps left the page on All sites) a group header keeps its
+  // name and numbers on one line, and the page does not scroll sideways. The viewport is
+  // emulated over the protocol: no window changes size
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  const phoneSteps = async () => {
+    const fails = [];
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const q = (s) => document.querySelector(s);
+    const waitFor = async (fn, what, ms = 5000) => {
+      for (let t = 0; t < ms; t += 100) { if (fn()) return true; await sleep(100); }
+      fails.push(`timed out waiting for ${what}`);
+      return false;
+    };
+    if (!await waitFor(() => window.innerWidth <= 400 && q('.site-overview-group .site-overview-trend'), 'the grouped overview at phone width')) return fails;
+    await sleep(300);
+    const head = q('.site-overview-group');
+    const name = head.querySelector('.site-overview-group-name').getBoundingClientRect();
+    const trend = head.querySelector('.site-overview-trend').getBoundingClientRect();
+    if (Math.abs(name.top - trend.top) > 4 || name.right > trend.left) fails.push(`a group header keeps its name and numbers on one line at phone width (name ${Math.round(name.left)}-${Math.round(name.right)}, trend at ${Math.round(trend.left)}, tops ${Math.round(name.top)} and ${Math.round(trend.top)})`);
+    if (document.documentElement.scrollWidth > window.innerWidth) fails.push(`the dashboard scrolls sideways at phone width (${document.documentElement.scrollWidth} > ${window.innerWidth})`);
+    return fails;
+  };
+  const result5 = await send('Runtime.evaluate', { expression: `(${phoneSteps.toString()})()`, awaitPromise: true, returnByValue: true });
+  if (result5.exceptionDetails) errors.push(`Phone-width steps threw: ${result5.exceptionDetails.exception?.description}`);
+  failures.push(...(Array.isArray(result5.result?.value) ? result5.result.value : []));
+  await send('Emulation.clearDeviceMetricsOverride');
 
   // 8. Installed app (PWA) with a custom date range: pull-to-refresh reloads that same range
   const day = (ago) => new Date(Date.now() - ago * 86400000).toISOString().slice(0, 10);
@@ -732,7 +779,7 @@ async function main() {
   };
   const result3 = await send('Runtime.evaluate', { expression: `(${installed.toString()})(${JSON.stringify(range)})`, awaitPromise: true, returnByValue: true });
   if (result3.exceptionDetails) errors.push(`Installed-app steps threw: ${result3.exceptionDetails.exception?.description}`);
-  failures.push(...(result3.result?.value || []));
+  failures.push(...(Array.isArray(result3.result?.value) ? result3.result.value : []));
 
   // 9. The chart's Pageviews | Visitors tab is remembered across a reload
   await send('Runtime.evaluate', { expression: `localStorage.removeItem('puls-from'); localStorage.removeItem('puls-to')` });
@@ -780,7 +827,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered), sites in CMD+K (listed at once, filtered with names that start with the query first, / for pages only, Enter opens the first), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
   }
 }
 
