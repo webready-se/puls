@@ -626,6 +626,25 @@ test('api counts beyond the limit, exit pages and the summary come from the same
         ->and($data['summary']['topSourceVisitors'])->toBe(2);
 });
 
+test('the dashboard page links its stylesheet and script with the version, and both are served', function () {
+    $page = http('GET', '/?share=' . createTestShareToken('three-files-' . uniqid()));
+    preg_match("/const PULS_VERSION = '([^']+)'/", file_get_contents(__DIR__ . '/../../public/index.php'), $m);
+
+    expect($page['status'])->toBe(200)
+        ->and($page['body'])->toContain('href="dashboard.css?v=' . $m[1] . '"')
+        ->and($page['body'])->toContain('src="dashboard.js?v=' . $m[1] . '"')
+        ->and($page['body'])->not->toContain('__PULS_VERSION__');
+
+    $css = http('GET', '/dashboard.css?v=' . $m[1]);
+    $js = http('GET', '/dashboard.js?v=' . $m[1]);
+    expect($css['status'])->toBe(200)
+        ->and(implode("\n", $css['headers']))->toContain('text/css')
+        ->and($css['body'])->toContain('--accent-tile')
+        ->and($js['status'])->toBe(200)
+        ->and(implode("\n", $js['headers']))->toMatch('/javascript/')
+        ->and($js['body'])->toContain('window.PULS_BRANDING');
+});
+
 test('share API returns 404 for expired token', function () {
     $token = createTestShareToken('test', '2020-01-01 00:00:00');
     $r = http('GET', '/?api&days=7&share=' . $token);

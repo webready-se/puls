@@ -48,7 +48,9 @@ Static file requests (anything with `.` in path) return 404 early to prevent rou
 
 ```text
 public/index.php        — All backend logic (routing, tracking, API, auth, bot detection)
-public/dashboard.html   — Self-contained dashboard (CSS + JS, no build step)
+public/dashboard.html   — The dashboard's markup; PHP serves it with the branding injected and the version in the asset URLs
+public/dashboard.css    - The dashboard's styles (the kit's tokens at the top), no build step
+public/dashboard.js     - The dashboard's script: fetches the API, renders islands, drill-downs, settings
 public/fonts/           - Figtree (variable woff2) and its SIL Open Font License, copied from the design kit
 config.php              — Configuration (loads .env, auto-detects Forge paths)
 .env.example            — Environment template (checked in)
@@ -58,7 +60,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (358 tests, unit + feature)
+tests/                  — Pest test suite (359 tests, unit + feature)
 docs/integrations.md    - Tracking setup: script attributes, events, keeping personal data out of URLs, excluding own visits, reverse proxies
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading
@@ -108,9 +110,9 @@ tool disagree, the kit wins, unless this tool's docs say why it differs.
 
 **Calm by default.** The dashboard opens on what most site owners need: the numbers, the chart, pages and sources. More detail is one click away, so a new card or panel usually opens on demand (a click on a day, a row or a button) and can be closed again, rather than being always on. Anyone who wants it always there is served by remembering that it is open, as Compare and the chart tab are remembered, without making it everyone's default. Why: Puls is for busy site owners who are not analytics experts, and every section that is always on pushes the rest further down, on a phone most of all.
 
-Puls's copy of the kit's tokens is at the top of the `<style>` in `public/dashboard.html`, with the kit version it was copied from. Where Puls differs on purpose:
+Puls's copy of the kit's tokens is at the top of `public/dashboard.css`, with the kit version it was copied from. Where Puls differs on purpose:
 
-- **Strict CSP comes later.** The kit asks for `script-src 'self'` and `style-src 'self'`; Puls still has inline handlers and styles and gets there in steps (ROADMAP, Epic 3)
+- **Strict CSP comes in steps.** The kit asks for `script-src 'self'` and `style-src 'self'`; the dashboard is three files now, and the inline handlers, inline styles and the injected branding script go next (ROADMAP, Epic 3)
 - **White-label.** `APP_ACCENT` sets `--accent-tile` (logo, bars, charts), and `--accent` (text, links, buttons) only where `accent_text_colours()` finds it readable, through `--brand-text` and `--brand-text-dark`
 - **`--on-accent`** is Puls's own token for text on a filled `--accent` button: white in light mode, dark in dark mode, since the dark accent is light
 - **Chart markers.** Releases are coral and notes teal, so the two can be told apart (the kit draws both as slate lines)
