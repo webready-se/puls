@@ -168,6 +168,8 @@ async function main() {
 
   await send('Page.enable');
   await send('Runtime.enable');
+  // A Content Security Policy violation is a console.error, which fails the run below
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: `document.addEventListener('securitypolicyviolation', (e) => console.error('CSP violation: ' + e.violatedDirective + ' blocked ' + (e.blockedURI || 'inline') + ' at ' + (e.sourceFile || location.pathname) + ':' + e.lineNumber))` });
   await send('Emulation.setTimezoneOverride', { timezoneId: TIMEZONE });
 
   // 5. Load the shared dashboard and walk through it

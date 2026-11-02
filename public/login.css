@@ -1,0 +1,75 @@
+/* The login page's styles. The dashboard has its own (dashboard.css); this page is small and
+   must not load 56 KB to show a form */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* The design kit's tokens that this page uses, and Puls's accent. The install's own accent is set
+   by theme.js through --accent-tile, --brand-text and --brand-text-dark, as on the dashboard */
+:root {
+  --bg: #f8fafc; --surface: #fff; --line: #e2e8f0;
+  --text: #1e293b; --text-2: #475569; --text-3: #64748b;
+  --accent: var(--brand-text, #be123c); --accent-tile: #f16272; --on-accent: #fff;
+  --down: #b91c1c; --down-soft: #fef2f2; --down-line: #fecaca;
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --bg: #0f172a; --surface: #1e293b; --line: #334155;
+  --text: #f1f5f9; --text-2: #cbd5e1; --text-3: #94a3b8;
+  --accent: var(--brand-text-dark, #fb7185); --on-accent: #0f172a;
+  --down: #f87171; --down-soft: rgb(248 113 113 / 0.12); --down-line: rgb(248 113 113 / 0.2);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a; --surface: #1e293b; --line: #334155;
+    --text: #f1f5f9; --text-2: #cbd5e1; --text-3: #94a3b8;
+    --accent: var(--brand-text-dark, #fb7185); --on-accent: #0f172a;
+    --down: #f87171; --down-soft: rgb(248 113 113 / 0.12); --down-line: rgb(248 113 113 / 0.2);
+    color-scheme: dark;
+  }
+}
+@font-face {
+  font-family: "Figtree";
+  src: url("fonts/figtree-latin.woff2") format("woff2");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+body {
+  font-family: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+}
+.login-card {
+  background: var(--surface); border-radius: 16px; padding: 40px;
+  border: 1px solid var(--line); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  width: 100%; max-width: 380px;
+}
+.logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; justify-content: center; }
+.logo-icon {
+  width: 40px; height: 40px; border-radius: 9px;
+  background: var(--accent-tile);
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-icon svg { width: 20px; height: 20px; }
+.logo-text { font-weight: 800; font-size: 24px; letter-spacing: -0.03em; }
+.tagline { text-align: center; font-size: 13px; color: var(--text-3); margin-top: -20px; margin-bottom: 28px; }
+label { display: block; font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+input[type="text"], input[type="password"] {
+  width: 100%; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  font-size: 14px; outline: none;
+  margin-bottom: 16px; transition: border-color 0.15s;
+}
+input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
+button {
+  width: 100%; padding: 12px; border-radius: 10px; border: none;
+  background: var(--accent);
+  color: var(--on-accent); font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: opacity 0.15s;
+}
+button:hover { opacity: 0.9; }
+.error {
+  background: var(--down-soft); color: var(--down); padding: 10px 14px;
+  border-radius: 10px; font-size: 13px; margin-bottom: 16px;
+  border: 1px solid var(--down-line);
+}

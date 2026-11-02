@@ -479,19 +479,51 @@ test('share endpoint returns dashboard for valid token', function () {
     $token = createTestShareToken('test');
     $r = http('GET', '/?share=' . $token);
     expect($r['status'])->toBe(200)
-        ->and($r['body'])->toContain('PULS_SHARE')
+        ->and($r['body'])->toContain('id="puls-config"')
         ->and($r['body'])->toContain($token);
 });
 
-test('dashboard config is injected once, after the page title', function () {
+test('dashboard config is injected once, after the page title, as a JSON data block', function () {
     // The dashboard's own scripts may contain "</title>" (SVG tooltips); only the head's is the anchor
+    $block = '<script type="application/json" id="puls-config">';
     $shared = http('GET', '/?share=' . createTestShareToken('test'))['body'];
     $dashboard = http('GET', '/', ['header' => restrictedSession()], 8090)['body'];
-    foreach (['PULS_SHARE' => $shared, 'PULS_BRANDING' => $dashboard] as $global => $body) {
-        expect(substr_count($body, "window.{$global}="))->toBe(1)
-            ->and($body)->toContain("</title><script>window.{$global}=");
+    foreach ([$shared, $dashboard] as $body) {
+        expect(substr_count($body, $block))->toBe(1);
         $first = strpos($body, '</title>');
-        expect(strpos($body, "window.{$global}="))->toBe($first + strlen('</title><script>'));
+        expect(strpos($body, $block))->toBe($first + strlen('</title>'));
+        preg_match('#' . preg_quote($block, '#') . '(.*?)</script>#', $body, $m);
+        $data = json_decode($m[1], true);
+        expect($data['branding']['name'])->toBe('Puls')
+            ->and($data['branding']['accentText'])->toHaveKeys(['light', 'dark']);
+    }
+    expect(json_decode(preg_replace('#^.*?' . preg_quote($block, '#') . '(.*?)</script>.*$#s', '$1', $shared), true)['share'])->toHaveKey('token')
+        ->and(json_decode(preg_replace('#^.*?' . preg_quote($block, '#') . '(.*?)</script>.*$#s', '$1', $dashboard), true)['share'])->toBeNull();
+});
+
+test('the dashboard, the shared dashboard and the login page carry a strict CSP and no inline script or style', function () {
+    $pages = [
+        'login' => http('GET', '/'),
+        'shared' => http('GET', '/?share=' . createTestShareToken('csp-' . uniqid())),
+        'dashboard' => http('GET', '/', ['header' => restrictedSession()], 8090),
+    ];
+    foreach ($pages as $name => $r) {
+        $csp = collect($r['headers'])->first(fn ($h) => stripos($h, 'Content-Security-Policy:') === 0);
+        expect($csp)->toContain("script-src 'self';")
+            ->and($csp)->toContain("style-src 'self';")
+            ->and($csp)->not->toContain('unsafe-inline');
+        // The only <script> without src is the JSON data block; no <style>, no style= or on*= attributes
+        $inlineScripts = preg_match_all('/<script(?![^>]*\bsrc=)[^>]*>/i', $r['body'], $m);
+        expect($inlineScripts)->toBe(1, "{$name}: inline scripts")
+            ->and($m[0][0])->toContain('type="application/json"')
+            ->and($r['body'])->not->toContain('<style')
+            ->and(preg_match('/\sstyle="/', $r['body']))->toBe(0, "{$name}: style attribute")
+            ->and(preg_match('/\son[a-z]+="/i', $r['body']))->toBe(0, "{$name}: inline handler");
+    }
+
+    foreach (['theme.js' => 'puls-config', 'login.css' => '--accent-tile', 'login.js' => '/?csrf'] as $file => $needle) {
+        $f = http('GET', '/' . $file);
+        expect($f['status'])->toBe(200, $file)->and($f['body'])->toContain($needle);
     }
 });
 
@@ -642,7 +674,7 @@ test('the dashboard page links its stylesheet and script with the version, and b
         ->and($css['body'])->toContain('--accent-tile')
         ->and($js['status'])->toBe(200)
         ->and(implode("\n", $js['headers']))->toMatch('/javascript/')
-        ->and($js['body'])->toContain('window.PULS_BRANDING');
+        ->and($js['body'])->toContain('puls-config');
 });
 
 test('share API returns 404 for expired token', function () {

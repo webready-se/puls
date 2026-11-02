@@ -2,12 +2,15 @@
   // --- Config ---
   const API = '/';
   const COLORS = ['#f16272','#19acca','#f59e0b','#22c55e','#8b5cf6','#94a3b8'];
-  const isShared = !!window.PULS_SHARE;
-  const shareToken = isShared ? window.PULS_SHARE.token : null;
-  const shareSite = isShared ? window.PULS_SHARE.site : null;
+  // Branding and, on a shared link, the share come from PHP as a JSON data block in <head>:
+  // data, not script, so a strict Content Security Policy has nothing to allow
+  const pulsConfig = JSON.parse(document.getElementById('puls-config').textContent);
+  const isShared = !!pulsConfig.share;
+  const shareToken = isShared ? pulsConfig.share.token : null;
+  const shareSite = isShared ? pulsConfig.share.site : null;
 
   // --- Branding ---
-  const branding = window.PULS_BRANDING || {};
+  const branding = pulsConfig.branding || {};
   const appName = branding.name || 'Puls';
   if (appName !== 'Puls') {
     document.title = appName;
