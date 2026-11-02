@@ -45,14 +45,14 @@
 
 <a href="#app" class="skip-link">Skip to content</a>
 <div class="header">
-  <div class="logo" onclick="selectSite('')" style="cursor:pointer">
+  <div class="logo pointer" onclick="selectSite('')">
     <div class="logo-icon">
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
       </svg>
     </div>
     <span class="logo-text">Puls</span>
-    <span class="live-badge" id="live-badge" style="display:none" aria-live="polite" aria-atomic="true">
+    <span class="live-badge" id="live-badge" hidden aria-live="polite" aria-atomic="true">
       <span class="live-dot" aria-hidden="true"></span><span id="live-count">0</span> online now
     </span>
   </div>
@@ -74,7 +74,7 @@
       <button class="period-btn" data-days="30">30 days</button>
       <button class="period-btn" data-days="90">90 days</button>
       <button class="period-btn" id="custom-range-btn" onclick="toggleDatePicker(event)" aria-label="Custom date range">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="icon-14"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
       </button>
     </div>
     <div class="date-picker" id="date-picker">
@@ -129,7 +129,7 @@
       </button>
     </div>
   </div>
-  <div class="menu-section" id="notes-section" style="display:none">
+  <div class="menu-section" id="notes-section" hidden>
     <button type="button" class="fold-row fold-toggle menu-fold-toggle" aria-expanded="false" aria-controls="notes-body">
       <span class="menu-label" id="notes-label">Chart notes</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><span class="fold-summary" id="notes-summary"></span>
     </button>
@@ -138,7 +138,7 @@
     <p class="excluded-hint" id="notes-empty">Add one with + Note above the chart.</p>
     </div>
   </div>
-  <div class="menu-section" id="excluded-section" style="display:none">
+  <div class="menu-section" id="excluded-section" hidden>
     <button type="button" class="fold-row fold-toggle menu-fold-toggle" aria-expanded="false" aria-controls="excluded-body">
       <span class="menu-label" id="excluded-label">Excluded IPs</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><span class="fold-summary" id="excluded-summary"></span>
     </button>
@@ -153,7 +153,7 @@
     <p class="excluded-hint">Pageviews and events from these addresses are not stored.</p>
     </div>
   </div>
-  <div class="menu-section" id="goals-section" style="display:none">
+  <div class="menu-section" id="goals-section" hidden>
     <button type="button" class="fold-row fold-toggle menu-fold-toggle" aria-expanded="false" aria-controls="goals-body">
       <span class="menu-label">Goals</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><span class="fold-summary" id="goals-summary"></span>
     </button>
@@ -162,7 +162,7 @@
     <div class="goal-list" id="goal-list"></div>
     </div>
   </div>
-  <div style="flex:1"></div>
+  <div class="flex-1"></div>
   <a href="/?logout" class="menu-logout">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     Log out

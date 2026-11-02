@@ -58,6 +58,26 @@
   function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   // A string argument for an inline handler: a JS literal, then escaped for the attribute it sits in
   function jsArg(s) { return esc(JSON.stringify(String(s == null ? '' : s))); }
+
+  // A strict Content Security Policy allows no inline style attribute, so rendering code puts a
+  // bar's width or height and a colour in data attributes (data-w in percent, data-h in pixels,
+  // data-bg, data-color), and they are applied here through the CSSOM, which the policy allows.
+  // Every element added to the page passes through the observer, so no caller has to remember it
+  function applyStyles(root) {
+    var sel = '[data-w],[data-h],[data-bg],[data-color]';
+    var els = root.querySelectorAll ? [].slice.call(root.querySelectorAll(sel)) : [];
+    if (root.nodeType === 1 && root.matches(sel)) els.push(root);
+    els.forEach(function(el) {
+      var d = el.dataset;
+      if (d.w !== undefined) el.style.width = d.w + '%';
+      if (d.h !== undefined) el.style.height = d.h + 'px';
+      if (d.bg !== undefined) el.style.background = d.bg;
+      if (d.color !== undefined) el.style.color = d.color;
+    });
+  }
+  new MutationObserver(function(records) {
+    records.forEach(function(r) { [].forEach.call(r.addedNodes, function(n) { if (n.nodeType === 1) applyStyles(n); }); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
   function num(n) { return Number(n || 0).toLocaleString('en-US'); }
   function formatDuration(s) {
     if (!s || s < 10) return '< 10s';
@@ -239,7 +259,7 @@
       localStorage.removeItem('puls-to');
     }
     datePicker.classList.remove('open');
-    customRangeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>';
+    customRangeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="icon-14"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>';
     load(+btn.dataset.days);
   });
 
@@ -441,10 +461,10 @@
 
     // Live badge
     if (d.live > 0) {
-      liveBadge.style.display = 'inline-flex';
+      liveBadge.hidden = false;
       liveCount.textContent = d.live;
     } else {
-      liveBadge.style.display = 'none';
+      liveBadge.hidden = true;
     }
 
     var hasData = d.totals && +d.totals.views > 0;
@@ -508,7 +528,7 @@
       var channelName = Object.keys(channelSlugs).find(function(k) { return channelSlugs[k] === d.channel; }) || d.channel;
       var cColor = channelColors[channelName] || 'var(--accent-tile)';
       html += island('filter-channel', '<div class="path-filter">' +
-        '<span style="width:10px;height:10px;border-radius:50%;background:' + cColor + ';flex-shrink:0"></span>' +
+        '<span class="dot dot-10" data-bg="' + cColor + '"></span>' +
         '<span>Channel</span>' +
         '<span class="path-filter-path">' + esc(channelName) + '</span>' +
         '<button class="path-filter-clear" onclick="filterChannel(\'\')">Clear filter</button>' +
@@ -594,7 +614,7 @@
       var max = Math.max.apply(null, b.rows.map(function(r) { return r.count; }).concat([1]));
       html += '<div class="card breakdown-card" data-island="bd:' + b.id + '">' +
         '<div class="breakdown-head" data-anchor="bd:' + b.id + '">' +
-          '<div style="min-width:0"><span class="card-title"' + (isShared ? '' : ' contenteditable="plaintext-only" spellcheck="false" title="Click to rename" data-bd-site="' + esc(b.site) + '" data-bd-event="' + esc(b.event) + '" data-bd-group="' + esc(b.group) + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}" onblur="renameBreakdown(this)"') + '>' + esc(b.label) + '</span>' +
+          '<div class="min-w-0"><span class="card-title"' + (isShared ? '' : ' contenteditable="plaintext-only" spellcheck="false" title="Click to rename" data-bd-site="' + esc(b.site) + '" data-bd-event="' + esc(b.event) + '" data-bd-group="' + esc(b.group) + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}" onblur="renameBreakdown(this)"') + '>' + esc(b.label) + '</span>' +
             (sub ? '<div class="breakdown-sub">' + esc(sub) + '</div>' : '') + '</div>' +
           '<div class="breakdown-actions">' +
             (arrange ? '<button class="breakdown-grip" aria-label="Move card: drag it, or use the arrow keys" title="Drag to move, or use the arrow keys" onpointerdown="startCardDrag(event, this)" onkeydown="moveCardKey(event, this)">' + icons.grip + '</button>' : '') +
@@ -604,7 +624,7 @@
         '</div>' +
         renderBreakdownGlance(b);
       if (!b.rows.length) {
-        html += '<p class="breakdown-rows" style="color:var(--text-2);font-size:13px">No values in this period</p>';
+        html += '<p class="breakdown-rows muted fs-13">No values in this period</p>';
       } else {
         // Five rows; Show all expands the rest in place
         var open = !!expandedCards[b.id];
@@ -613,8 +633,8 @@
           if (i === CARD_ROWS) html += '<div id="bd-more-' + b.id + '"' + (open ? '' : ' hidden') + '>';
           var value = String(r.value);
           html += '<div class="trow">' +
-            '<span class="trow-label" title="' + esc(value) + '">' + esc(value) + ' <span style="color:var(--text-3);font-size:11px">' + num(r.visitors) + '</span>' + (r.new ? '<span class="event-new">new</span>' : '') + '</span>' +
-            '<div class="trow-bar"><div class="trow-fill" style="width:' + (r.count / max * 100) + '%;background:var(--accent-tile)"></div></div>' +
+            '<span class="trow-label" title="' + esc(value) + '">' + esc(value) + ' <span class="faint fs-11">' + num(r.visitors) + '</span>' + (r.new ? '<span class="event-new">new</span>' : '') + '</span>' +
+            '<div class="trow-bar"><div class="trow-fill" data-w="' + (r.count / max * 100) + '" data-bg="var(--accent-tile)"></div></div>' +
             '<span class="trow-val">' + num(r.count) + '</span>' +
           '</div>';
         });
@@ -952,7 +972,7 @@
     var goal = Math.max(1, Math.round(g.target * currentDays / TARGET_DAYS[g.targetPeriod]));
     var reached = g.conversions >= goal;
     return '<div class="goal-meter' + (reached ? ' reached' : '') + '" role="progressbar" aria-label="Target" aria-valuemin="0" aria-valuemax="' + goal + '" aria-valuenow="' + Math.min(g.conversions, goal) + '">' +
-        '<div class="goal-meter-fill" style="width:' + Math.min(100, g.conversions / goal * 100) + '%"></div></div>' +
+        '<div class="goal-meter-fill" data-w="' + Math.min(100, g.conversions / goal * 100) + '"></div></div>' +
       '<div class="goal-target">' + num(g.conversions) + ' / ' + num(goal) + (reached ? ' · reached' : '') +
         ' <button class="goal-target-set" onclick="editGoalTarget(' + key + ')" title="Change the target">' + num(g.target) + ' per ' + g.targetPeriod + '</button></div>';
   }
@@ -996,7 +1016,7 @@
     if (summary.topPage) {
       html += '<div class="summary-card">' +
         '<div class="summary-card-label">Top page</div>' +
-        '<div class="summary-card-value" style="font-size:13px;word-break:break-all">' + esc(decode(summary.topPage)) + '</div>' +
+        '<div class="summary-card-value summary-card-path">' + esc(decode(summary.topPage)) + '</div>' +
         '<div class="summary-card-sub">' + num(summary.topPageViews) + ' views</div>' +
       '</div>';
     }
@@ -1013,7 +1033,7 @@
 
   function renderSiteOverview(overview) {
     if (!overview || overview.length < 2) return '';
-    var html = '<div class="card"><span class="card-title">Sites</span><div style="margin-top:12px">';
+    var html = '<div class="card"><span class="card-title">Sites</span><div class="mt-12">';
     overview.forEach(function(s) {
       var trendHtml = '';
       if (s.trend !== null) {
@@ -1022,12 +1042,12 @@
         var sign = s.trend > 0 ? '+' : '';
         trendHtml = '<span class="site-overview-trend stat-trend ' + cls + '">' + arrow + ' ' + sign + s.trend + '%</span>';
       } else {
-        trendHtml = '<span class="site-overview-trend" style="color:var(--text-2)">\u2013</span>';
+        trendHtml = '<span class="site-overview-trend muted">\u2013</span>';
       }
       var sinceHtml = '';
       if (s.first_seen) {
         var fd = new Date(s.first_seen + 'T00:00:00');
-        sinceHtml = '<div style="font-size:10px;color:var(--text-2);font-weight:400;margin-top:1px;opacity:0.6">since ' + fd.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + '</div>';
+        sinceHtml = '<div class="site-overview-since">since ' + fd.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + '</div>';
       }
       var liveHtml = '';
       if (s.live > 0) {
@@ -1083,7 +1103,7 @@
 
     return '<div class="card" id="chart-card">' +
       '<div class="card-header">' +
-        '<div class="card-tabs" style="margin:0;border:0;padding:0">' +
+        '<div class="card-tabs card-tabs-bare">' +
           '<div class="card-tab' + (chartMode === 'views' ? ' active' : '') + '" data-chart="views" onclick="switchChartMode(this)">Pageviews</div>' +
           '<div class="card-tab' + (chartMode === 'visitors' ? ' active' : '') + '" data-chart="visitors" onclick="switchChartMode(this)">Visitors</div>' +
         '</div>' +
@@ -1093,9 +1113,9 @@
         '</span>' +
       '</div>' +
       (noteSite() ? renderNoteForm() : '') +
-      (compareMode && hasCompare ? '<div class="chart-legend" style="padding:0 4px 10px">' +
-        '<div class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--accent-tile)"></span>Current period</div>' +
-        '<div class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--line)"></span>Previous period</div>' +
+      (compareMode && hasCompare ? '<div class="chart-legend chart-legend-top">' +
+        '<div class="chart-legend-item"><span class="chart-legend-dot current"></span>Current period</div>' +
+        '<div class="chart-legend-item"><span class="chart-legend-dot prev"></span>Previous period</div>' +
       '</div>' : '') +
       '<div class="chart-scroll' + (compareMode && hasCompare ? ' compare' : '') + (marksFor(d, d.pageviews.map(function(p) { return p.date; })).stacked ? ' stacked-marks' : '') + '"><div class="chart">' + buildBars(d.pageviews, d.previousPageviews) + '</div></div>' +
     '</div>';
@@ -1177,10 +1197,10 @@
         // so use darker colors that read well on the light tooltip surface.
         var deltaColor = delta === null ? '#64748b' : (delta >= 0 ? '#059669' : '#dc2626');
         var prevLabel = prev ? formatDay(prev.date) : '';
-        var combinedTip = '<div class="tip" style="text-align:left">' +
-          '<div style="font-weight:600;margin-bottom:4px">' + label + '<span style="color:' + deltaColor + ';font-weight:500">' + deltaStr + '</span></div>' +
+        var combinedTip = '<div class="tip tip-left">' +
+          '<div class="tip-head">' + label + '<span class="tip-delta" data-color="' + deltaColor + '">' + deltaStr + '</span></div>' +
           '<div>' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
-          (prev ? '<div style="color:var(--text-3);margin-top:2px">vs ' + prevLabel + ': ' + num(prev.views) + ' / ' + num(prev.visitors) + '</div>' : '') +
+          (prev ? '<div class="tip-prev">vs ' + prevLabel + ': ' + num(prev.views) + ' / ' + num(prev.visitors) + '</div>' : '') +
         '</div>';
 
         bars += '<div class="chart-col chart-col-compare' + (marks[p.date] ? marks[p.date].cls : '') + '">' +
@@ -1189,11 +1209,11 @@
           '<div class="chart-bars">' +
             '<div class="chart-bar-wrap">' +
               '<span class="chart-val">' + num(p[key]) + '</span>' +
-              '<div class="chart-bar" style="height:' + h + 'px"></div>' +
+              '<div class="chart-bar" data-h="' + h + '"></div>' +
             '</div>' +
             '<div class="chart-bar-wrap">' +
               '<span class="chart-val-prev">' + (prev ? num(prev[key]) : '0') + '</span>' +
-              '<div class="chart-bar chart-bar-prev" style="height:' + prevH + 'px"></div>' +
+              '<div class="chart-bar chart-bar-prev" data-h="' + prevH + '"></div>' +
             '</div>' +
           '</div>' +
           '<span class="chart-date">' + label + '</span>' +
@@ -1202,7 +1222,7 @@
         bars += '<div class="chart-col' + (marks[p.date] ? marks[p.date].cls : '') + '">' +
           (marks[p.date] ? marks[p.date].html : '') +
           '<span class="chart-val">' + num(p[key]) + '</span>' +
-          '<div class="chart-bar" style="height:' + h + 'px">' +
+          '<div class="chart-bar" data-h="' + h + '">' +
             '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
           '</div>' +
           '<span class="chart-date">' + label + '</span>' +
@@ -1237,7 +1257,7 @@
   function renderTable(title, rows, labelKey, valKey, color) {
     if (!rows || !rows.length) {
       return '<div class="card"><span class="card-title">' + title + '</span>' +
-        '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p></div>';
+        '<p class="muted fs-13 mt-12">No data yet</p></div>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r[valKey]; }));
     var prefix = '';
@@ -1259,7 +1279,7 @@
         }
       }
     }
-    var html = '<div class="card"><span class="card-title">' + title + (prefix ? ' <span style="font-weight:400;color:var(--text-3);font-size:12px">' + esc(prefix) + '</span>' : '') + '</span><div style="margin-top:14px">';
+    var html = '<div class="card"><span class="card-title">' + title + (prefix ? ' <span class="fw-400 faint fs-12">' + esc(prefix) + '</span>' : '') + '</span><div class="mt-14">';
     rows.forEach(function(r) {
       var pct = (+r[valKey] / max) * 100;
       var full = decode(r[labelKey]);
@@ -1267,7 +1287,7 @@
       var label = prefix ? (stripped ? '/' + stripped : '/') : full;
       html += '<div class="trow">' +
         '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="' + color + '"></div></div>' +
         '<span class="trow-val">' + num(r[valKey]) + '</span>' +
       '</div>';
     });
@@ -1277,7 +1297,7 @@
 
   function renderTableContent(rows, labelKey, valKey, color) {
     if (!rows || !rows.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r[valKey]; }));
     var prefix = '';
@@ -1302,10 +1322,10 @@
       var full = decode(r[labelKey]);
       var stripped = prefix ? full.substring(prefix.length) : '';
       var label = prefix ? (stripped ? '/' + stripped : '/') : full;
-      var bounce = r.bounceRate !== undefined ? ' <span class="trow-bounce" style="color:var(--text-3);font-size:11px" title="Share of visitors who entered here and saw only this page">' + r.bounceRate + '% bounce</span>' : '';
+      var bounce = r.bounceRate !== undefined ? ' <span class="trow-bounce faint fs-11" title="Share of visitors who entered here and saw only this page">' + r.bounceRate + '% bounce</span>' : '';
       html += '<div class="trow">' +
         '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + bounce + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="' + color + '"></div></div>' +
         '<span class="trow-val">' + num(r[valKey]) + '</span>' +
       '</div>';
     });
@@ -1314,7 +1334,7 @@
 
   function renderPagesContent(rows) {
     if (!rows || !rows.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r.views; }));
     var goalPaths = (lastData && lastData.goals) ? lastData.goals.map(function(g) { return g.path; }) : [];
@@ -1322,11 +1342,11 @@
     rows.forEach(function(r) {
       var pct = (+r.views / max) * 100;
       var isGoal = goalPaths.indexOf(r.path) >= 0;
-      var goalBtn = isShared ? '' : '<button class="goal-toggle' + (isGoal ? ' is-goal' : '') + '" onclick="event.stopPropagation();toggleGoal(' + jsArg(r.path) + ')" title="' + (isGoal ? 'Remove goal' : 'Set as goal') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button>';
+      var goalBtn = isShared ? '' : '<button class="goal-toggle' + (isGoal ? ' is-goal' : '') + '" onclick="event.stopPropagation();toggleGoal(' + jsArg(r.path) + ')" title="' + (isGoal ? 'Remove goal' : 'Set as goal') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="icon-14"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button>';
       html += '<div class="trow">' +
         goalBtn +
         '<span class="trow-label" title="' + esc(r.path) + '">' + esc(decode(r.path)) + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:var(--accent-tile)"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="var(--accent-tile)"></div></div>' +
         '<span class="trow-val">' + num(r.views) + '</span>' +
       '</div>';
     });
@@ -1366,7 +1386,7 @@
     html += '</div>';
 
     tabs.forEach(function(t, i) {
-      html += '<div class="tab-panel" data-panel="' + t.id + '"' + (i !== 0 ? ' style="display:none"' : '') + '>' +
+      html += '<div class="tab-panel" data-panel="' + t.id + '"' + (i !== 0 ? ' hidden' : '') + '>' +
         renderTableContent(t.rows, 'path', t.valKey, t.color) +
         showAllBtn(t.total, t.expand, t.label + ' pages') +
       '</div>';
@@ -1382,13 +1402,13 @@
     card.querySelectorAll('.card-tab').forEach(function(t) { t.classList.remove('active'); });
     el.classList.add('active');
     card.querySelectorAll('.tab-panel').forEach(function(p) {
-      p.style.display = p.getAttribute('data-panel') === tabId ? '' : 'none';
+      p.hidden = p.getAttribute('data-panel') !== tabId;
     });
   }
 
   function renderDonutContent(items) {
     if (!items || !items.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
 
     var cum = 0;
@@ -1416,7 +1436,7 @@
     var legend = '';
     items.forEach(function(item, idx) {
       legend += '<div class="donut-item">' +
-        '<span class="donut-dot" style="background:' + COLORS[idx % COLORS.length] + '"></span>' +
+        '<span class="donut-dot" data-bg="' + COLORS[idx % COLORS.length] + '"></span>' +
         esc(item.name) + ' <span class="donut-pct">' + item.pct + '%</span>' +
       '</div>';
     });
@@ -1434,7 +1454,7 @@
   }
 
   function renderChannels(channels) {
-    return '<div class="card"><span class="card-title">Channels</span><div style="margin-top:14px">' +
+    return '<div class="card"><span class="card-title">Channels</span><div class="mt-14">' +
       renderChannelsContent(channels) + '</div></div>';
   }
 
@@ -1450,15 +1470,15 @@
         renderTableContent(referrers, 'source', 'visitors', '#19acca') +
         showAllBtn(referrersTotal, 'referrers', 'Traffic sources') +
       '</div>' +
-      '<div class="tab-panel" data-panel="utm" style="display:none">' +
+      '<div class="tab-panel" data-panel="utm" hidden>' +
         renderUtmContent(utm) +
         showAllBtn(utmTotal, 'utm', 'UTM campaigns') +
       '</div>' +
-      '<div class="tab-panel" data-panel="events" style="display:none">' +
+      '<div class="tab-panel" data-panel="events" hidden>' +
         renderEventsContent((events || []).slice(0, 10)) +
         showAllBtn(eventsTotal, 'events', 'Custom events') +
       '</div>' +
-      '<div class="tab-panel" data-panel="outbound" style="display:none">' +
+      '<div class="tab-panel" data-panel="outbound" hidden>' +
         renderOutboundContent(outbound) +
         showAllBtn(outboundTotal, 'outbound', 'Outbound links') +
       '</div>' +
@@ -1468,7 +1488,7 @@
 
   function renderEventsContent(rows) {
     if (!rows || !rows.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r.count; }));
     var html = '';
@@ -1477,8 +1497,8 @@
       var name = r.event_name.replace(/_/g, ' ');
       var visitors = r.visitors !== undefined ? num(r.visitors) + ' visitor' + (+r.visitors === 1 ? '' : 's') : '';
       html += '<div class="trow trow-clickable" role="button" tabindex="0" aria-label="' + esc(name) + ': ' + num(r.count) + ' events, show details" data-event="' + esc(r.event_name) + '" data-anchor="event:' + esc(r.event_name) + '" onclick="loadEventDetail(' + jsArg(r.event_name) + ', this)">' +
-        '<span class="trow-label">' + esc(name) + (visitors ? ' <span style="color:var(--text-3);font-size:11px">' + visitors + '</span>' : '') + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:var(--accent-tile)"></div></div>' +
+        '<span class="trow-label">' + esc(name) + (visitors ? ' <span class="faint fs-11">' + visitors + '</span>' : '') + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="var(--accent-tile)"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
       '</div>';
     });
@@ -1487,7 +1507,7 @@
 
   function renderOutboundContent(rows) {
     if (!rows || !rows.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r.clicks; }));
     var html = '';
@@ -1496,7 +1516,7 @@
       var display = r.url ? r.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '(unknown)';
       html += '<div class="trow trow-clickable" role="button" tabindex="0" onclick="loadOutboundDetail(' + jsArg(r.url || '') + ', this)">' +
         '<span class="trow-label" title="' + esc(r.url || '') + '">' + esc(display) + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#06b6d4"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="#06b6d4"></div></div>' +
         '<span class="trow-val">' + num(r.clicks) + '</span>' +
       '</div>';
     });
@@ -1505,7 +1525,7 @@
 
   function renderPctBars(items, color) {
     if (!items || !items.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
     var maxPct = Math.max.apply(null, items.map(function(i) { return +i.pct; }));
     var html = '';
@@ -1513,7 +1533,7 @@
       var w = maxPct > 0 ? (+i.pct / maxPct) * 100 : 0;
       html += '<div class="trow">' +
         '<span class="trow-label">' + esc(i.name) + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + w + '%;background:' + color + '"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + w + '" data-bg="' + color + '"></div></div>' +
         '<span class="trow-val">' + i.pct + '%</span>' +
       '</div>';
     });
@@ -1527,15 +1547,15 @@
 
   function renderCountries(countries) {
     if (!countries || !countries.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
     var max = Math.max.apply(null, countries.map(function(c) { return +c.visitors; }));
     var html = '';
     countries.forEach(function(c) {
       var pct = (+c.visitors / max) * 100;
       html += '<div class="trow">' +
-        '<span class="trow-label" style="display:flex;align-items:center"><span style="margin-right:6px;font-size:18px;line-height:1">' + countryFlag(c.code) + '</span>' + esc(c.name) + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#d97706"></div></div>' +
+        '<span class="trow-label trow-label-flag"><span class="flag">' + countryFlag(c.code) + '</span>' + esc(c.name) + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="#d97706"></div></div>' +
         '<span class="trow-val">' + num(c.visitors) + '</span>' +
       '</div>';
     });
@@ -1551,9 +1571,9 @@
         '<div class="card-tab" data-tab="languages" onclick="switchPageTab(this)">Languages</div>' +
       '</div>' +
       '<div class="tab-panel" data-panel="browsers">' + renderPctBars(browsers, 'var(--accent-tile)') + '</div>' +
-      '<div class="tab-panel" data-panel="devices" style="display:none">' + renderPctBars(devices, '#19acca') + '</div>' +
-      '<div class="tab-panel" data-panel="countries" style="display:none">' + renderCountries(countries) + '</div>' +
-      '<div class="tab-panel" data-panel="languages" style="display:none">' + renderPctBars(languages, '#059669') + '</div>' +
+      '<div class="tab-panel" data-panel="devices" hidden>' + renderPctBars(devices, '#19acca') + '</div>' +
+      '<div class="tab-panel" data-panel="countries" hidden>' + renderCountries(countries) + '</div>' +
+      '<div class="tab-panel" data-panel="languages" hidden>' + renderPctBars(languages, '#059669') + '</div>' +
     '</div>';
     return html;
   }
@@ -1569,7 +1589,7 @@
 
   function renderChannelsContent(channels) {
     if (!channels || !channels.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
     var maxVisitors = Math.max.apply(null, channels.map(function(c) { return +c.visitors; }));
     var html = '';
@@ -1579,9 +1599,9 @@
       var slug = channelSlugs[c.channel] || '';
       html += '<div class="trow trow-clickable" role="button" tabindex="0" onclick="filterChannel(\'' + slug + '\')">' +
         '<span class="trow-label">' + esc(c.channel) +
-          ' <span style="color:var(--text-3);font-size:11px">' + c.pages_per_visitor + ' p/v</span>' +
+          ' <span class="faint fs-11">' + c.pages_per_visitor + ' p/v</span>' +
         '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="' + color + '"></div></div>' +
         '<span class="trow-val">' + num(c.visitors) + '</span>' +
       '</div>';
     });
@@ -1595,7 +1615,7 @@
 
   function renderUtmContent(rows) {
     if (!rows || !rows.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
     var max = Math.max.apply(null, rows.map(function(r) { return +r.visitors; }));
     var html = '';
@@ -1604,7 +1624,7 @@
       var label = esc(r.source) + (r.medium ? ' / ' + esc(r.medium) : '') + (r.campaign ? ' — ' + esc(r.campaign) : '') + (r.term ? ' [' + esc(r.term) + ']' : '') + (r.content ? ' (' + esc(r.content) + ')' : '');
       html += '<div class="trow">' +
         '<span class="trow-label" title="' + label + '">' + label + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:#059669"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="#059669"></div></div>' +
         '<span class="trow-val">' + num(r.visitors) + '</span>' +
       '</div>';
     });
@@ -1612,7 +1632,7 @@
   }
 
   function renderUtm(rows) {
-    return '<div class="card"><span class="card-title">UTM campaigns</span><div style="margin-top:14px">' +
+    return '<div class="card"><span class="card-title">UTM campaigns</span><div class="mt-14">' +
       renderUtmContent(rows) + '</div></div>';
   }
 
@@ -1627,15 +1647,15 @@
     var badges = '';
     cats.forEach(function(c) {
       var color = botCatColors[c.category] || botCatColors['Other'];
-      badges += '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;background:' + color + '15;color:' + color + '">' +
-        esc(c.category) + ' <span style="opacity:0.7">' + num(c.visits) + '</span></span> ';
+      badges += '<span class="bot-badge" data-bg="' + color + '15" data-color="' + color + '">' +
+        esc(c.category) + ' <span class="op-70">' + num(c.visits) + '</span></span> ';
     });
 
-    var html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' + badges + '</div>' +
+    var html = '<div class="bot-badges">' + badges + '</div>' +
       '<div class="grid-2">';
 
     html += renderBotTable(bots, d.botsTotal);
-    html += '<div class="card"><span class="card-title">Most crawled pages</span><div style="margin-top:14px">' +
+    html += '<div class="card"><span class="card-title">Most crawled pages</span><div class="mt-14">' +
       renderTableContent(pages, 'path', 'visits', '#2563eb') + '</div>' +
       showAllBtn(d.botPagesTotal, 'botPages', 'Most crawled pages') +
     '</div>';
@@ -1645,8 +1665,8 @@
     // Bot activity timeline
     var activity = d.botActivity || [];
     if (activity.length) {
-      html += '<div class="card" style="margin-top:14px"><span class="card-title">Latest bot activity</span>' +
-        '<div style="margin-top:12px">' +
+      html += '<div class="card mt-14"><span class="card-title">Latest bot activity</span>' +
+        '<div class="mt-12">' +
         renderBotActivityContent(activity) +
         '</div>' +
         showAllBtn(activity.length >= 10 ? 11 : 0, 'botActivity', 'Bot activity') +
@@ -1686,7 +1706,7 @@
 
   function renderBotTableContent(bots) {
     if (!bots || !bots.length) {
-      return '<p style="color:var(--text-2);font-size:13px;margin-top:12px">No data yet</p>';
+      return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
     var max = Math.max.apply(null, bots.map(function(b) { return +b.visits; }));
     var html = '';
@@ -1695,10 +1715,10 @@
       var color = botCatColors[b.category] || botCatColors['Other'];
       html += '<div class="trow">' +
         '<span class="trow-label" title="' + esc(b.name) + ' (' + esc(b.category) + ')">' +
-          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:6px;flex-shrink:0"></span>' +
-          esc(b.name) + ' <span style="color:var(--text-3);font-size:11px">' + esc(b.category) + '</span>' +
+          '<span class="dot mr-6" data-bg="' + color + '"></span>' +
+          esc(b.name) + ' <span class="faint fs-11">' + esc(b.category) + '</span>' +
         '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="' + color + '"></div></div>' +
         '<span class="trow-val">' + num(b.visits) + '</span>' +
       '</div>';
     });
@@ -1706,7 +1726,7 @@
   }
 
   function renderBotTable(bots, botsTotal) {
-    return '<div class="card"><span class="card-title">Active bots</span><div style="margin-top:14px">' +
+    return '<div class="card"><span class="card-title">Active bots</span><div class="mt-14">' +
       renderBotTableContent(bots) + '</div>' +
       showAllBtn(botsTotal, 'bots', 'Active bots') +
     '</div>';
@@ -1714,14 +1734,14 @@
 
   function renderBotActivityContent(activity) {
     if (!activity || !activity.length) {
-      return '<p style="color:var(--text-2);font-size:13px">No data yet</p>';
+      return '<p class="muted fs-13">No data yet</p>';
     }
     var html = '';
     activity.forEach(function(a) {
       var color = botCatColors[a.category] || botCatColors['Other'];
       var time = formatTime(a.created_at);
       html += '<div class="bot-row">' +
-        '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
+        '<span class="dot" data-bg="' + color + '"></span>' +
         '<span class="bot-row-name">' + esc(a.name) + '</span>' +
         '<span class="bot-row-site">' + esc(a.site) + '</span>' +
         '<span class="bot-row-path">' + esc(a.path) + '</span>' +
@@ -1736,17 +1756,17 @@
     items.forEach(function(l) {
       var time = formatTime(l.last_seen);
       var refs = (l.referrers || []).filter(function(r) { return r; });
-      html += '<div style="padding:8px 0;border-bottom:1px solid var(--line)">' +
-        '<div style="display:flex;align-items:center;gap:10px;font-size:13px;overflow:hidden">' +
-          '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
-          (l.site ? '<span style="color:var(--text-3);font-size:11px;min-width:0">' + esc(l.site) + '</span>' : '') +
-          '<span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(l.path) + '">' + esc(l.path) + '</span>' +
-          (showStatus ? '<span style="font-size:11px;color:' + color + ';font-weight:600">' + l.status + '</span>' : '') +
-          '<span style="color:var(--text-2);white-space:nowrap;font-size:12px">' + num(l.hits) + ' hits</span>' +
-          '<span style="color:var(--text-3);white-space:nowrap;font-size:12px">' + time + '</span>' +
+      html += '<div class="bl-row">' +
+        '<div class="bl-line">' +
+          '<span class="dot" data-bg="' + color + '"></span>' +
+          (l.site ? '<span class="faint fs-11 min-w-0">' + esc(l.site) + '</span>' : '') +
+          '<span class="bl-path" title="' + esc(l.path) + '">' + esc(l.path) + '</span>' +
+          (showStatus ? '<span class="fs-11 fw-600" data-color="' + color + '">' + l.status + '</span>' : '') +
+          '<span class="muted nowrap fs-12">' + num(l.hits) + ' hits</span>' +
+          '<span class="faint nowrap fs-12">' + time + '</span>' +
         '</div>';
       if (refs.length) {
-        html += '<div style="margin-left:18px;margin-top:4px;font-size:12px;color:var(--text-3)">' +
+        html += '<div class="bl-refs">' +
           '\u2190 ' + refs.map(esc).join(', ') + '</div>';
       }
       html += '</div>';
@@ -1767,10 +1787,10 @@
     function renderGroup(title, color, items, showStatus) {
       if (!items.length) return '';
       var visible = items.slice(0, BROKEN_SHOW);
-      var g = '<div class="card" style="margin-bottom:14px">' +
-        '<span class="card-title" style="display:flex;align-items:center;gap:8px">' + title +
-        ' <span style="font-size:12px;font-weight:400;color:var(--text-2)">' + items.length + ' pages</span></span>' +
-        '<div style="margin-top:12px">' +
+      var g = '<div class="card mb-14">' +
+        '<span class="card-title row gap-8">' + title +
+        ' <span class="fs-12 fw-400 muted">' + items.length + ' pages</span></span>' +
+        '<div class="mt-12">' +
         renderBrokenGroup(visible, color, showStatus) +
         '</div>';
       if (items.length > BROKEN_SHOW) {
@@ -1853,9 +1873,9 @@
 
       '<div class="utm-step">' +
         '<div class="utm-step-label"><span class="utm-step-num active">1</span> Which page should the link go to?</div>' +
-        '<div style="display:flex;gap:8px;align-items:center">' +
-          '<input type="text" id="utm-domain" value="' + esc(utmDomain()) + '" placeholder="https://your-site.com" oninput="updateUtm()" style="width:45%">' +
-          '<input type="text" id="utm-path" placeholder="/ (homepage)" oninput="updateUtm()" style="flex:1">' +
+        '<div class="row gap-8">' +
+          '<input type="text" id="utm-domain" value="' + esc(utmDomain()) + '" placeholder="https://your-site.com" oninput="updateUtm()" class="w-45">' +
+          '<input type="text" id="utm-path" placeholder="/ (homepage)" oninput="updateUtm()" class="flex-1">' +
         '</div>' +
       '</div>' +
 
@@ -1869,7 +1889,7 @@
           '<div class="utm-ch-btn" data-source="newsletter" data-medium="email" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">\u2709</span>Newsletter</div>' +
           '<div class="utm-ch-btn" data-source="website" data-medium="referral" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">www</span>Website</div>' +
         '</div>' +
-        '<div id="utm-custom-wrap" style="display:none;margin-top:8px">' +
+        '<div id="utm-custom-wrap" class="mt-8" hidden>' +
           '<div class="snippet-grid">' +
             '<div><label>Source</label><input type="text" id="utm-source-custom" placeholder="e.g. podcast" oninput="updateUtm()"></div>' +
             '<div><label>Medium</label>' +
@@ -1882,17 +1902,17 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div style="margin-top:8px;text-align:center">' +
-          '<span class="utm-ch-btn" style="display:inline-block;width:auto;padding:6px 16px;font-size:11px" id="utm-other-btn" onclick="toggleUtmCustom()">Other source...</span>' +
+        '<div class="mt-8 ta-center">' +
+          '<span class="utm-ch-btn utm-ch-other" id="utm-other-btn" onclick="toggleUtmCustom()">Other source...</span>' +
         '</div>' +
       '</div>' +
 
       '<div class="utm-step">' +
-        '<div class="utm-step-label"><span class="utm-step-num" id="utm-step3-num">3</span> Campaign name <span style="color:#64748b;font-weight:400">(optional)</span></div>' +
+        '<div class="utm-step-label"><span class="utm-step-num" id="utm-step3-num">3</span> Campaign name <span class="faint fw-400">(optional)</span></div>' +
         '<input type="text" id="utm-campaign" placeholder="e.g. spring-campaign, black-friday" oninput="updateUtm()">' +
       '</div>' +
 
-      '<div id="utm-result-wrap" style="display:none">' +
+      '<div id="utm-result-wrap" hidden>' +
         '<div class="utm-result-box">' +
           '<div class="utm-result-url" id="utm-result-url"></div>' +
           '<button class="utm-copy-btn" id="utm-copy-btn" onclick="copyUtmLink()">Copy link</button>' +
@@ -1965,7 +1985,7 @@
         '    proxy_set_header X-Original-Referer $http_referer;\n' +
         '}' +
       '</pre>' +
-      '<p style="margin-top:12px;margin-bottom:0"><strong style="color:#f1f5f9">How does it work?</strong> Nginx sends a copy of bot requests to Puls in the background (mirror). ' +
+      '<p class="mt-12 mb-0"><strong class="t-light">How does it work?</strong> Nginx sends a copy of bot requests to Puls in the background (mirror). ' +
         'Broken links (404) are caught via post_action after the response is sent. ' +
         'PHP site: add post_action in the PHP block. Static site: in the error_page location. Zero impact on response time.</p>' +
     '</div>';
@@ -1990,7 +2010,7 @@
     utmState.source = el.dataset.source;
     utmState.medium = el.dataset.medium;
     utmState.custom = false;
-    document.getElementById('utm-custom-wrap').style.display = 'none';
+    document.getElementById('utm-custom-wrap').hidden = true;
     document.getElementById('utm-other-btn').classList.remove('selected');
 
     // Sync advanced fields
@@ -2006,8 +2026,8 @@
   window.toggleUtmCustom = function() {
     var wrap = document.getElementById('utm-custom-wrap');
     var btn = document.getElementById('utm-other-btn');
-    var isOpen = wrap.style.display !== 'none';
-    wrap.style.display = isOpen ? 'none' : 'block';
+    var isOpen = !wrap.hidden;
+    wrap.hidden = isOpen;
     btn.classList.toggle('selected', !isOpen);
 
     if (!isOpen) {
@@ -2069,7 +2089,7 @@
     else step3.classList.remove('active');
 
     if (!source) {
-      resultWrap.style.display = 'none';
+      resultWrap.hidden = true;
       placeholder.style.display = 'block';
       return;
     }
@@ -2090,7 +2110,7 @@
 
     // Show with highlighted params
     resultUrl.innerHTML = esc(base) + '<span class="utm-highlight">' + esc(sep + params) + '</span>';
-    resultWrap.style.display = 'block';
+    resultWrap.hidden = false;
     placeholder.style.display = 'none';
 
     // Reset copy button
@@ -2136,7 +2156,7 @@
     var overlayTitle = document.getElementById('overlay-title');
     var overlayContent = document.getElementById('overlay-content');
     overlayTitle.textContent = title;
-    overlayContent.innerHTML = '<p style="color:var(--text-2);font-size:13px">Loading...</p>';
+    overlayContent.innerHTML = '<p class="muted fs-13">Loading...</p>';
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
     dialogOpened(overlay.querySelector('.overlay-panel'));
@@ -2255,7 +2275,7 @@
   function openEventDetail(row, eventName, group, showAll, then, quiet) {
     var detail = document.createElement('div');
     detail.className = 'event-detail';
-    detail.innerHTML = '<span style="color:var(--text-2)">Loading...</span>';
+    detail.innerHTML = '<span class="muted">Loading...</span>';
     row.after(detail);
     fetchEventDetail(detail, eventName, group, showAll, then, quiet);
   }
@@ -2281,7 +2301,7 @@
         var tot = data.eventTotals || { count: 0, visitors: 0 };
         if (!quiet) announce(eventName.replace(/_/g, ' ') + ': ' + num(tot.count) + ' events from ' + num(tot.visitors) + ' visitors' + (data.funnel && data.funnel.rate !== null ? ', ' + data.funnel.rate + '% went on to ' + data.funnel.then.replace(/_/g, ' ') : ''));
       })
-      .catch(function() { detail.innerHTML = '<span style="color:var(--text-2)">Failed to load</span>'; });
+      .catch(function() { detail.innerHTML = '<span class="muted">Failed to load</span>'; });
   }
 
   window.setEventGroup = function(btn) {
@@ -2315,7 +2335,7 @@
     var rate = siteVisitors ? (tot.count / siteVisitors * 100) : 0;
     var delta = prev.count > 0 ? Math.round(((tot.count - prev.count) / prev.count) * 100) : null;
     var deltaHtml = delta === null ? '' :
-      '<span style="color:var(--' + (delta >= 0 ? 'green' : 'red') + ')">' + (delta >= 0 ? '\u25B2' : '\u25BC') + Math.abs(delta) + '% vs previous</span>';
+      '<span class="' + (delta >= 0 ? 't-up' : 't-down') + '">' + (delta >= 0 ? '\u25B2' : '\u25BC') + Math.abs(delta) + '% vs previous</span>';
 
     var html = '<div class="event-summary">' +
       '<span><b>' + num(tot.count) + '</b> events</span>' +
@@ -2331,7 +2351,7 @@
       html += '<div class="event-chips">' +
         '<button class="event-chip' + (eventChartMode === 'count' ? ' active' : '') + '" data-mode="count" onclick="setEventChartMode(this)">Count</button>' +
         '<button class="event-chip' + (eventChartMode === 'rate' ? ' active' : '') + '" data-mode="rate" onclick="setEventChartMode(this)">Per 100 visitors</button>' +
-        (showCompare ? '<span class="event-chips-label" style="margin-left:auto">vs previous period</span>' : '') +
+        (showCompare ? '<span class="event-chips-label ml-auto">vs previous period</span>' : '') +
       '</div>' +
       '<div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + (dense ? ' dense' : '') + (marksFor(d, d.eventSeries.map(function(r) { return r.date; })).stacked ? ' stacked-marks' : '') + '"><div class="chart">' +
         buildEventBars(d.eventSeries, showCompare ? d.previousEventSeries : null, d.pageviews, d.previousPageviews, dense, d) +
@@ -2349,7 +2369,7 @@
       var canSave = !isShared && d.eventGroupKey && (currentSite || sites.length === 1);
       var saved = canSave && lastData && (lastData.breakdowns || []).some(function(b) { return b.event === st.name && b.group === d.eventGroupKey; });
       html += '<button class="event-chip' + (!d.eventGroupKey ? ' active' : '') + '" data-key="" onclick="setEventGroup(this)">Recent</button>' +
-        (d.eventGroupKey && d.eventGroupNew ? '<span class="event-chips-label" style="margin-left:auto">' + num(d.eventGroupNew) + ' new vs previous period</span>' : '') +
+        (d.eventGroupKey && d.eventGroupNew ? '<span class="event-chips-label ml-auto">' + num(d.eventGroupNew) + ' new vs previous period</span>' : '') +
         (canSave ? '<button class="event-chip event-save"' + (saved ? ' disabled' : '') + ' onclick="saveBreakdown(this)" title="Show this grouping as its own card on the dashboard">' + (saved ? 'Saved' : 'Save as card') + '</button>' : '') +
       '</div>';
     }
@@ -2386,7 +2406,7 @@
       '<div class="event-funnel-head">' +
         '<span class="event-funnel-rate">' + (f.rate === null ? '–' : f.rate.toFixed(1) + '%') + '</span>' +
         '<span>' + num(f.converted) + ' of ' + num(f.started) + ' visitors went on to <b>' + esc(f.then.replace(/_/g, ' ')) + '</b> the same day</span>' +
-        (delta === null ? '' : '<span style="color:var(--' + (delta >= 0 ? 'green' : 'red') + ')">' + (delta >= 0 ? '\u25B2' : '\u25BC') + Math.abs(delta) + ' pts vs previous</span>') +
+        (delta === null ? '' : '<span class="' + (delta >= 0 ? 't-up' : 't-down') + '">' + (delta >= 0 ? '\u25B2' : '\u25BC') + Math.abs(delta) + ' pts vs previous</span>') +
       '</div>' +
       '<div class="event-funnel-days">';
     var maxStarted = Math.max.apply(null, f.series.map(function(r) { return r.started; }).concat([1]));
@@ -2395,7 +2415,7 @@
       var ch = r.started ? h * r.converted / r.started : 0;
       var pct = r.started ? Math.round(100 * r.converted / r.started) + '%' : 'no starts';
       html += '<div class="event-funnel-day" title="' + formatDay(r.date) + ': ' + num(r.converted) + ' of ' + num(r.started) + ' (' + pct + ')">' +
-        '<div class="event-funnel-bar" style="height:' + h + 'px"><div class="event-funnel-fill" style="height:' + ch + 'px"></div></div>' +
+        '<div class="event-funnel-bar" data-h="' + h + '"><div class="event-funnel-fill" data-h="' + ch + '"></div></div>' +
       '</div>';
     });
     html += '</div></div>';
@@ -2433,13 +2453,13 @@
         var deltaStr = delta === null ? '' : (delta >= 0 ? ' (+' + delta + '%)' : ' (' + delta + '%)');
         bars += '<div class="chart-col chart-col-compare' + (marks[row.date] ? marks[row.date].cls : '') + '">' +
           (marks[row.date] ? marks[row.date].html : '') +
-          '<div class="tip" style="text-align:left"><div style="font-weight:600;margin-bottom:4px">' + label + '<span style="color:' + (delta === null ? '#64748b' : (delta >= 0 ? '#059669' : '#dc2626')) + ';font-weight:500">' + deltaStr + '</span></div>' +
+          '<div class="tip tip-left"><div class="tip-head">' + label + '<span class="tip-delta" data-color="' + (delta === null ? '#64748b' : (delta >= 0 ? '#059669' : '#dc2626')) + '">' + deltaStr + '</span></div>' +
             '<div>' + tipBody + '</div>' +
-            (p ? '<div style="color:var(--text-3);margin-top:2px">vs ' + formatDay(p.date) + ': ' + num(p.count) + ' / ' + num(p.visitors) + '</div>' : '') +
+            (p ? '<div class="tip-prev">vs ' + formatDay(p.date) + ': ' + num(p.count) + ' / ' + num(p.visitors) + '</div>' : '') +
           '</div>' +
           '<div class="chart-bars">' +
-            '<div class="chart-bar-wrap">' + valHtml + '<div class="chart-bar" style="height:' + h + 'px"></div></div>' +
-            '<div class="chart-bar-wrap">' + (dense ? '' : '<span class="chart-val-prev">' + fmt(pv) + '</span>') + '<div class="chart-bar chart-bar-prev" style="height:' + ph + 'px"></div></div>' +
+            '<div class="chart-bar-wrap">' + valHtml + '<div class="chart-bar" data-h="' + h + '"></div></div>' +
+            '<div class="chart-bar-wrap">' + (dense ? '' : '<span class="chart-val-prev">' + fmt(pv) + '</span>') + '<div class="chart-bar chart-bar-prev" data-h="' + ph + '"></div></div>' +
           '</div>' +
           dateHtml +
         '</div>';
@@ -2447,7 +2467,7 @@
         bars += '<div class="chart-col' + (marks[row.date] ? marks[row.date].cls : '') + '">' +
           (marks[row.date] ? marks[row.date].html : '') +
           valHtml +
-          '<div class="chart-bar" style="height:' + h + 'px"><div class="tip">' + label + ': ' + tipBody + '</div></div>' +
+          '<div class="chart-bar" data-h="' + h + '"><div class="tip">' + label + ': ' + tipBody + '</div></div>' +
           dateHtml +
         '</div>';
       }
@@ -2456,15 +2476,15 @@
   }
 
   function renderEventGroup(rows, showAll) {
-    if (!rows.length) return '<span style="color:var(--text-2)">No values for this key in the period</span>';
+    if (!rows.length) return '<span class="muted">No values for this key in the period</span>';
     var limit = showAll ? rows.length : 20;
     var max = Math.max.apply(null, rows.map(function(r) { return +r.count; }));
     var html = '';
     rows.slice(0, limit).forEach(function(r) {
       var value = String(r.value);
       html += '<div class="trow">' +
-        '<span class="trow-label" title="' + esc(value) + '">' + esc(value) + ' <span style="color:var(--text-3);font-size:11px">' + num(r.visitors) + '</span>' + (r.new ? '<span class="event-new">new</span>' : '') + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" style="width:' + (+r.count / max * 100) + '%;background:var(--accent-tile)"></div></div>' +
+        '<span class="trow-label" title="' + esc(value) + '">' + esc(value) + ' <span class="faint fs-11">' + num(r.visitors) + '</span>' + (r.new ? '<span class="event-new">new</span>' : '') + '</span>' +
+        '<div class="trow-bar"><div class="trow-fill" data-w="' + (+r.count / max * 100) + '" data-bg="var(--accent-tile)"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
       '</div>';
     });
@@ -2475,7 +2495,7 @@
   }
 
   function renderEventRecent(items) {
-    if (!items.length) return '<span style="color:var(--text-2)">No detail data</span>';
+    if (!items.length) return '<span class="muted">No detail data</span>';
     var html = '';
     items.slice(0, 20).forEach(function(item) {
       var dataStr = '';
@@ -2493,7 +2513,7 @@
       '</div>';
     });
     if (items.length > 20) {
-      html += '<div style="padding:4px 0;color:var(--text-2);font-size:11px">+ ' + (items.length - 20) + ' more</div>';
+      html += '<div class="more-note">+ ' + (items.length - 20) + ' more</div>';
     }
     return html;
   }
@@ -2540,7 +2560,7 @@
 
     var detail = document.createElement('div');
     detail.className = 'event-detail';
-    detail.innerHTML = '<span style="color:var(--text-2)">Loading...</span>';
+    detail.innerHTML = '<span class="muted">Loading...</span>';
     el.after(detail);
 
     fetch(fetchUrl)
@@ -2548,7 +2568,7 @@
       .then(function(data) {
         var items = data.eventDetail || [];
         if (!items.length) {
-          detail.innerHTML = '<span style="color:var(--text-2)">No detail data</span>';
+          detail.innerHTML = '<span class="muted">No detail data</span>';
           return;
         }
         var html = '';
@@ -2561,11 +2581,11 @@
           '</div>';
         });
         if (items.length > 20) {
-          html += '<div style="padding:4px 0;color:var(--text-2);font-size:11px">+ ' + (items.length - 20) + ' more</div>';
+          html += '<div class="more-note">+ ' + (items.length - 20) + ' more</div>';
         }
         detail.innerHTML = html;
       })
-      .catch(function() { detail.innerHTML = '<span style="color:var(--text-2)">Failed to load</span>'; });
+      .catch(function() { detail.innerHTML = '<span class="muted">Failed to load</span>'; });
   };
 
   // The menu opens as an overview: notes, excluded IPs and goals folded to a line that says what
@@ -2669,8 +2689,8 @@
   }
 
   function populateNotes() {
-    if (isShared || !lastData) { notesSection.style.display = 'none'; return; }
-    notesSection.style.display = '';
+    if (isShared || !lastData) { notesSection.hidden = true; return; }
+    notesSection.hidden = false;
     noteList.innerHTML = (lastData.annotations || []).map(function(a) {
       var when = formatDay(a.date) + (a.end_date ? ' to ' + formatDay(a.end_date) : '');
       return '<div class="note-item" data-id="' + (+a.id) + '" data-site="' + esc(a.site) + '">' +
@@ -2725,8 +2745,8 @@
   var excludedForm = document.getElementById('excluded-form');
 
   function populateExcluded() {
-    if (isShared) { excludedSection.style.display = 'none'; return; }
-    excludedSection.style.display = '';
+    if (isShared) { excludedSection.hidden = true; return; }
+    excludedSection.hidden = false;
     var site = noteSite();
     excludedForm.hidden = !site;
     var summary = document.getElementById('excluded-summary');
@@ -2794,10 +2814,10 @@
 
   function populateGoalPicker() {
     if (isShared || !lastData || !lastData.pages) {
-      if (goalSection) goalSection.style.display = 'none';
+      if (goalSection) goalSection.hidden = true;
       return;
     }
-    goalSection.style.display = '';
+    goalSection.hidden = false;
     goalSearch.value = '';
     renderGoalList('');
   }
@@ -2889,7 +2909,7 @@
   if (isShared) {
     var exportSection = document.getElementById('export-section');
     if (exportSection) exportSection.style.display = 'none';
-    if (goalSection) goalSection.style.display = 'none';
+    if (goalSection) goalSection.hidden = true;
   }
 
   window.exportData = function(format) {
