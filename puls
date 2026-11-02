@@ -334,10 +334,14 @@ function sitesList(string $dbPath): void
         return;
     }
 
-    $col = 22;
+    // The site column is as wide as the longest name needs (indented under a group), with two
+    // spaces before the dates, so a long name never runs into them; at least as wide as before
+    $groups = siteGroupMap($db);
+    $indent = empty($groups) ? 0 : 2;
+    $col = max(22, max(array_map(fn($s) => mb_strlen($s['site']), $sites)) + $indent + 2);
     echo mbPad('SITE', $col) . sprintf("%-12s %-12s %10s %10s %8s\n",
         'SINCE', 'LAST SEEN', 'PAGEVIEWS', 'VISITORS', 'BROKEN');
-    echo str_repeat('─', 78) . "\n";
+    echo str_repeat('─', $col + 56) . "\n";
 
     $row = function (array $s, string $indent = '') use ($col): void {
         echo mbPad($indent . $s['site'], $col) . sprintf("%-12s %-12s %10s %10s %8s\n",
@@ -350,7 +354,6 @@ function sitesList(string $dbPath): void
     };
 
     // With groups, the sites are listed under their group, the ones without one last
-    $groups = siteGroupMap($db);
     if (empty($groups)) {
         foreach ($sites as $s) $row($s);
     } else {
