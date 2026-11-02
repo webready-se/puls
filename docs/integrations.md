@@ -17,7 +17,7 @@ Puls automatically tracks:
 
 | Attribute | What it does |
 |-----------|--------------|
-| `data-site="name"` | Site name. Separates data in a multi-site setup. Defaults to the hostname. Angle brackets, quotes, backticks, backslashes and control characters are removed |
+| `data-site="name"` | Site name. Separates data in a multi-site setup. Defaults to the hostname. Angle brackets, quotes, backticks, backslashes and control characters are removed. An internationalized domain is stored in Unicode whether it arrives as punycode or not (`xn--bcher-kva.example` and `bücher.example` are one site), from the script, the pixel and the Nginx mirror alike |
 | `data-outbound` | Tracks clicks on external links as `outbound_click` ([more](#outbound-link-tracking)) |
 | `data-auto-events` | Tracks phone and email clicks, downloads and form submissions ([more](#auto-event-tracking)) |
 | `data-version="2.6.0"` | App version on every pageview and event, shown as release markers ([more](#app-version)) |
@@ -455,14 +455,41 @@ location / {
 location = /_puls_log {
     internal;
     if ($is_bot = "0") { return 204; }
+    resolver 127.0.0.53 valid=300s;   # systemd-resolved (Ubuntu, Forge); elsewhere your DNS server
+    proxy_ssl_server_name on;
     proxy_pass https://your-puls-domain/?log&s=my-site&p=$request_uri;
     proxy_set_header Host your-puls-domain;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_connect_timeout 2s;
+    proxy_send_timeout 2s;
+    proxy_read_timeout 3s;
 }
 ```
 
 The `map` and the `if` line matter: `mirror` copies every request, and without them every visitor's page and asset requests reach Puls and are listed as "Unknown client". `php puls nginx:config` prints the whole block for a site, with the map.
 
-This happens server-side with zero latency impact on your visitors. Puls deduplicates requests automatically.
+Three lines are easy to leave out, and each failure is silent. `resolver`: a `proxy_pass` with a variable in it is resolved at runtime, and without one Nginx logs "no resolver defined" and drops the mirror. `proxy_ssl_server_name on`: without SNI the copy reaches the server's default HTTPS site instead of Puls. `proxy_pass_request_body off`: a mirror copies the request body too, and Puls has no use for it. The timeouts keep a slow Puls from holding the visitor's connection: the visitor's response is not delayed by the mirror, but the connection stays busy until the mirror has finished.
+
+Puls deduplicates: the same bot on the same site and path counts once per 10 seconds, so a page that mirrors more than once is one visit.
+
+### Checking that the mirror fires
+
+A mirror leaves no trace by default. To see every copy and the status Puls answered, log the subrequests inside the location while you set it up:
+
+```nginx
+location = /_puls_log {
+    internal;
+    log_subrequest on;
+    access_log /var/log/nginx/puls-mirror.log;
+    # ...the lines above
+}
+```
+
+Two things to know when the log stays empty or shows more than expected:
+
+- The mirror runs the server block's rewrite-phase rules again (`if`, `rewrite` and `return` at server level), with `$uri` set to `/_puls_log`. A server-level rule that returns for a broad pattern, such as a maintenance page for every path without a dot, swallows every mirror without a trace. Put such rules in `location /`, or exclude `/_puls_log`.
+- When `mirror` is set in the server block rather than in `location /`, an internal redirect from `try_files ... /index.php` or `error_page 404 /index.php` starts the request over and mirrors it again, so one page can arrive two or three times (deduplicated by Puls, see above). `mirror off;` in the locations for static files keeps assets out altogether.
 
 ## Zero-Downtime Deploys (Laravel Forge)
 

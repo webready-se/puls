@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **Sites in groups.** A hub with many sites puts them in groups with `php puls sites:group Shops shop-a.example shop-b.example` (as many sites as you like in one command, or interactively by number), and `sites:ungroup` takes them out. The All sites overview then lists the sites under their group, with the group's visitors, views and trend in a header, the groups by views and the sites without one under "Other sites" last. A group folds to its header on a click, keeping its sums, and the choice is remembered per viewer; a group of more than six sites shows its five biggest with "Show 6 more sites (12 views)" for the rest, so a hub of thirty sites stays one screen. The site picker lists them under group headers too (named for screen readers), and its filter and ⌘K match a group's name as well, so "shop" finds every site in Shops; ⌘K names the group after a site. A site is in one group or none, and a group exists as long as a site points to it. `sites:list` shows the groups, a rename keeps the group and a removal drops it. The API lists them with `?api&groups`, and `siteOverview` rows carry `group` and `prev_views`.
 
+### Changed
+
+- `php puls nginx:config` prints a mirror block that works on a Forge server as it is: `resolver 127.0.0.53` (systemd-resolved) instead of Google's, no request body sent to Puls, and timeouts of a few seconds so a slow Puls never holds a visitor's connection. The mirror snippet in `docs/integrations.md` has the same lines; it lacked `resolver` and `proxy_ssl_server_name on`, and failed silently without them: Nginx logs "no resolver defined" and drops the mirror, and without SNI the copy reaches the server's default HTTPS site instead of Puls. The docs now also say how to see that the mirror fires, that server-level `if` rules apply to the mirror too, and that a page can mirror more than once.
+- `docs/install.md` says that Forge's default `try_files $uri $uri/ ...` answers an `OPTIONS` request with 405 before PHP runs, so a `fetch()` with a JSON content type fails its preflight (`sendBeacon` and the tracking script are not affected), and how to change the line.
+- `docs/integrations.md` says that a site name in punycode and the same name in Unicode are one site.
+
 ## [1.30.0] - 2026-11-02
 
 ### Added
