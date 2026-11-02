@@ -1054,6 +1054,34 @@ test('a user with several sites can load the all-sites view, limited to those si
         ->and(array_column($data['siteOverview'], 'site'))->toContain('test', 'other')->not->toContain('not-theirs');
 });
 
+test('groups: the api lists them limited to the viewer\'s sites, and the overview names a site\'s group', function () {
+    foreach (['test', 'other', 'not-theirs'] as $site) collectVia($site, '198.51.100.21');
+    $db = getTestDb();
+    $db->exec("INSERT OR REPLACE INTO site_groups (site, group_name) VALUES ('test', 'Shops'), ('other', 'Shops'), ('not-theirs', 'Private')");
+    try {
+        $all = json_decode(http('GET', '/?api&groups', ['header' => restrictedSession('full')], 8090)['body'], true);
+        expect($all)->toBe(['Private' => ['not-theirs'], 'Shops' => ['other', 'test']]);
+        $pair = http('GET', '/?api&groups', ['header' => restrictedSession('pair')], 8090)['body'];
+        // The sites are a JSON list, not an object with numeric keys
+        expect($pair)->toBe('{"Shops":["other","test"]}');
+        // A share token reads one site, so it sees that site\'s group alone
+        $token = createTestShareToken('test');
+        expect(json_decode(http('GET', '/?api&groups&share=' . $token)['body'], true))->toBe(['Shops' => ['test']]);
+        // No group at all is an empty object, not an empty array
+        $db->exec('DELETE FROM site_groups');
+        expect(http('GET', '/?api&groups', ['header' => restrictedSession('full')], 8090)['body'])->toBe('{}');
+        $db->exec("INSERT INTO site_groups (site, group_name) VALUES ('test', 'Shops')");
+
+        $data = json_decode(http('GET', '/?api&days=7', ['header' => restrictedSession('pair')], 8090)['body'], true);
+        $rows = array_column($data['siteOverview'], null, 'site');
+        expect($rows['test']['group'])->toBe('Shops')
+            ->and($rows['other']['group'])->toBeNull()
+            ->and($rows['test'])->toHaveKey('prev_views');
+    } finally {
+        $db->exec('DELETE FROM site_groups');
+    }
+});
+
 test('goals table has a type column after migration', function () {
     $cols = array_column(getTestDb()->query('PRAGMA table_info(goals)')->fetchAll(PDO::FETCH_ASSOC), 'name');
     expect($cols)->toContain('type');
