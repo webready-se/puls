@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **The CSP advice in `docs/integrations.md` covers the `<noscript>` pixel and the `puls.track` stub, not only the tracking script.** It names `img-src` for the pixel, and the hash that lets the stub run without `'unsafe-inline'` (or a file of your own for it)
 - **The `<noscript>` pixel has no inline style any more, which a strict `style-src` blocked.** In the docs, the dashboard's tracking snippet and `php puls nginx:config`. The GIF is transparent, so it never showed
 
+### Security
+
+- **A strict Content Security Policy on every page Puls serves: `script-src 'self'; style-src 'self'`.** Until now the dashboard allowed inline script and style, so one missed escaping of a page path or event name could run script in your browser (as in v1.26.1); now it can only show as text. The dashboard has no inline handlers, styles or scripts any more, and the smoke test fails on any violation, so none can come back. The login page's styles and script are files too (`login.css`, `login.js`), and the theme script is `theme.js`. If you upgrade by copying files by hand rather than from the release zip, copy all of `public/`
+
 ## [1.29.0] - 2026-10-28
 
 ### Added
