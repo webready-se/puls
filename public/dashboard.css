@@ -328,6 +328,26 @@ body {
 .site-overview-live .live-dot { width: 6px; height: 6px; }
 .site-overview-stat { font-size: 12px; color: var(--text-3); white-space: nowrap; min-width: 70px; text-align: right; }
 .site-overview-trend { font-size: 11px; white-space: nowrap; min-width: 45px; text-align: right; }
+/* A group's header carries its sums in the same columns as its sites' rows */
+/* A faint band out to the card's edges, so a header is a landmark while scrolling a long list */
+.site-overview-group {
+  display: flex; align-items: center; gap: 12px; padding: 9px 12px; width: calc(100% + 24px); margin: 10px -12px 0;
+  border: none; border-radius: 8px; background: var(--surface-2); font: inherit; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.site-overview-group:first-child { margin-top: 0; }
+.site-overview-group svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--text-3); transition: transform 0.2s; }
+.site-overview-group[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.site-overview-group:hover .site-overview-group-name, .site-overview-group:hover svg { color: var(--text); }
+.site-overview-group-body > .site-overview-row:last-child { border-bottom: none; }
+.site-overview-more { margin-top: 0; padding: 8px; }
+.site-overview-group-name {
+  flex: 1; min-width: 0; font-size: 11.5px; font-weight: 700; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 0.07em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.site-overview-group-count { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-3); }
+.site-overview-row.in-group { padding-left: 26px; }
+.site-overview-row.in-group:hover { padding-left: 38px; }
 @media (max-width: 600px) {
   .site-overview-stat { min-width: 55px; }
 }
@@ -920,6 +940,7 @@ body {
 .cmd-group { padding: 10px 12px 4px; font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.09em; }
 .cmd-group-scope { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .cmd-item-current { font-size: 12px; color: var(--text-3); flex-shrink: 0; }
+.cmd-item-group { font-size: 12px; color: var(--text-3); flex-shrink: 0; }
 .cmd-hint {
   padding: 12px 18px; font-size: 12px; color: var(--text-3);
   border-top: 1px solid var(--line); text-align: center;

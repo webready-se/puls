@@ -987,6 +987,17 @@ function get_api_data(array $config, array $user): string
         return json_encode($sites);
     }
 
+    // The groups and their sites, limited to the sites the user can read
+    if (isset($_GET['groups'])) {
+        $groups = [];
+        foreach (site_groups($db) as $siteName => $group) {
+            if (!empty($allowedSites) && !in_array($siteName, $allowedSites, true)) continue;
+            $groups[$group][] = $siteName;
+        }
+        // An object even when empty; JSON_FORCE_OBJECT would turn the site lists into objects too
+        return $groups ? json_encode($groups) : '{}';
+    }
+
     // Date range: support both &days=7 and &from=2026-03-01&to=2026-03-15
     $from = $_GET['from'] ?? '';
     $to = $_GET['to'] ?? '';
@@ -1551,12 +1562,15 @@ function get_api_data(array $config, array $user): string
             $liveMap[$row['site']] = (int) $row['live'];
         }
 
+        $groupMap = site_groups($db);
         foreach ($currentSites as $s) {
             $prev = $prevMap[$s['site']] ?? 0;
             $trend = $prev > 0 ? (int) round((((int)$s['views'] - $prev) / $prev) * 100) : null;
             $siteOverview[] = [
                 'site' => $s['site'],
+                'group' => $groupMap[$s['site']] ?? null,
                 'views' => (int) $s['views'],
+                'prev_views' => $prev,
                 'visitors' => (int) $s['visitors'],
                 'live' => $liveMap[$s['site']] ?? 0,
                 'trend' => $trend,
@@ -2201,9 +2215,19 @@ function meta_ad_params(): array
     return ['brid'];
 }
 
+/** Every site that is in a group, as site => group name, groups in name order. */
+function site_groups(PDO $db): array
+{
+    $map = [];
+    foreach ($db->query('SELECT site, group_name FROM site_groups ORDER BY group_name, site') as $row) {
+        $map[$row['site']] = $row['group_name'];
+    }
+    return $map;
+}
+
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 26; // Bump this when adding new migrations
+    $currentVersion = 27; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -2675,6 +2699,16 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
         $db->exec('DROP INDEX IF EXISTS idx_site_date');
         $db->exec('PRAGMA analysis_limit = 1000');
         $db->exec('ANALYZE');
+    }
+
+    // v27: a site belongs to one group, or none. No group table: a group exists as
+    // long as a site points to it. The CLI creates this table too (sites:group), for
+    // a database the web app has not migrated yet
+    if ($version < 27) {
+        $db->exec('CREATE TABLE IF NOT EXISTS site_groups (
+            site TEXT PRIMARY KEY,
+            group_name TEXT NOT NULL
+        )');
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);

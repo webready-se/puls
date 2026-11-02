@@ -33,6 +33,7 @@
   let currentPath = '';
   let currentChannel = '';
   let sites = [];
+  let siteGroups = {}; // site name -> group name, for the sites in a group
 
   // --- Elements ---
   const app = document.getElementById('app');
@@ -141,7 +142,9 @@
     'event-group': function(el) { setEventGroup(el); },
     'event-funnel': function(el) { setEventFunnel(el); },
     'save-breakdown': function(el) { saveBreakdown(el); },
-    'show-all-event-group': function(el) { showAllEventGroup(el); }
+    'show-all-event-group': function(el) { showAllEventGroup(el); },
+    'toggle-site-group': function(el) { toggleSiteGroup(el); },
+    'show-site-group': function(el) { showSiteGroup(el); }
   };
   function delegate(eventType, attr) {
     document.addEventListener(eventType, function(e) {
@@ -215,14 +218,39 @@
   function matchSites(q) {
     var needle = q.toLowerCase();
     var at = function(s) { return (s || 'All sites').toLowerCase().indexOf(needle); };
-    var found = [''].concat(sites).filter(function(s) { return at(s) >= 0; });
-    return found.filter(function(s) { return at(s) === 0; }).concat(found.filter(function(s) { return at(s) > 0; }));
+    // A group's name matches for its sites too, so "shop" lists every site in Shops
+    var inGroup = function(s) { return !!s && !!siteGroups[s] && siteGroups[s].toLowerCase().indexOf(needle) >= 0; };
+    var found = [''].concat(sites).filter(function(s) { return at(s) >= 0 || inGroup(s); });
+    return found.filter(function(s) { return at(s) === 0; }).concat(found.filter(function(s) { return at(s) !== 0; }));
   }
-  function siteRowHtml(s) {
+  function siteRowHtml(s, withGroup) {
     return '<div class="cmd-item" role="option" aria-selected="false" data-site="' + esc(s) + '">' +
       '<span class="cmd-item-path">' + (s ? esc(s) : 'All sites') + '</span>' +
+      (withGroup && siteGroups[s] ? '<span class="cmd-item-group">' + esc(siteGroups[s]) + '</span>' : '') +
       (s === currentSite ? '<span class="cmd-item-current">Current</span>' : '') +
     '</div>';
+  }
+
+  // The picker lists sites under their group when any site has one: groups in name order,
+  // the sites without one under "Other sites" last, All sites first and outside them
+  function siteListHtml(rows) {
+    var grouped = sites.some(function(s) { return siteGroups[s]; });
+    if (!grouped) return rows.map(function(s) { return siteRowHtml(s); }).join('');
+    var html = rows.indexOf('') >= 0 ? siteRowHtml('') : '';
+    var byGroup = {}, names = [];
+    rows.forEach(function(s) {
+      if (s === '') return;
+      var g = siteGroups[s] || '';
+      if (!byGroup[g]) { byGroup[g] = []; if (g) names.push(g); }
+      byGroup[g].push(s);
+    });
+    names.sort(function(a, b) { return a.localeCompare(b); });
+    if (byGroup['']) names.push('');
+    names.forEach(function(g, i) {
+      html += '<div role="group" aria-labelledby="site-group-' + i + '"><div class="cmd-group" id="site-group-' + i + '">' + (g ? esc(g) : 'Other sites') + '</div>' +
+        byGroup[g].map(function(s) { return siteRowHtml(s); }).join('') + '</div>';
+    });
+    return html;
   }
 
   // --- Site picker: a button with the sites in a list under it, not the palette: a control that
@@ -240,7 +268,7 @@
 
   function paintSites() {
     var rows = matchSites(siteFilter.hidden ? '' : siteFilter.value.trim());
-    siteList.innerHTML = rows.length ? rows.map(siteRowHtml).join('') : '<div class="cmd-empty">No site matches</div>';
+    siteList.innerHTML = rows.length ? siteListHtml(rows) : '<div class="cmd-empty">No site matches</div>';
     var items = siteList.querySelectorAll('.cmd-item');
     items.forEach(function(el, i) { el.id = 'site-option-' + i; });
     siteActive = Math.min(siteActive, items.length - 1);
@@ -265,8 +293,12 @@
     siteFilter.value = '';
     siteMenu.hidden = false;
     siteBtn.setAttribute('aria-expanded', 'true');
-    siteActive = matchSites('').indexOf(currentSite);
+    siteActive = -1;
     paintSites();
+    // The site on screen is highlighted where the list shows it, which with groups is not its place in sites[]
+    var items = siteList.querySelectorAll('.cmd-item');
+    siteActive = Array.prototype.findIndex.call(items, function(el) { return el.getAttribute('data-site') === currentSite; });
+    markSite(items);
     (siteFilter.hidden || matchMedia('(pointer: coarse)').matches ? siteList : siteFilter).focus();
   }
   function closeSites(refocus) {
@@ -399,13 +431,16 @@
     sites = [shareSite];
     load(7);
   } else {
-    fetch(apiUrl('?api&sites'))
-      .then(function(r) {
-        if (r.status === 401) { location.href = '/?login'; return; }
-        return r.json();
+    Promise.all([fetch(apiUrl('?api&sites')), fetch(apiUrl('?api&groups'))])
+      .then(function(rs) {
+        if (rs[0].status === 401) { location.href = '/?login'; return; }
+        return Promise.all([rs[0].json(), rs[1].ok ? rs[1].json() : {}]);
       })
-      .then(function(s) {
-        if (!s) return;
+      .then(function(res) {
+        if (!res) return;
+        var s = res[0];
+        siteGroups = {};
+        Object.keys(res[1] || {}).forEach(function(g) { res[1][g].forEach(function(site) { siteGroups[site] = g; }); });
         sites = s;
         sitePicker.hidden = s.length <= 1;
         // Restore saved site selection
@@ -1116,35 +1151,94 @@
     return html;
   }
 
+  function overviewTrendHtml(trend) {
+    if (trend === null) return '<span class="site-overview-trend muted">\u2013</span>';
+    var cls = trend > 0 ? 'up' : (trend < 0 ? 'down' : 'flat');
+    var arrow = trend > 0 ? '\u25B2' : (trend < 0 ? '\u25BC' : '\u2013');
+    return '<span class="site-overview-trend stat-trend ' + cls + '">' + arrow + ' ' + (trend > 0 ? '+' : '') + trend + '%</span>';
+  }
+
+  function siteOverviewRow(s, inGroup, hidden) {
+    var sinceHtml = '';
+    if (s.first_seen) {
+      var fd = new Date(s.first_seen + 'T00:00:00');
+      sinceHtml = '<div class="site-overview-since">since ' + fd.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + '</div>';
+    }
+    var liveHtml = '';
+    if (s.live > 0) {
+      liveHtml = '<span class="site-overview-live" title="' + s.live + ' online now"><span class="live-dot" aria-hidden="true"></span>' + s.live + '</span>';
+    }
+    return '<div class="site-overview-row' + (inGroup ? ' in-group' : '') + '"' + (hidden ? ' hidden' : '') + ' data-action="select-site" data-site="' + esc(s.site) + '">' +
+      '<span class="site-overview-name">' + esc(s.site) + liveHtml + sinceHtml + '</span>' +
+      '<span class="site-overview-stat">' + num(s.visitors) + ' visitors</span>' +
+      '<span class="site-overview-stat">' + num(s.views) + ' views</span>' +
+      overviewTrendHtml(s.trend) +
+    '</div>';
+  }
+
+  // A group folds to its header on a click, and the header keeps the sums, so a folded hub
+  // reads as one line per group. Open until the viewer folds it; remembered per viewer. A long
+  // group shows its biggest sites and sums the rest behind "Show more", as Top pages does
+  var SITE_GROUP_ROWS = 5;
+  function foldedSiteGroups() {
+    try { return JSON.parse(localStorage.getItem('puls-site-groups-folded') || '[]'); } catch (e) { return []; }
+  }
+  function toggleSiteGroup(btn) {
+    var body = document.getElementById(btn.getAttribute('aria-controls'));
+    body.hidden = !body.hidden;
+    btn.setAttribute('aria-expanded', String(!body.hidden));
+    var name = btn.getAttribute('data-group');
+    var folded = foldedSiteGroups().filter(function(g) { return g !== name; });
+    if (body.hidden) folded.push(name);
+    localStorage.setItem('puls-site-groups-folded', JSON.stringify(folded));
+  }
+  function showSiteGroup(btn) {
+    btn.parentNode.querySelectorAll('.site-overview-row[hidden]').forEach(function(r) { r.hidden = false; });
+    btn.remove();
+  }
+
+  // Sites under their group when any has one: a header per group with its visitors, views and
+  // trend over the period, groups by views, the sites without a group under "Other sites" last
   function renderSiteOverview(overview) {
     if (!overview || overview.length < 2) return '';
     var html = '<div class="card"><span class="card-title">Sites</span><div class="mt-12">';
-    overview.forEach(function(s) {
-      var trendHtml = '';
-      if (s.trend !== null) {
-        var cls = s.trend > 0 ? 'up' : (s.trend < 0 ? 'down' : 'flat');
-        var arrow = s.trend > 0 ? '\u25B2' : (s.trend < 0 ? '\u25BC' : '\u2013');
-        var sign = s.trend > 0 ? '+' : '';
-        trendHtml = '<span class="site-overview-trend stat-trend ' + cls + '">' + arrow + ' ' + sign + s.trend + '%</span>';
-      } else {
-        trendHtml = '<span class="site-overview-trend muted">\u2013</span>';
-      }
-      var sinceHtml = '';
-      if (s.first_seen) {
-        var fd = new Date(s.first_seen + 'T00:00:00');
-        sinceHtml = '<div class="site-overview-since">since ' + fd.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + '</div>';
-      }
-      var liveHtml = '';
-      if (s.live > 0) {
-        liveHtml = '<span class="site-overview-live" title="' + s.live + ' online now"><span class="live-dot" aria-hidden="true"></span>' + s.live + '</span>';
-      }
-      html += '<div class="site-overview-row" data-action="select-site" data-site="' + esc(s.site) + '">' +
-        '<span class="site-overview-name">' + esc(s.site) + liveHtml + sinceHtml + '</span>' +
-        '<span class="site-overview-stat">' + num(s.visitors) + ' visitors</span>' +
-        '<span class="site-overview-stat">' + num(s.views) + ' views</span>' +
-        trendHtml +
-      '</div>';
-    });
+    if (!overview.some(function(s) { return s.group; })) {
+      overview.forEach(function(s) { html += siteOverviewRow(s, false); });
+    } else {
+      var groups = {}, order = [];
+      overview.forEach(function(s) {
+        var g = s.group || '';
+        if (!groups[g]) { groups[g] = { sites: [], views: 0, prev: 0, visitors: 0 }; order.push(g); }
+        groups[g].sites.push(s);
+        groups[g].views += s.views;
+        groups[g].prev += s.prev_views || 0;
+        groups[g].visitors += s.visitors;
+      });
+      order.sort(function(a, b) { return (a === '') - (b === '') || groups[b].views - groups[a].views; });
+      var folded = foldedSiteGroups();
+      order.forEach(function(g, i) {
+        var grp = groups[g], id = 'site-group-body-' + i, isFolded = folded.indexOf(g) >= 0;
+        var trend = grp.prev > 0 ? Math.round((grp.views - grp.prev) / grp.prev * 100) : null;
+        // A sum of the sites in no group says nothing, so "Other sites" carries only its count
+        html += '<button type="button" class="site-overview-group" data-action="toggle-site-group" data-group="' + esc(g) + '" aria-expanded="' + !isFolded + '" aria-controls="' + id + '">' + foldChevron +
+          '<span class="site-overview-group-name">' + (g ? esc(g) : 'Other sites') +
+            ' <span class="site-overview-group-count">' + grp.sites.length + (grp.sites.length === 1 ? ' site' : ' sites') + '</span></span>' +
+          (g ? '<span class="site-overview-stat">' + num(grp.visitors) + ' visitors</span>' +
+            '<span class="site-overview-stat">' + num(grp.views) + ' views</span>' +
+            overviewTrendHtml(trend) : '') +
+        '</button>';
+        // Hide the tail only when it is more than one site, so a group of six is not five and a button
+        var shown = grp.sites.length > SITE_GROUP_ROWS + 1 ? SITE_GROUP_ROWS : grp.sites.length;
+        html += '<div class="site-overview-group-body" id="' + id + '"' + (isFolded ? ' hidden' : '') + '>';
+        grp.sites.forEach(function(s, j) { html += siteOverviewRow(s, true, j >= shown); });
+        if (shown < grp.sites.length) {
+          var rest = grp.sites.slice(shown);
+          var restViews = rest.reduce(function(n, s) { return n + s.views; }, 0);
+          html += '<button class="show-all site-overview-more" data-action="show-site-group">Show ' + rest.length + ' more sites (' + num(restViews) + ' views)</button>';
+        }
+        html += '</div>';
+      });
+    }
     html += '</div></div>';
     return html;
   }
@@ -3239,7 +3333,7 @@
     var html = '';
     if (siteMatches.length) {
       html += '<div role="group" aria-labelledby="cmd-group-sites"><div class="cmd-group" id="cmd-group-sites">Sites</div>';
-      html += siteMatches.map(siteRowHtml).join('');
+      html += siteMatches.map(function(s) { return siteRowHtml(s, true); }).join('');
       html += '</div>';
     }
     if (cmdPages && cmdPages.length) {

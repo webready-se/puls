@@ -53,6 +53,18 @@ php puls user:edit client                # Change sites or password
 
 Both ask for a password and suggest one: press Enter and Puls generates a strong password (four groups of five characters, easy to read out or type on a phone) and shows it once. Copy it then, since only its hash is stored. A password you type yourself needs at least 10 characters, and on a terminal you type it twice. Without a name, `user:add` asks for one.
 
+## Site groups
+
+With many sites, put them in groups: the All sites overview, the site picker and ⌘K list them under their group, and the overview sums a group's visitors, views and trend. A click on a group's header folds it to that line (remembered in your browser), and a large group shows its five biggest sites with the rest behind "Show more". A site is in one group or none, and a group exists as long as a site points to it, so there is nothing to create or delete apart from the sites in it.
+
+```bash
+php puls sites:group Shops shop-a.example shop-b.example   # Put sites in a group (as many as you like)
+php puls sites:ungroup shop-b.example                      # Take a site out of its group
+php puls sites:list                                        # Sites under their group
+```
+
+Without arguments, `sites:group` offers the groups and the sites by number. A site keeps its group when renamed, and loses it when removed.
+
 ## Share links
 
 A share link shows one site's dashboard read-only, without a login, and also opens the [read API](api.md) for that site:
@@ -110,6 +122,8 @@ php puls user:list                       # List all users
 php puls sites:list                      # List all tracked sites
 php puls sites:rename <old> <new>        # Rename a tracked site
 php puls sites:remove <name>             # Delete all data for a site
+php puls sites:group <group> <site>...   # Put sites in a group (one group per site)
+php puls sites:ungroup <site>...         # Take sites out of their group
 php puls sites:clean-paths <site> --query --ids  # Clean stored paths (--keep=a,b, --tokens, --dry-run)
 php puls share:create <site>             # Create a shareable dashboard link
 php puls share:create <site> --label="Client Q1" --expires=2026-06-30
