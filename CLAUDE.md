@@ -70,6 +70,8 @@ scripts/build-release.sh — Builds release zip with runtime files only
 scripts/readme-media.mjs - Generates every README image, the drill-down GIF and the social preview (headless Chrome over DevTools protocol + demo DB, ffmpeg)
 scripts/smoke.mjs       — Dashboard smoke test: headless Chrome over DevTools protocol, fails on JS errors (no npm deps)
 scripts/seed-demo.php   — Seeds a demo SQLite database with realistic fake data
+scripts/seed-benchmark.php - Seeds a benchmark database: 2M pageviews over a year, the same every run (schema from index.php)
+scripts/benchmark.php   - Times the dashboard API on a database as the dashboard asks for it, with query plans (`--explain`)
 Dockerfile              — Alpine + PHP built-in server (~93MB image)
 docker-entrypoint.sh    - Creates .env from .env.example, creates admin from ADMIN_PASSWORD env var
 docker-compose.yml      — One-command setup with volume for /app/data
@@ -128,6 +130,9 @@ php -S localhost:8080 -t public
 ./vendor/bin/pest
 
 # Dashboard smoke test (needs Node 22+ and Chrome; runs in CI as its own job)
+# Benchmark the dashboard API on 2M seeded pageviews (about 20 s to seed, 800 MB)
+php scripts/seed-benchmark.php && php scripts/benchmark.php --explain
+
 node scripts/smoke.mjs
 
 # Add user with site restriction
