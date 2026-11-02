@@ -595,6 +595,37 @@ test('api median session length is the middle visit, computed in SQL', function 
     expect($data['medianSessionSeconds'])->toBe(60);
 });
 
+test('api counts beyond the limit, exit pages and the summary come from the same passes as the tables', function () {
+    $site = 'passes-' . uniqid();
+    $db = getTestDb();
+    $stmt = $db->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash, referrer, utm_source) VALUES (?, ?, ?, ?, ?, ?)');
+    $start = max(time() - 3600, strtotime('today'));
+    $at = fn(int $minutes) => date('Y-m-d H:i:s', $start + $minutes * 60);
+    $stmt->execute([$at(0), $site, '/', 'a', 'Google', 'newsletter']);
+    $stmt->execute([$at(1), $site, '/kale', 'a', 'Google', 'newsletter']);
+    $stmt->execute([$at(0), $site, '/kale', 'b', 'Google', null]);
+    $stmt->execute([$at(0), $site, '/', 'c', 'Bing', 'ads']);
+    $stmt->execute([$at(2), $site, '/beet', 'c', 'Bing', 'ads']);
+    $stmt->execute([$at(0), $site, '/', 'd', null, null]);
+
+    $data = json_decode(http('GET', '/?api&days=1&share=' . createTestShareToken($site))['body'], true);
+
+    expect(array_column($data['pages'], 'views', 'path'))->toBe(['/' => 3, '/kale' => 2, '/beet' => 1])
+        ->and($data['pagesTotal'])->toBe(3)
+        ->and(array_keys($data['pages'][0]))->toBe(['path', 'views', 'visitors'])
+        ->and(array_column($data['referrers'], 'visitors', 'source'))->toBe(['Google' => 2, 'Bing' => 1])
+        ->and($data['referrersTotal'])->toBe(2)
+        ->and($data['utmTotal'])->toBe(2)
+        ->and($data['exitPages'][0])->toBe(['path' => '/kale', 'exits' => 2])
+        ->and(array_column($data['exitPages'], 'exits', 'path'))->toEqualCanonicalizing(['/kale' => 2, '/beet' => 1, '/' => 1])
+        ->and(array_column($data['entryPages'], 'entries', 'path'))->toBe(['/' => 3, '/kale' => 1])
+        ->and(array_column($data['entryPages'], 'bounces', 'path'))->toBe(['/' => 1, '/kale' => 1])
+        ->and($data['summary']['topPage'])->toBe('/kale')
+        ->and($data['summary']['topPageViews'])->toBe(2)
+        ->and($data['summary']['topSource'])->toBe('Google')
+        ->and($data['summary']['topSourceVisitors'])->toBe(2);
+});
+
 test('share API returns 404 for expired token', function () {
     $token = createTestShareToken('test', '2020-01-01 00:00:00');
     $r = http('GET', '/?api&days=7&share=' . $token);
