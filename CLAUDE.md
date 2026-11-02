@@ -58,7 +58,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (354 tests, unit + feature)
+tests/                  — Pest test suite (357 tests, unit + feature)
 docs/integrations.md    - Tracking setup: script attributes, events, keeping personal data out of URLs, excluding own visits, reverse proxies
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading
@@ -86,6 +86,7 @@ docker-compose.yml      — One-command setup with volume for /app/data
 
 - **No framework** — pure PHP 8.3+, only requires `pdo_sqlite`
 - **SQLite with WAL mode** — good concurrent read performance, single-file database
+- **One covering index on pageviews** - `(site, created_at, visitor_hash)`: the dashboard's visitor counts, bounces and sessions read it, not the rows. No index on the hash alone: nothing looks a visitor up, and the planner used it to scan the whole table for All sites. A sampled `ANALYZE` once a day (`refresh_statistics`) lets the planner walk the index site by site. Measure a query or index change with `scripts/seed-benchmark.php` and `scripts/benchmark.php` before and after
 - **Session-based auth** — CSRF-protected, brute-force lockout per IP (failed logins counted in `audit_log`), bcrypt passwords; a new session id every hour, the old one leading to it for a minute so requests in flight stay logged in; session files in `data/sessions` deleted once a day (PHP's own clean-up does not reach them on Forge)
 - **Per-user site access** — users can be restricted to specific sites
 - **Self-contained dashboard** — no build tools, no CDN, works offline after load
@@ -129,10 +130,10 @@ php -S localhost:8080 -t public
 # Run tests
 ./vendor/bin/pest
 
-# Dashboard smoke test (needs Node 22+ and Chrome; runs in CI as its own job)
 # Benchmark the dashboard API on 2M seeded pageviews (about 20 s to seed, 800 MB)
 php scripts/seed-benchmark.php && php scripts/benchmark.php --explain
 
+# Dashboard smoke test (needs Node 22+ and Chrome; runs in CI as its own job)
 node scripts/smoke.mjs
 
 # Add user with site restriction

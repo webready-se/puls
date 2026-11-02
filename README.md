@@ -107,7 +107,7 @@ A goal is a page or an event. Its tile shows the visitors who converted, their s
 **When to pick something else.** Puls is made for small and medium sites that you run yourself.
 
 - You would rather not run anything: Plausible and Umami have hosted plans, and GoatCounter has a free hosted service.
-- Millions of pageviews a month on one site: a database built for analytics, like Plausible's ClickHouse, stays fast at that size. Puls's dashboard slows down there; making it faster is [on the roadmap](ROADMAP.md).
+- Millions of pageviews a month on one site: a database built for analytics, like Plausible's ClickHouse, stays fast at that size. Puls's dashboard slows down there: a 30-day view of a site with 2 million pageviews a year takes about 3 s on a laptop (`scripts/benchmark.php`), and making it faster is [on the roadmap](ROADMAP.md).
 - E-commerce reports, heatmaps or session recordings: Matomo does that, Puls doesn't.
 
 ## Privacy

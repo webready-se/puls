@@ -26,5 +26,8 @@ test('migration v25 renames stored unknown visits that detect_bot() knows now', 
         ['Unknown crawler', 'Other'],
         ['Unknown client', 'Client'],
         ['Googlebot', 'Search engine'],
-    ])->and((int) $db->query('PRAGMA user_version')->fetchColumn())->toBe(25);
+    ]);
+    // Through to the current version, whatever later migrations exist
+    preg_match('/\$currentVersion = (\d+);/', file_get_contents(__DIR__ . '/../../public/index.php'), $m);
+    expect((int) $db->query('PRAGMA user_version')->fetchColumn())->toBe((int) $m[1]);
 });

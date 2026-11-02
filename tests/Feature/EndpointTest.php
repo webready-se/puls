@@ -570,6 +570,31 @@ test('api entry pages include bounces that add up to the site bounce rate', func
     expect(round(100 * $bounced / 6, 1))->toEqual($data['bounceRate']);
 });
 
+test('api median session length is the middle visit, computed in SQL', function () {
+    $site = 'median-' . uniqid();
+    $db = getTestDb();
+    $stmt = $db->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash) VALUES (?, ?, ?, ?)');
+    $start = max(time() - 3600, strtotime('today'));
+    $at = fn(int $seconds) => date('Y-m-d H:i:s', $start + $seconds);
+    // Three visits of two pages, 10 s, 60 s and 600 s apart, and one of a single page (no length)
+    foreach (['a' => 10, 'b' => 600, 'c' => 60] as $visitor => $seconds) {
+        $stmt->execute([$at(0), $site, '/', $visitor]);
+        $stmt->execute([$at($seconds), $site, '/next', $visitor]);
+    }
+    $stmt->execute([$at(0), $site, '/', 'd']);
+    $token = createTestShareToken($site);
+
+    $data = json_decode(http('GET', '/?api&days=1&share=' . $token)['body'], true);
+    expect($data['medianSessionSeconds'])->toBe(60)
+        ->and($data['previousMedianSessionSeconds'])->toBeNull();
+
+    // An even count takes the upper middle (position n/2 of the sorted list), as before
+    $stmt->execute([$at(0), $site, '/', 'e']);
+    $stmt->execute([$at(20), $site, '/next', 'e']);
+    $data = json_decode(http('GET', '/?api&days=1&share=' . $token)['body'], true);
+    expect($data['medianSessionSeconds'])->toBe(60);
+});
+
 test('share API returns 404 for expired token', function () {
     $token = createTestShareToken('test', '2020-01-01 00:00:00');
     $r = http('GET', '/?api&days=7&share=' . $token);
