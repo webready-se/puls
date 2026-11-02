@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Sites in groups.** A hub with many sites puts them in groups with `php puls sites:group Shops shop-a.example shop-b.example` (as many sites as you like in one command, or interactively by number), and `sites:ungroup` takes them out. The All sites overview then lists the sites under their group, with the group's visitors, views and trend in a header, the groups by views and the sites without one under "Other sites" last. A group folds to its header on a click, keeping its sums, and the choice is remembered per viewer; a group of more than six sites shows its five biggest with "Show 6 more sites (12 views)" for the rest, so a hub of thirty sites stays one screen. The site picker lists them under group headers too (named for screen readers), and its filter and ⌘K match a group's name as well, so "shop" finds every site in Shops; ⌘K names the group after a site. A site is in one group or none, and a group exists as long as a site points to it. `sites:list` shows the groups, a rename keeps the group and a removal drops it. The API lists them with `?api&groups`, and `siteOverview` rows carry `group` and `prev_views`.
+
 ## [1.30.0] - 2026-11-02
 
 ### Added

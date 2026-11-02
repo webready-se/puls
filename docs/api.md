@@ -23,6 +23,7 @@ All requests are `GET` with query parameters.
 | Request | Returns |
 |---------|---------|
 | `?api&sites` | The sites you can read, as a JSON array of names. With a share token, only its site |
+| `?api&groups` | The site groups and their sites, as `{"Shops": ["a", "b"]}`, limited to the sites you can read. `{}` without groups |
 | `?api` | The dashboard data for a period (below) |
 | `?api&event=<name>` | One event's drill-down (below) |
 | `?api&search=<text>` | Up to 20 paths containing the text (2+ characters), with views and visitors |
@@ -62,6 +63,7 @@ Every response compares with the previous period of the same length, in the `pre
 | `outbound`, `outboundTotal` | `[{url, clicks, visitors}]` |
 | `goals` | `[{path, label, type, conversions, rate, previousConversions, series, target, targetPeriod}]`, `type` is `page` or `event`. `series` is the visitors who converted per day; `target` is a count per `targetPeriod` (`day`, `week` or `month`), or `null` |
 | `breakdowns` | Saved event cards: `[{id, site, label, event, group, rows, total, new, count, previousCount, series}]`. `rows` holds the top 50 values, `total` the number of values, `count` and `previousCount` the events with a value in this and the previous period, `series` their count per day |
+| `siteOverview` | On All sites: `[{site, group, views, prev_views, visitors, live, trend, first_seen}]`, `group` is `null` for a site in no group |
 | `summary` | `{bestDay, bestDayViews, peakHour, peakHourStart, peakHourViews, topPage, topPageViews, topSource, topSourceVisitors}`. `peakHourStart` is the hour (0 to 23) that `peakHour` starts |
 | `versions` | `[{version, first_seen}]` from `data-version` |
 | `annotations` | Chart notes overlapping the period: `[{id, site, date, end_date, label}]` |
