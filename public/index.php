@@ -614,17 +614,17 @@ function get_tracking_script(): string
       var ci=sc.dataset.collapseIds!==undefined;
       var ct=sc.dataset.collapseTokens!==undefined;
       var tk=/\/(?:(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{16,}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?=\/|$)/g;
-      function pth(){var x=sc.dataset.path||location.pathname;if(ct)x=x.replace(tk,'/:token');return ci?x.replace(/\/\d+(?=\/|$)/g,'/:id'):x}
+      function pth(x){x=x||sc.dataset.path||location.pathname;if(ct)x=x.replace(tk,'/:token');return ci?x.replace(/\/\d+(?=\/|$)/g,'/:id'):x}
       function log(){if(dbg&&window.console)console.log.apply(console,['[puls]'].concat([].slice.call(arguments)))}
       function off(){try{return localStorage.getItem('puls_ignore')==='1'}catch(e){return false}}
       function opt(){var h=location.hash;if(h!=='#puls-ignore'&&h!=='#puls-track')return;try{h==='#puls-ignore'?localStorage.setItem('puls_ignore','1'):localStorage.removeItem('puls_ignore')}catch(e){return}history.replaceState(null,'',location.pathname+location.search);alert(h==='#puls-ignore'?'Puls: visits from this browser are no longer counted on '+location.hostname+'.':'Puls: visits from this browser are counted again on '+location.hostname+'.')}
       opt();addEventListener('hashchange',opt);
       function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});if(!o.source&&p.get('gad_source')){o.source='google';o.medium='cpc';var c=p.get('gad_campaignid');if(c)o.campaign=c}return Object.keys(o).length?o:null}
-      function url(){var s=location.search;if(qk!==undefined&&s){var k=qk==='none'?[]:qk.split(',').map(function(x){return x.trim()}),p=new URLSearchParams(s),o=new URLSearchParams();p.forEach(function(v,n){if(k.indexOf(n)>=0)o.append(n,v)});s=o.toString();s=s?'?'+s:''}return pth()+s}
+      function url(p){var s=location.search,x;if(typeof p=='string'){try{p=new URL(p,location.href)}catch(e){return}if(p.origin!==location.origin)return;x=p.pathname;s=p.search}if(qk!==undefined&&s){var k=qk==='none'?[]:qk.split(',').map(function(x){return x.trim()}),p=new URLSearchParams(s),o=new URLSearchParams();p.forEach(function(v,n){if(k.indexOf(n)>=0)o.append(n,v)});s=o.toString();s=s?'?'+s:''}return pth(x)+s}
       var last;
-      function s(){
+      function s(p){
         if(off()){log('ignored: this browser is excluded');return}
-        var u=url();if(u===last){log('skipped: same URL as the last pageview');return}last=u;
+        var u=url(p);if(!u){log('ignored: not this site',p);return}if(u===last){log('skipped: same URL as the last pageview');return}last=u;
         var d=JSON.stringify({u:u,r:document.referrer,w:innerWidth,site:site,utm:utm(),v:ver});
         log('pageview',u);
         navigator.sendBeacon?navigator.sendBeacon(ep,d):0;
@@ -633,8 +633,8 @@ function get_tracking_script(): string
       q();
       if(history.pushState){var o=history.pushState;history.pushState=function(){o.apply(this,arguments);q()};addEventListener('popstate',q)}
       var prev=window.puls;
-      window.puls={track:function(name,data){if(!name||off())return;var p={event_name:name,site:site,page_path:pth()};if(ver)p.app_version=ver;if(data&&typeof data==='object')p.event_data=data;log('event',name,data||'');navigator.sendBeacon?navigator.sendBeacon(evEp,JSON.stringify(p)):0}};
-      if(prev&&prev.q&&prev.q.length){log('draining',prev.q.length,'queued event(s)');for(var i=0;i<prev.q.length;i++)puls.track.apply(null,prev.q[i])}
+      window.puls={page:s,track:function(name,data){if(!name||off())return;var p={event_name:name,site:site,page_path:pth()};if(ver)p.app_version=ver;if(data&&typeof data==='object')p.event_data=data;log('event',name,data||'');navigator.sendBeacon?navigator.sendBeacon(evEp,JSON.stringify(p)):0}};
+      if(prev&&prev.q&&prev.q.length){log('draining',prev.q.length,'queued call(s)');for(var i=0;i<prev.q.length;i++){var e=prev.q[i];e.page?s(e.page[0]):puls.track.apply(null,e)}}
       if(sc.dataset.outbound!==undefined){document.addEventListener('click',function(e){var a=e.target.closest('a[href]');if(!a)return;try{var u=new URL(a.href,location.origin);if(u.hostname===location.hostname||u.protocol!=='http:'&&u.protocol!=='https:')return;puls.track('outbound_click',{url:u.href,text:(a.textContent||'').trim().substring(0,200)})}catch(ex){}},true)}
       if(sc.dataset.autoEvents!==undefined){
         document.addEventListener('click',function(e){

@@ -10,7 +10,7 @@ Puls works with any website or framework that serves HTML. The tracking script i
 
 Puls automatically tracks:
 
-- Page views (including SPA client-side navigation via `pushState`/`popstate`)
+- Page views (including SPA client-side navigation via `pushState`/`popstate`, and [`puls.page()`](#counting-a-pageview-yourself) for the rest)
 - Referrers, UTM parameters, browsers, devices, languages
 
 ### Script attributes
@@ -196,7 +196,7 @@ In `index.html`:
 </body>
 ```
 
-Puls hooks into `pushState` and `popstate` automatically — no React Router integration needed.
+Puls hooks into `pushState` and `popstate` automatically — no React Router integration needed. A view that changes the URL with `replaceState`, or without the History API at all, calls [`puls.page()`](#counting-a-pageview-yourself).
 
 ### Static HTML
 
@@ -205,6 +205,24 @@ Puls hooks into `pushState` and `popstate` automatically — no React Router int
 ```
 
 That's it. Works on any HTML page.
+
+## Counting a pageview yourself
+
+The script counts a pageview on load and on every `pushState` and `popstate`. A page it cannot see needs a call: a listing that loads more with `history.replaceState` (endless scroll), or an app that changes its views without the History API.
+
+```js
+// After the URL has changed: counts the current URL
+puls.page();
+
+// Or name the path yourself
+puls.page('/products/shoes?page=2');
+```
+
+A call goes through the same rules as an automatic pageview: `data-query`, `data-collapse-ids`, `data-collapse-tokens` and the [per-browser opt-out](#per-browser) apply, and the same URL twice in a row counts once, so `puls.page()` right after a `pushState` the script already counted does nothing. A path you pass is used instead of `data-path` for that call. A full URL on the same site works too; one on another site is ignored, with a line in [debug mode](#debug-mode).
+
+The query rules apply to a path you pass as well, so with `data-query="none"` page 2 and page 3 of `/products?page=2` are both `/products` and count once. Keep the parameter that tells pages apart (`data-query="page"`) if each page should count.
+
+`replaceState` is not counted by itself on purpose: sites use it for filters, sorting and tabs, which are not new pages, and with query strings kept every filter change would count. A call says what the site means.
 
 ## Custom Events
 
@@ -262,14 +280,14 @@ The `data` parameter is optional. When provided, it is stored as JSON and visibl
 
 ### Calling `puls.track` before the script has loaded
 
-The script is loaded with `defer`, so `window.puls` does not exist until the page has parsed. Single-page apps often fire events earlier than that (reading settings from `localStorage` on first render, PWA launch). Add this stub before any code that tracks, and the script drains the queue when it initialises:
+The script is loaded with `defer`, so `window.puls` does not exist until the page has parsed. Single-page apps often fire events earlier than that (reading settings from `localStorage` on first render, PWA launch). Add this stub before any code that tracks, and the script drains the queue when it initialises. It takes [`puls.page()`](#counting-a-pageview-yourself) calls too:
 
 ```html
-<script>window.puls = window.puls || { q: [], track: function () { this.q.push(arguments) } }</script>
+<script>window.puls = window.puls || { q: [], track: function () { this.q.push(arguments) }, page: function () { this.q.push({ page: arguments }) } }</script>
 <script src="https://your-puls-domain/?js" data-site="my-site" defer></script>
 ```
 
-Queued events are sent in order with the same `site` and `page_path` the live call would have used.
+Queued calls are sent in order with the same `site` and `page_path` the live call would have used, before the pageview the script counts on load. The shorter stub from earlier versions, without `page`, still works.
 
 ### Debug mode
 
@@ -309,6 +327,7 @@ Puls ships no npm package. Declare the global once in your project:
 // puls.d.ts
 interface Puls {
   track(name: string, data?: Record<string, string | number | boolean>): void;
+  page(path?: string): void;
 }
 
 declare global {
@@ -548,8 +567,10 @@ img-src https://your-puls-domain;
 The [stub for calling `puls.track` early](#calling-pulstrack-before-the-script-has-loaded) is an inline script, which a CSP without `'unsafe-inline'` blocks. Allow it by its hash:
 
 ```text
-script-src https://your-puls-domain 'sha256-GAkijOUCDhWurpZ6NiC3T8Wnzrz6/IIAtXUhidMnKCE=';
+script-src https://your-puls-domain 'sha256-ueSBnEDwOUKd/Lkz3C9djkHPjh1SIXZ+32upwHRmORs=';
 ```
+
+The shorter stub from earlier versions, without `page`, has the hash `'sha256-GAkijOUCDhWurpZ6NiC3T8Wnzrz6/IIAtXUhidMnKCE='`, so a site that keeps it keeps its policy.
 
 The hash holds for the stub exactly as shown, on one line with nothing else between `<script>` and `</script>`. A line break, an indent or one changed space gives another hash, so a framework that reformats the stub needs its own (Chrome's console names the hash of an inline script it blocked). If your CSP uses a nonce, give the stub the nonce instead. Or put the line in a file on your own site, loaded before the Puls script, which `script-src 'self'` covers:
 

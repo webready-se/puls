@@ -82,6 +82,14 @@ test('js endpoint drains events queued before the script loaded', function () {
         ->and($r['body'])->toContain('puls.track.apply');
 });
 
+test('js endpoint offers puls.page and drains pageviews queued before the script loaded', function () {
+    // The behaviour is checked in a browser by scripts/smoke.mjs; this pins that it ships
+    $body = http('GET', '/?js')['body'];
+    expect($body)->toContain('page:s')
+        ->and($body)->toContain('e.page?s(e.page[0])')
+        ->and($body)->toContain("typeof p=='string'");
+});
+
 test('js endpoint supports data-debug console logging', function () {
     $r = http('GET', '/?js');
     expect($r['body'])->toContain('dataset.debug')

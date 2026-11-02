@@ -820,6 +820,47 @@ async function main() {
   if (!/updated \d\d:\d\d, Stockholm time$/.test(footText)) failures.push(`footer names the install's zone for a viewer elsewhere (shows "${footText}")`);
   await send('Emulation.setTimezoneOverride', { timezoneId: TIMEZONE });
 
+  // 11. The tracking script on a page: sendBeacon is recorded instead of sent, so what the script
+  // would send is checked without a row in the database. puls.page() counts the current URL or a
+  // path through the same rules as a pageview (data-query, data-collapse-ids), once per URL, never
+  // another site's; calls queued before the script loaded are sent in order
+  const trackerSteps = async () => {
+    const fails = [];
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const sent = [];
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    navigator.sendBeacon = (url, body) => { sent.push({ url: String(url), body: JSON.parse(body) }); return true; };
+    const pages = () => sent.filter((b) => b.url.endsWith('?collect')).map((b) => b.body.u);
+    window.puls = { q: [], track: function () { this.q.push(arguments); }, page: function () { this.q.push({ page: arguments }); } };
+    window.puls.page('/queued/7');
+    window.puls.track('queued_event', { a: 1 });
+    const el = document.createElement('script');
+    el.src = '/?js';
+    el.dataset.site = 'smoke-tracker';
+    el.dataset.query = 'page';
+    el.dataset.collapseIds = '';
+    document.head.appendChild(el);
+    for (let t = 0; t < 5000 && pages().length < 2; t += 100) await sleep(100);
+    // The pageview on load runs through requestIdleCallback, which passes an object: it must count as "/"
+    if (pages().join() !== '/queued/:id,/') fails.push(`a queued puls.page() is sent before the pageview on load, through the id rule (sent ${pages().join(', ')})`);
+    const ev = sent.find((b) => b.url.endsWith('?event'));
+    if (ev?.body.event_name !== 'queued_event' || sent.indexOf(ev) !== 1) fails.push('a queued puls.track() is still sent, in its place in the queue');
+    if (!sent.every((b) => b.body.site === 'smoke-tracker')) fails.push('every beacon names the site from data-site');
+    history.replaceState(null, '', '/?page=2&q=secret');
+    window.puls.page();
+    window.puls.page();
+    window.puls.page('/products/42?page=3&ref=x');
+    window.puls.page('https://other.example/elsewhere');
+    window.puls.page(location.origin + '/full/9');
+    history.replaceState(null, '', '/');
+    const after = pages().slice(2);
+    if (after.join() !== '/?page=2,/products/:id?page=3,/full/:id') fails.push(`puls.page() counts the current URL once, a path and a full URL on this site through data-query and the id rule, and nothing for another site (sent ${after.join(', ')})`);
+    return fails;
+  };
+  const result6 = await send('Runtime.evaluate', { expression: `(${trackerSteps.toString()})()`, awaitPromise: true, returnByValue: true });
+  if (result6.exceptionDetails) errors.push(`Tracker steps threw: ${result6.exceptionDetails.exception?.description}`);
+  failures.push(...(Array.isArray(result6.result?.value) ? result6.result.value : []));
+
   ws.close();
   failures.push(...errors);
   if (failures.length) {
@@ -827,7 +868,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored). No JS errors.');
   }
 }
 
