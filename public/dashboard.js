@@ -57,7 +57,6 @@
   // Safe in text and in quoted attributes: quotes are escaped too
   function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   // A string argument for an inline handler: a JS literal, then escaped for the attribute it sits in
-  function jsArg(s) { return esc(JSON.stringify(String(s == null ? '' : s))); }
 
   // A strict Content Security Policy allows no inline style attribute, so rendering code puts a
   // bar's width or height and a colour in data attributes (data-w in percent, data-h in pixels,
@@ -78,6 +77,89 @@
   new MutationObserver(function(records) {
     records.forEach(function(r) { [].forEach.call(r.addedNodes, function(n) { if (n.nodeType === 1) applyStyles(n); }); });
   }).observe(document.documentElement, { childList: true, subtree: true });
+
+  // Event delegation instead of inline handlers, which a strict Content Security Policy forbids.
+  // An element names its action in data-action (click) or data-on-<event>, and carries its
+  // arguments in data attributes. One listener per event type walks from the target up to the
+  // document and runs every action on the way, as the inline handlers bubbled, until one of them
+  // stops propagation. Blur does not bubble, so data-on-blur listens to focusout
+  var actions = {
+    'all-sites': function() { selectSite(''); },
+    'select-site': function(el) { selectSite(el.dataset.site); },
+    'open-search': function() { openSearch(); },
+    'close-search-outside': function(el, e) { if (e.target === el) closeSearch(); },
+    'toggle-date-picker': function(el, e) { toggleDatePicker(e); },
+    'apply-date-range': function() { applyDateRange(); },
+    'open-menu': function() { openMenu(); },
+    'close-menu': function() { closeMenu(); },
+    'export': function(el) { exportData(el.dataset.format); },
+    'add-excluded': function(el, e) { addExcluded(e); },
+    'exclude-mine': function(el) { excludeMine(el.dataset.ip); },
+    'remove-excluded': function(el) { removeExcluded(el); },
+    'close-overlay': function() { closeOverlay(); },
+    'close-overlay-outside': function(el, e) { if (e.target === el) closeOverlay(); },
+    'clear-path-filter': function() { clearPathFilter(); },
+    'filter-channel': function(el) { filterChannel(el.dataset.channel || ''); },
+    'blur-on-enter': function(el, e) { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } },
+    'rename-breakdown': function(el) { renameBreakdown(el); },
+    'card-drag': function(el, e) { startCardDrag(e, el); },
+    'card-move': function(el, e) { moveCardKey(e, el); },
+    'open-breakdown': function(el) { openBreakdownDetail(el); },
+    'remove-breakdown': function(el) { removeBreakdown(+el.dataset.id, el.dataset.site); },
+    'toggle-breakdown-rows': function(el) { toggleBreakdownRows(el, +el.dataset.id); },
+    'remove-goal': function(el) { removeGoal(el.dataset.path); },
+    'toggle-goal': function(el, e) { e.stopPropagation(); toggleGoal(el.dataset.path); },
+    'menu-toggle-goal': function(el) { menuToggleGoal(el.dataset.path, el.dataset.type); },
+    'save-goal-target': function(el, e) { saveGoalTarget(e, el.dataset.path); },
+    'clear-goal-target': function(el, e) { saveGoalTarget(e, el.dataset.path, true); },
+    'cancel-goal-target': function() { editGoalTarget(null); },
+    'cancel-goal-target-on-escape': function(el, e) { if (e.key === 'Escape') editGoalTarget(null); },
+    'edit-goal-target': function(el) { editGoalTarget(el.dataset.key); },
+    'chart-mode': function(el) { switchChartMode(el); },
+    'toggle-compare': function(el) { toggleCompareMode(el); },
+    'toggle-note-form': function() { toggleNoteForm(); },
+    'note-form-to-settings': function() { toggleNoteForm(); openMenu('notes'); },
+    'save-note': function(el, e) { saveNote(e); },
+    'update-note': function(el) { updateNote(el); },
+    'remove-note': function(el) { removeNote(el); },
+    'show-all': function(el) { showAll(el.dataset.type, el.dataset.title); },
+    'page-tab': function(el) { switchPageTab(el); },
+    'event-detail': function(el) { loadEventDetail(el.dataset.name, el); },
+    'outbound-detail': function(el) { loadOutboundDetail(el.dataset.url, el); },
+    'show-broken': function(el) { showBrokenAll(el.dataset.title, el.dataset.groupColor, !!el.dataset.status); },
+    'copy-snippet': function(el) { copySnippet(el); },
+    'update-utm': function() { updateUtm(); },
+    'update-utm-advanced': function() { updateUtmFromAdvanced(); },
+    'utm-channel': function(el) { selectUtmChannel(el); },
+    'toggle-utm-custom': function() { toggleUtmCustom(); },
+    'toggle-utm-advanced': function() { toggleUtmAdvanced(); },
+    'copy-utm-link': function() { copyUtmLink(); },
+    'event-chart-mode': function(el) { setEventChartMode(el); },
+    'event-group': function(el) { setEventGroup(el); },
+    'event-funnel': function(el) { setEventFunnel(el); },
+    'save-breakdown': function(el) { saveBreakdown(el); },
+    'show-all-event-group': function(el) { showAllEventGroup(el); }
+  };
+  function delegate(eventType, attr) {
+    document.addEventListener(eventType, function(e) {
+      for (var el = e.target; el && el.nodeType === 1; el = el.parentNode) {
+        var name = el.getAttribute(attr);
+        if (name !== null) {
+          var fn = actions[name];
+          if (!fn) console.error('Unknown action: ' + name);
+          else fn(el, e);
+          if (e.cancelBubble) return;
+        }
+      }
+    });
+  }
+  delegate('click', 'data-action');
+  delegate('input', 'data-on-input');
+  delegate('change', 'data-on-change');
+  delegate('submit', 'data-on-submit');
+  delegate('keydown', 'data-on-keydown');
+  delegate('pointerdown', 'data-on-pointerdown');
+  delegate('focusout', 'data-on-blur');
   function num(n) { return Number(n || 0).toLocaleString('en-US'); }
   function formatDuration(s) {
     if (!s || s < 10) return '< 10s';
@@ -521,7 +603,7 @@
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>' +
         '<span>Filtering on</span>' +
         '<span class="path-filter-path" title="' + esc(d.path) + '">' + esc(decode(d.path)) + '</span>' +
-        '<button class="path-filter-clear" onclick="clearPathFilter()">Clear filter</button>' +
+        '<button class="path-filter-clear" data-action="clear-path-filter">Clear filter</button>' +
       '</div>');
     }
     if (d.channel) {
@@ -531,7 +613,7 @@
         '<span class="dot dot-10" data-bg="' + cColor + '"></span>' +
         '<span>Channel</span>' +
         '<span class="path-filter-path">' + esc(channelName) + '</span>' +
-        '<button class="path-filter-clear" onclick="filterChannel(\'\')">Clear filter</button>' +
+        '<button class="path-filter-clear" data-action="filter-channel" data-channel="">Clear filter</button>' +
       '</div>');
     }
 
@@ -614,12 +696,12 @@
       var max = Math.max.apply(null, b.rows.map(function(r) { return r.count; }).concat([1]));
       html += '<div class="card breakdown-card" data-island="bd:' + b.id + '">' +
         '<div class="breakdown-head" data-anchor="bd:' + b.id + '">' +
-          '<div class="min-w-0"><span class="card-title"' + (isShared ? '' : ' contenteditable="plaintext-only" spellcheck="false" title="Click to rename" data-bd-site="' + esc(b.site) + '" data-bd-event="' + esc(b.event) + '" data-bd-group="' + esc(b.group) + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}" onblur="renameBreakdown(this)"') + '>' + esc(b.label) + '</span>' +
+          '<div class="min-w-0"><span class="card-title"' + (isShared ? '' : ' contenteditable="plaintext-only" spellcheck="false" title="Click to rename" data-bd-site="' + esc(b.site) + '" data-bd-event="' + esc(b.event) + '" data-bd-group="' + esc(b.group) + '" data-on-keydown="blur-on-enter" data-on-blur="rename-breakdown"') + '>' + esc(b.label) + '</span>' +
             (sub ? '<div class="breakdown-sub">' + esc(sub) + '</div>' : '') + '</div>' +
           '<div class="breakdown-actions">' +
-            (arrange ? '<button class="breakdown-grip" aria-label="Move card: drag it, or use the arrow keys" title="Drag to move, or use the arrow keys" onpointerdown="startCardDrag(event, this)" onkeydown="moveCardKey(event, this)">' + icons.grip + '</button>' : '') +
-            '<button class="event-chip breakdown-open" aria-expanded="false" data-event="' + esc(b.event) + '" data-group="' + esc(b.group) + '" onclick="openBreakdownDetail(this)" title="Trend, funnel and CSV for this event">Details</button>' +
-            (isShared ? '' : '<button class="goal-remove" onclick="removeBreakdown(' + b.id + ', ' + jsArg(b.site) + ')" title="Remove card" aria-label="Remove card">&times;</button>') +
+            (arrange ? '<button class="breakdown-grip" aria-label="Move card: drag it, or use the arrow keys" title="Drag to move, or use the arrow keys" data-on-pointerdown="card-drag" data-on-keydown="card-move">' + icons.grip + '</button>' : '') +
+            '<button class="event-chip breakdown-open" aria-expanded="false" data-event="' + esc(b.event) + '" data-group="' + esc(b.group) + '" data-action="open-breakdown" title="Trend, funnel and CSV for this event">Details</button>' +
+            (isShared ? '' : '<button class="goal-remove" data-action="remove-breakdown" data-id="' + b.id + '" data-site="' + esc(b.site) + '" title="Remove card" aria-label="Remove card">&times;</button>') +
           '</div>' +
         '</div>' +
         renderBreakdownGlance(b);
@@ -640,7 +722,7 @@
         });
         if (b.rows.length > CARD_ROWS) {
           var more = b.total > b.rows.length ? 'Show top ' + b.rows.length + ' of ' + num(b.total) : 'Show all (' + num(b.total) + ')';
-          html += '</div></div><button class="breakdown-toggle" aria-expanded="' + open + '" aria-controls="bd-more-' + b.id + '" data-more="' + esc(more) + '" onclick="toggleBreakdownRows(this, ' + b.id + ')">' + (open ? 'Show fewer' : esc(more)) + '</button>';
+          html += '</div></div><button class="breakdown-toggle" aria-expanded="' + open + '" aria-controls="bd-more-' + b.id + '" data-more="' + esc(more) + '" data-action="toggle-breakdown-rows" data-id="' + b.id + '">' + (open ? 'Show fewer' : esc(more)) + '</button>';
         } else {
           html += '</div>';
         }
@@ -935,7 +1017,7 @@
       html += '<div class="goal-tile' + (empty ? ' is-empty' : '') + '" data-island="goal:' + esc(goalKey(g)) + '">' +
         '<div class="goal-tile-head">' +
           '<div class="goal-name"><span class="goal-label" title="' + esc(g.path) + '">' + esc(g.label) + '</span>' + (isEvent ? '<span class="goal-type">event</span>' : '') + '</div>' +
-          '<button class="goal-remove" onclick="removeGoal(' + jsArg(g.path) + ')" title="Remove goal" aria-label="Remove goal">&times;</button>' +
+          '<button class="goal-remove" data-action="remove-goal" data-path="' + esc(g.path) + '" title="Remove goal" aria-label="Remove goal">&times;</button>' +
         '</div>' +
         '<div class="goal-tile-body">' +
           '<div><div class="goal-value">' + num(g.conversions) + '</div>' +
@@ -955,26 +1037,26 @@
   // Across sites the same path can be a goal with different labels, so a goal is its type, path and label
   function goalKey(g) { return [g.type, g.path, g.label].join('\n'); }
   function renderGoalTarget(g, site) {
-    var path = jsArg(g.path), key = jsArg(goalKey(g));
+    var path = esc(g.path), key = esc(goalKey(g));
     if (editingTarget === goalKey(g)) {
       var period = g.targetPeriod || 'week';
-      return '<form class="goal-target-form" onsubmit="saveGoalTarget(event, ' + path + ')" onkeydown="if(event.key===\'Escape\')editGoalTarget(null)">' +
+      return '<form class="goal-target-form" data-on-submit="save-goal-target" data-on-keydown="cancel-goal-target-on-escape" data-path="' + path + '">' +
         '<input type="number" name="target" min="1" step="1" required value="' + (g.target || '') + '" aria-label="Target">' +
         '<select name="period" aria-label="Target period">' + ['day', 'week', 'month'].map(function(p) {
           return '<option value="' + p + '"' + (p === period ? ' selected' : '') + '>per ' + p + '</option>';
         }).join('') + '</select>' +
         '<button type="submit">Save</button>' +
-        (g.target ? '<button type="button" onclick="saveGoalTarget(event, ' + path + ', true)">Clear</button>' : '') +
-        '<button type="button" onclick="editGoalTarget(null)">Cancel</button>' +
+        (g.target ? '<button type="button" data-action="clear-goal-target" data-path="' + path + '">Clear</button>' : '') +
+        '<button type="button" data-action="cancel-goal-target">Cancel</button>' +
       '</form>';
     }
-    if (!g.target) return site ? '<button class="goal-target-set" onclick="editGoalTarget(' + key + ')">Set target</button>' : '';
+    if (!g.target) return site ? '<button class="goal-target-set" data-action="edit-goal-target" data-key="' + key + '">Set target</button>' : '';
     var goal = Math.max(1, Math.round(g.target * currentDays / TARGET_DAYS[g.targetPeriod]));
     var reached = g.conversions >= goal;
     return '<div class="goal-meter' + (reached ? ' reached' : '') + '" role="progressbar" aria-label="Target" aria-valuemin="0" aria-valuemax="' + goal + '" aria-valuenow="' + Math.min(g.conversions, goal) + '">' +
         '<div class="goal-meter-fill" data-w="' + Math.min(100, g.conversions / goal * 100) + '"></div></div>' +
       '<div class="goal-target">' + num(g.conversions) + ' / ' + num(goal) + (reached ? ' · reached' : '') +
-        ' <button class="goal-target-set" onclick="editGoalTarget(' + key + ')" title="Change the target">' + num(g.target) + ' per ' + g.targetPeriod + '</button></div>';
+        ' <button class="goal-target-set" data-action="edit-goal-target" data-key="' + key + '" title="Change the target">' + num(g.target) + ' per ' + g.targetPeriod + '</button></div>';
   }
 
   window.editGoalTarget = function(key) {
@@ -1053,7 +1135,7 @@
       if (s.live > 0) {
         liveHtml = '<span class="site-overview-live" title="' + s.live + ' online now"><span class="live-dot" aria-hidden="true"></span>' + s.live + '</span>';
       }
-      html += '<div class="site-overview-row" onclick="selectSite(' + jsArg(s.site) + ')">' +
+      html += '<div class="site-overview-row" data-action="select-site" data-site="' + esc(s.site) + '">' +
         '<span class="site-overview-name">' + esc(s.site) + liveHtml + sinceHtml + '</span>' +
         '<span class="site-overview-stat">' + num(s.visitors) + ' visitors</span>' +
         '<span class="site-overview-stat">' + num(s.views) + ' views</span>' +
@@ -1104,12 +1186,12 @@
     return '<div class="card" id="chart-card">' +
       '<div class="card-header">' +
         '<div class="card-tabs card-tabs-bare">' +
-          '<div class="card-tab' + (chartMode === 'views' ? ' active' : '') + '" data-chart="views" onclick="switchChartMode(this)">Pageviews</div>' +
-          '<div class="card-tab' + (chartMode === 'visitors' ? ' active' : '') + '" data-chart="visitors" onclick="switchChartMode(this)">Visitors</div>' +
+          '<div class="card-tab' + (chartMode === 'views' ? ' active' : '') + '" data-chart="views" data-action="chart-mode">Pageviews</div>' +
+          '<div class="card-tab' + (chartMode === 'visitors' ? ' active' : '') + '" data-chart="visitors" data-action="chart-mode">Visitors</div>' +
         '</div>' +
         '<span class="card-subtitle">' + esc(siteName) + ' — ' + periodLabel() +
-          (hasCompare ? '<button class="chart-compare-toggle' + (compareMode ? ' active' : '') + '" onclick="toggleCompareMode(this)">Compare</button>' : '') +
-          (noteSite() ? '<button class="chart-compare-toggle note-toggle" aria-expanded="false" aria-controls="note-form" onclick="toggleNoteForm()">+ Note</button>' : '') +
+          (hasCompare ? '<button class="chart-compare-toggle' + (compareMode ? ' active' : '') + '" data-action="toggle-compare">Compare</button>' : '') +
+          (noteSite() ? '<button class="chart-compare-toggle note-toggle" aria-expanded="false" aria-controls="note-form" data-action="toggle-note-form">+ Note</button>' : '') +
         '</span>' +
       '</div>' +
       (noteSite() ? renderNoteForm() : '') +
@@ -1342,7 +1424,7 @@
     rows.forEach(function(r) {
       var pct = (+r.views / max) * 100;
       var isGoal = goalPaths.indexOf(r.path) >= 0;
-      var goalBtn = isShared ? '' : '<button class="goal-toggle' + (isGoal ? ' is-goal' : '') + '" onclick="event.stopPropagation();toggleGoal(' + jsArg(r.path) + ')" title="' + (isGoal ? 'Remove goal' : 'Set as goal') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="icon-14"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button>';
+      var goalBtn = isShared ? '' : '<button class="goal-toggle' + (isGoal ? ' is-goal' : '') + '" data-action="toggle-goal" data-path="' + esc(r.path) + '" title="' + (isGoal ? 'Remove goal' : 'Set as goal') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="icon-14"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button>';
       html += '<div class="trow">' +
         goalBtn +
         '<span class="trow-label" title="' + esc(r.path) + '">' + esc(decode(r.path)) + '</span>' +
@@ -1368,7 +1450,7 @@
 
   function showAllBtn(total, expandType, title) {
     if (total <= 10) return '';
-    return '<button class="show-all" onclick="showAll(\'' + expandType + '\', ' + jsArg(title) + ')">Show all (' + total + ')</button>';
+    return '<button class="show-all" data-action="show-all" data-type="' + expandType + '" data-title="' + esc(title) + '">Show all (' + total + ')</button>';
   }
 
   function renderTabbedPages(pages, entryPages, exitPages, pagesTotal) {
@@ -1381,7 +1463,7 @@
     var html = '<div class="card">' +
       '<div class="card-tabs">';
     tabs.forEach(function(t, i) {
-      html += '<div class="card-tab' + (i === 0 ? ' active' : '') + '" data-tab="' + t.id + '" onclick="switchPageTab(this)">' + t.label + '</div>';
+      html += '<div class="card-tab' + (i === 0 ? ' active' : '') + '" data-tab="' + t.id + '" data-action="page-tab">' + t.label + '</div>';
     });
     html += '</div>';
 
@@ -1461,10 +1543,10 @@
   function renderTabbedTraffic(referrers, utm, referrersTotal, utmTotal, events, eventsTotal, outbound, outboundTotal) {
     var html = '<div class="card">' +
       '<div class="card-tabs">' +
-        '<div class="card-tab active" data-tab="sources" onclick="switchPageTab(this)">Sources</div>' +
-        '<div class="card-tab" data-tab="utm" onclick="switchPageTab(this)">UTM</div>' +
-        '<div class="card-tab" data-tab="events" onclick="switchPageTab(this)">Events</div>' +
-        '<div class="card-tab" data-tab="outbound" onclick="switchPageTab(this)">Outbound</div>' +
+        '<div class="card-tab active" data-tab="sources" data-action="page-tab">Sources</div>' +
+        '<div class="card-tab" data-tab="utm" data-action="page-tab">UTM</div>' +
+        '<div class="card-tab" data-tab="events" data-action="page-tab">Events</div>' +
+        '<div class="card-tab" data-tab="outbound" data-action="page-tab">Outbound</div>' +
       '</div>' +
       '<div class="tab-panel" data-panel="sources">' +
         renderTableContent(referrers, 'source', 'visitors', '#19acca') +
@@ -1496,7 +1578,7 @@
       var pct = (+r.count / max) * 100;
       var name = r.event_name.replace(/_/g, ' ');
       var visitors = r.visitors !== undefined ? num(r.visitors) + ' visitor' + (+r.visitors === 1 ? '' : 's') : '';
-      html += '<div class="trow trow-clickable" role="button" tabindex="0" aria-label="' + esc(name) + ': ' + num(r.count) + ' events, show details" data-event="' + esc(r.event_name) + '" data-anchor="event:' + esc(r.event_name) + '" onclick="loadEventDetail(' + jsArg(r.event_name) + ', this)">' +
+      html += '<div class="trow trow-clickable" role="button" tabindex="0" aria-label="' + esc(name) + ': ' + num(r.count) + ' events, show details" data-event="' + esc(r.event_name) + '" data-anchor="event:' + esc(r.event_name) + '" data-action="event-detail" data-name="' + esc(r.event_name) + '">' +
         '<span class="trow-label">' + esc(name) + (visitors ? ' <span class="faint fs-11">' + visitors + '</span>' : '') + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="var(--accent-tile)"></div></div>' +
         '<span class="trow-val">' + num(r.count) + '</span>' +
@@ -1514,7 +1596,7 @@
     rows.forEach(function(r) {
       var pct = (+r.clicks / max) * 100;
       var display = r.url ? r.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '(unknown)';
-      html += '<div class="trow trow-clickable" role="button" tabindex="0" onclick="loadOutboundDetail(' + jsArg(r.url || '') + ', this)">' +
+      html += '<div class="trow trow-clickable" role="button" tabindex="0" data-action="outbound-detail" data-url="' + esc(r.url || '') + '">' +
         '<span class="trow-label" title="' + esc(r.url || '') + '">' + esc(display) + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="#06b6d4"></div></div>' +
         '<span class="trow-val">' + num(r.clicks) + '</span>' +
@@ -1565,10 +1647,10 @@
   function renderTabbedVisitors(browsers, devices, languages, countries) {
     var html = '<div class="card">' +
       '<div class="card-tabs">' +
-        '<div class="card-tab active" data-tab="browsers" onclick="switchPageTab(this)">Browsers</div>' +
-        '<div class="card-tab" data-tab="devices" onclick="switchPageTab(this)">Devices</div>' +
-        '<div class="card-tab" data-tab="countries" onclick="switchPageTab(this)">Countries</div>' +
-        '<div class="card-tab" data-tab="languages" onclick="switchPageTab(this)">Languages</div>' +
+        '<div class="card-tab active" data-tab="browsers" data-action="page-tab">Browsers</div>' +
+        '<div class="card-tab" data-tab="devices" data-action="page-tab">Devices</div>' +
+        '<div class="card-tab" data-tab="countries" data-action="page-tab">Countries</div>' +
+        '<div class="card-tab" data-tab="languages" data-action="page-tab">Languages</div>' +
       '</div>' +
       '<div class="tab-panel" data-panel="browsers">' + renderPctBars(browsers, 'var(--accent-tile)') + '</div>' +
       '<div class="tab-panel" data-panel="devices" hidden>' + renderPctBars(devices, '#19acca') + '</div>' +
@@ -1597,7 +1679,7 @@
       var pct = (+c.visitors / maxVisitors) * 100;
       var color = channelColors[c.channel] || 'var(--accent-tile)';
       var slug = channelSlugs[c.channel] || '';
-      html += '<div class="trow trow-clickable" role="button" tabindex="0" onclick="filterChannel(\'' + slug + '\')">' +
+      html += '<div class="trow trow-clickable" role="button" tabindex="0" data-action="filter-channel" data-channel="' + slug + '">' +
         '<span class="trow-label">' + esc(c.channel) +
           ' <span class="faint fs-11">' + c.pages_per_visitor + ' p/v</span>' +
         '</span>' +
@@ -1794,7 +1876,7 @@
         renderBrokenGroup(visible, color, showStatus) +
         '</div>';
       if (items.length > BROKEN_SHOW) {
-        g += '<button class="show-all" onclick="showBrokenAll(' + jsArg(title) + ',\'' + color + '\',' + !!showStatus + ')">Show all (' + items.length + ')</button>';
+        g += '<button class="show-all" data-action="show-broken" data-title="' + esc(title) + '" data-group-color="' + color + '" data-status="' + (showStatus ? '1' : '') + '">Show all (' + items.length + ')</button>';
       }
       g += '</div>';
       return g;
@@ -1861,7 +1943,7 @@
     return '<div class="snippet">' +
       '<h3>Tracking snippet</h3>' +
       '<p>Paste before &lt;/body&gt; on your site. The pixel catches bots that don\'t run JS.</p>' +
-      '<pre id="snippet-code" onclick="copySnippet(this)">' +
+      '<pre id="snippet-code" data-action="copy-snippet">' +
         '&lt;script src="' + host + '/?js" data-site="' + esc(siteVal) + '" data-outbound defer&gt;&lt;/script&gt;\n' +
         '&lt;noscript&gt;&lt;img src="' + host + '/?pixel&amp;s=' + esc(siteVal) + '&amp;p=/" alt="" width="1" height="1"&gt;&lt;/noscript&gt;' +
       '</pre>' +
@@ -1874,26 +1956,26 @@
       '<div class="utm-step">' +
         '<div class="utm-step-label"><span class="utm-step-num active">1</span> Which page should the link go to?</div>' +
         '<div class="row gap-8">' +
-          '<input type="text" id="utm-domain" value="' + esc(utmDomain()) + '" placeholder="https://your-site.com" oninput="updateUtm()" class="w-45">' +
-          '<input type="text" id="utm-path" placeholder="/ (homepage)" oninput="updateUtm()" class="flex-1">' +
+          '<input type="text" id="utm-domain" value="' + esc(utmDomain()) + '" placeholder="https://your-site.com" data-on-input="update-utm" class="w-45">' +
+          '<input type="text" id="utm-path" placeholder="/ (homepage)" data-on-input="update-utm" class="flex-1">' +
         '</div>' +
       '</div>' +
 
       '<div class="utm-step">' +
         '<div class="utm-step-label"><span class="utm-step-num" id="utm-step2-num">2</span> Where will you share the link?</div>' +
         '<div class="utm-channels" id="utm-channels">' +
-          '<div class="utm-ch-btn" data-source="facebook" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">f</span>Facebook</div>' +
-          '<div class="utm-ch-btn" data-source="instagram" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">ig</span>Instagram</div>' +
-          '<div class="utm-ch-btn" data-source="linkedin" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">in</span>LinkedIn</div>' +
-          '<div class="utm-ch-btn" data-source="twitter" data-medium="social" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">X</span>Twitter/X</div>' +
-          '<div class="utm-ch-btn" data-source="newsletter" data-medium="email" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">\u2709</span>Newsletter</div>' +
-          '<div class="utm-ch-btn" data-source="website" data-medium="referral" onclick="selectUtmChannel(this)"><span class="utm-ch-icon">www</span>Website</div>' +
+          '<div class="utm-ch-btn" data-source="facebook" data-medium="social" data-action="utm-channel"><span class="utm-ch-icon">f</span>Facebook</div>' +
+          '<div class="utm-ch-btn" data-source="instagram" data-medium="social" data-action="utm-channel"><span class="utm-ch-icon">ig</span>Instagram</div>' +
+          '<div class="utm-ch-btn" data-source="linkedin" data-medium="social" data-action="utm-channel"><span class="utm-ch-icon">in</span>LinkedIn</div>' +
+          '<div class="utm-ch-btn" data-source="twitter" data-medium="social" data-action="utm-channel"><span class="utm-ch-icon">X</span>Twitter/X</div>' +
+          '<div class="utm-ch-btn" data-source="newsletter" data-medium="email" data-action="utm-channel"><span class="utm-ch-icon">\u2709</span>Newsletter</div>' +
+          '<div class="utm-ch-btn" data-source="website" data-medium="referral" data-action="utm-channel"><span class="utm-ch-icon">www</span>Website</div>' +
         '</div>' +
         '<div id="utm-custom-wrap" class="mt-8" hidden>' +
           '<div class="snippet-grid">' +
-            '<div><label>Source</label><input type="text" id="utm-source-custom" placeholder="e.g. podcast" oninput="updateUtm()"></div>' +
+            '<div><label>Source</label><input type="text" id="utm-source-custom" placeholder="e.g. podcast" data-on-input="update-utm"></div>' +
             '<div><label>Medium</label>' +
-              '<select id="utm-medium-custom" onchange="updateUtm()">' +
+              '<select id="utm-medium-custom" data-on-change="update-utm">' +
                 '<option value="social">Social</option>' +
                 '<option value="email">Email</option>' +
                 '<option value="referral">Referral</option>' +
@@ -1903,31 +1985,31 @@
           '</div>' +
         '</div>' +
         '<div class="mt-8 ta-center">' +
-          '<span class="utm-ch-btn utm-ch-other" id="utm-other-btn" onclick="toggleUtmCustom()">Other source...</span>' +
+          '<span class="utm-ch-btn utm-ch-other" id="utm-other-btn" data-action="toggle-utm-custom">Other source...</span>' +
         '</div>' +
       '</div>' +
 
       '<div class="utm-step">' +
         '<div class="utm-step-label"><span class="utm-step-num" id="utm-step3-num">3</span> Campaign name <span class="faint fw-400">(optional)</span></div>' +
-        '<input type="text" id="utm-campaign" placeholder="e.g. spring-campaign, black-friday" oninput="updateUtm()">' +
+        '<input type="text" id="utm-campaign" placeholder="e.g. spring-campaign, black-friday" data-on-input="update-utm">' +
       '</div>' +
 
       '<div id="utm-result-wrap" hidden>' +
         '<div class="utm-result-box">' +
           '<div class="utm-result-url" id="utm-result-url"></div>' +
-          '<button class="utm-copy-btn" id="utm-copy-btn" onclick="copyUtmLink()">Copy link</button>' +
+          '<button class="utm-copy-btn" id="utm-copy-btn" data-action="copy-utm-link">Copy link</button>' +
         '</div>' +
       '</div>' +
       '<div id="utm-placeholder" class="utm-placeholder">Choose where to share the link</div>' +
 
-      '<span class="utm-advanced-toggle" onclick="toggleUtmAdvanced()">' +
+      '<span class="utm-advanced-toggle" data-action="toggle-utm-advanced">' +
         '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>' +
         'Advanced' +
       '</span>' +
       '<div class="utm-advanced" id="utm-advanced">' +
         '<div class="snippet-grid">' +
-          '<div><label>source</label><input type="text" id="utm-adv-source" oninput="updateUtmFromAdvanced()"></div>' +
-          '<div><label>medium</label><input type="text" id="utm-adv-medium" oninput="updateUtmFromAdvanced()"></div>' +
+          '<div><label>source</label><input type="text" id="utm-adv-source" data-on-input="update-utm-advanced"></div>' +
+          '<div><label>medium</label><input type="text" id="utm-adv-medium" data-on-input="update-utm-advanced"></div>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -1935,7 +2017,7 @@
     '<div class="snippet">' +
       '<h3>Server-side bot tracking (Nginx)</h3>' +
       '<p>Catch bots that don\'t load images or run JavaScript. Add to Nginx config per site.</p>' +
-      '<pre id="nginx-snippet" onclick="copySnippet(this)">' +
+      '<pre id="nginx-snippet" data-action="copy-snippet">' +
         '# Outside the server block\n' +
         'map $http_user_agent $is_bot {\n' +
         '    default 0;\n' +
@@ -2349,8 +2431,8 @@
       var showCompare = compareMode && d.previousEventSeries && d.previousEventSeries.length > 0;
       var dense = d.eventSeries.length > 31;
       html += '<div class="event-chips">' +
-        '<button class="event-chip' + (eventChartMode === 'count' ? ' active' : '') + '" data-mode="count" onclick="setEventChartMode(this)">Count</button>' +
-        '<button class="event-chip' + (eventChartMode === 'rate' ? ' active' : '') + '" data-mode="rate" onclick="setEventChartMode(this)">Per 100 visitors</button>' +
+        '<button class="event-chip' + (eventChartMode === 'count' ? ' active' : '') + '" data-mode="count" data-action="event-chart-mode">Count</button>' +
+        '<button class="event-chip' + (eventChartMode === 'rate' ? ' active' : '') + '" data-mode="rate" data-action="event-chart-mode">Per 100 visitors</button>' +
         (showCompare ? '<span class="event-chips-label ml-auto">vs previous period</span>' : '') +
       '</div>' +
       '<div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + (dense ? ' dense' : '') + (marksFor(d, d.eventSeries.map(function(r) { return r.date; })).stacked ? ' stacked-marks' : '') + '"><div class="chart">' +
@@ -2364,13 +2446,13 @@
     if (keys.length) {
       html += '<div class="event-chips"><span class="event-chips-label">Group by</span>';
       keys.forEach(function(k) {
-        html += '<button class="event-chip' + (k.key === d.eventGroupKey ? ' active' : '') + '" data-key="' + esc(k.key) + '" onclick="setEventGroup(this)">' + esc(k.key === '@version' ? 'version' : k.key) + '</button>';
+        html += '<button class="event-chip' + (k.key === d.eventGroupKey ? ' active' : '') + '" data-key="' + esc(k.key) + '" data-action="event-group">' + esc(k.key === '@version' ? 'version' : k.key) + '</button>';
       });
       var canSave = !isShared && d.eventGroupKey && (currentSite || sites.length === 1);
       var saved = canSave && lastData && (lastData.breakdowns || []).some(function(b) { return b.event === st.name && b.group === d.eventGroupKey; });
-      html += '<button class="event-chip' + (!d.eventGroupKey ? ' active' : '') + '" data-key="" onclick="setEventGroup(this)">Recent</button>' +
+      html += '<button class="event-chip' + (!d.eventGroupKey ? ' active' : '') + '" data-key="" data-action="event-group">Recent</button>' +
         (d.eventGroupKey && d.eventGroupNew ? '<span class="event-chips-label ml-auto">' + num(d.eventGroupNew) + ' new vs previous period</span>' : '') +
-        (canSave ? '<button class="event-chip event-save"' + (saved ? ' disabled' : '') + ' onclick="saveBreakdown(this)" title="Show this grouping as its own card on the dashboard">' + (saved ? 'Saved' : 'Save as card') + '</button>' : '') +
+        (canSave ? '<button class="event-chip event-save"' + (saved ? ' disabled' : '') + ' data-action="save-breakdown" title="Show this grouping as its own card on the dashboard">' + (saved ? 'Saved' : 'Save as card') + '</button>' : '') +
       '</div>';
     }
 
@@ -2389,7 +2471,7 @@
     // Free text with suggestions, so an event not seen yet can be the second step
     var listId = 'funnel-events-' + Math.random().toString(36).slice(2);
     var html = '<div class="event-chips"><span class="event-chips-label">Then</span>' +
-      '<input class="event-select" list="' + listId + '" value="' + esc(st.then || '') + '" placeholder="Event name…" onchange="setEventFunnel(this)" aria-label="Second event for funnel" autocomplete="off" spellcheck="false">' +
+      '<input class="event-select" list="' + listId + '" value="' + esc(st.then || '') + '" placeholder="Event name…" data-on-change="event-funnel" aria-label="Second event for funnel" autocomplete="off" spellcheck="false">' +
       '<datalist id="' + listId + '">';
     names.forEach(function(n) {
       html += '<option value="' + esc(n) + '">';
@@ -2489,7 +2571,7 @@
       '</div>';
     });
     if (rows.length > limit) {
-      html += '<button class="show-all" onclick="showAllEventGroup(this)">Show all (' + rows.length + ')</button>';
+      html += '<button class="show-all" data-action="show-all-event-group">Show all (' + rows.length + ')</button>';
     }
     return html;
   }
@@ -2634,13 +2716,13 @@
 
   function renderNoteForm() {
     var yesterday = ymd(new Date(Date.now() - 86400000));
-    return '<form class="note-form" id="note-form" hidden onsubmit="saveNote(event)">' +
+    return '<form class="note-form" id="note-form" hidden data-on-submit="save-note">' +
       '<label>Date<input type="date" name="date" required value="' + yesterday + '" max="' + ymd(new Date()) + '"></label>' +
       '<label>Until (optional)<input type="date" name="end_date"></label>' +
       '<label class="note-form-text">Note<input type="text" name="label" required maxlength="100" placeholder="What happened, e.g. a film on Facebook"></label>' +
       '<button type="submit">Save</button>' +
-      '<button type="button" onclick="toggleNoteForm()">Cancel</button>' +
-      '<p class="note-form-hint">Edit or remove notes in <button type="button" onclick="toggleNoteForm(); openMenu(\'notes\')">Settings</button></p>' +
+      '<button type="button" data-action="toggle-note-form">Cancel</button>' +
+      '<p class="note-form-hint">Edit or remove notes in <button type="button" data-action="note-form-to-settings">Settings</button></p>' +
     '</form>';
   }
 
@@ -2695,8 +2777,8 @@
       var when = formatDay(a.date) + (a.end_date ? ' to ' + formatDay(a.end_date) : '');
       return '<div class="note-item" data-id="' + (+a.id) + '" data-site="' + esc(a.site) + '">' +
         '<span class="note-item-date">' + esc(when) + '</span>' +
-        '<input type="text" maxlength="100" value="' + esc(a.label) + '" aria-label="Note for ' + esc(when) + '" onchange="updateNote(this)">' +
-        '<button type="button" aria-label="Remove note for ' + esc(when) + '" onclick="removeNote(this)">&times;</button>' +
+        '<input type="text" maxlength="100" value="' + esc(a.label) + '" aria-label="Note for ' + esc(when) + '" data-on-change="update-note">' +
+        '<button type="button" aria-label="Remove note for ' + esc(when) + '" data-action="remove-note">&times;</button>' +
       '</div>';
     }).join('');
     notesSummary();
@@ -2763,13 +2845,13 @@
         summary.textContent = d.excluded.length ? num(d.excluded.length) + ' excluded · ' + mine : mine.charAt(0).toUpperCase() + mine.slice(1);
         excludedMine.innerHTML = 'Your IP <code>' + esc(d.ip) + '</code>' + (d.ip_excluded
           ? '<span>is not counted</span>'
-          : '<button type="button" onclick="excludeMine(' + jsArg(d.ip) + ')">Exclude it</button>');
+          : '<button type="button" data-action="exclude-mine" data-ip="' + esc(d.ip) + '">Exclude it</button>');
         excludedList.innerHTML = d.excluded.map(function(x) {
           var note = [x.label, x.site === '*' ? 'all sites' : ''].filter(Boolean).join(' · ');
           return '<div class="note-item excluded-item" data-site="' + esc(x.site) + '" data-ip="' + esc(x.ip) + '">' +
             '<span class="excluded-ip">' + esc(x.ip) + '</span>' +
             (note ? '<span class="note-item-date">' + esc(note) + '</span>' : '') +
-            '<button type="button" aria-label="Count ' + esc(x.ip) + ' again" onclick="removeExcluded(this)">&times;</button>' +
+            '<button type="button" aria-label="Count ' + esc(x.ip) + ' again" data-action="remove-excluded">&times;</button>' +
           '</div>';
         }).join('');
       })
@@ -2862,7 +2944,7 @@
       : events.some(function(e) { return e.event_name === typed; });
     if (typed && !known && goalPaths.indexOf(typed) < 0) {
       html += '<div class="goal-list-label">Not seen yet</div>' +
-        '<button class="goal-item goal-item-new" data-type="' + typedType + '" onclick="menuToggleGoal(this.getAttribute(\'data-path\'), this.getAttribute(\'data-type\'))" data-path="' + esc(typed) + '">' +
+        '<button class="goal-item goal-item-new" data-type="' + typedType + '" data-action="menu-toggle-goal" data-path="' + esc(typed) + '">' +
           '<span class="goal-item-path">+ Add ' + typedType + ' goal: ' + esc(typed) + '</span>' +
         '</button>';
     }
@@ -2870,7 +2952,7 @@
   }
 
   function goalItemHtml(path, isGoal, type) {
-    return '<button class="goal-item' + (isGoal ? ' is-goal' : '') + '" data-type="' + (type || 'page') + '" onclick="menuToggleGoal(' + jsArg(path) + ', this.getAttribute(\'data-type\'))">' +
+    return '<button class="goal-item' + (isGoal ? ' is-goal' : '') + '" data-type="' + (type || 'page') + '" data-action="menu-toggle-goal" data-path="' + esc(path) + '">' +
       '<svg class="goal-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>' +
       '<span class="goal-item-path">' + esc(type === 'event' ? path.replace(/_/g, ' ') : decode(path)) + '</span>' +
     '</button>';

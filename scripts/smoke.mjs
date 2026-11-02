@@ -333,11 +333,11 @@ async function main() {
     expect(options.length > 0, 'funnel picker suggests events');
     // An event never seen still gives a funnel (0 converted) instead of an error
     input.value = 'never_seen_event';
-    input.dispatchEvent(new Event('change'));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
     await waitFor(() => q('.event-detail .event-funnel') && q('.event-detail')._state.then === 'never_seen_event', 'funnel to an unseen event');
     const again = q('.event-detail input.event-select');
     again.value = options[0].value;
-    again.dispatchEvent(new Event('change'));
+    again.dispatchEvent(new Event('change', { bubbles: true }));
     await waitFor(() => q('.event-detail .event-funnel') && q('.event-detail')._state.then === options[0].value, 'funnel result');
 
     // Compare mode follows into the drill-down
@@ -618,7 +618,7 @@ async function main() {
     if (!item) { fails.push('note listed in Settings'); return fails; }
     const field = item.querySelector('input');
     field.value = 'Smoke note, clarified';
-    field.dispatchEvent(new Event('change'));
+    field.dispatchEvent(new Event('change', { bubbles: true }));
     await waitFor(() => [...document.querySelectorAll('#chart-card .chart-note + .mark-tip')].some((t) => /Smoke note, clarified/.test(t.textContent)), 'relabelled note on the chart', 8000);
     item.querySelector('button').click();
     await waitFor(() => ![...document.querySelectorAll('#chart-card .chart-note + .mark-tip')].some((t) => /Smoke note/.test(t.textContent)), 'removed note leaves the chart', 8000);
