@@ -756,6 +756,7 @@ function handle_collect(array $config): void
     ]);
 
     refresh_statistics($db);
+    sum_closed_day($db);
 }
 
 /**
@@ -773,6 +774,371 @@ function refresh_statistics(PDO $db): void
     $db->exec('PRAGMA analysis_limit = 1000');
     $db->exec('ANALYZE');
     file_put_contents($marker, date('Y-m-d'));
+}
+
+// =====================================================================
+// DAILY SUMMARY
+// =====================================================================
+
+// Every site with a pageview. A loose index scan: it walks idx_site_date_visitor one distinct
+// site at a time instead of scanning every row, so its cost follows the number of sites, not
+// the size of the table, and stays flat as history accumulates
+function tracked_sites(PDO $db): array
+{
+    return $db->query('WITH RECURSIVE tracked(site) AS (
+            SELECT MIN(site) FROM pageviews
+            UNION ALL
+            SELECT (SELECT MIN(site) FROM pageviews WHERE site > tracked.site)
+            FROM tracked WHERE tracked.site IS NOT NULL
+        )
+        SELECT site FROM tracked WHERE site IS NOT NULL ORDER BY site')->fetchAll(PDO::FETCH_COLUMN);
+}
+
+/**
+ * A summary per site and day, which the dashboard reads instead of every pageview of a period.
+ * Exact, since the visitor hash changes every day: a visitor never spans two days, so a figure
+ * counted per visitor over a period is the sum of the days'. A cache, never the source: rows can
+ * always be deleted, and are summed again when needed. One row per kind and key:
+ *   day       ''            views, visitors, bounces (visitors with one pageview)
+ *   hour      0 to 23       views
+ *   path      the path      views, visitors, entries, bounces (entries with one pageview), exits
+ *   referrer  the source    visitors
+ *   utm       the five values as a JSON array   visitors
+ *   channel   its name      views, visitors
+ *   country   the code      visitors
+ *   browser, device, language   the value ('' for none)   views
+ *   duration  seconds       visitors with more than one pageview and that length
+ * The day row is there for every summed day, also one without pageviews, so a summed day can
+ * be told from one not summed yet.
+ */
+function create_daily_table(PDO $db): void
+{
+    $db->exec('CREATE TABLE IF NOT EXISTS daily (
+        site TEXT NOT NULL,
+        date TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        key TEXT NOT NULL,
+        views INTEGER NOT NULL DEFAULT 0,
+        visitors INTEGER NOT NULL DEFAULT 0,
+        entries INTEGER NOT NULL DEFAULT 0,
+        bounces INTEGER NOT NULL DEFAULT 0,
+        exits INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (site, date, kind, key)
+    ) WITHOUT ROWID');
+}
+
+// A visitor's channel, from their pageviews of a day (an aggregate over GROUP BY visitor_hash)
+function channel_sql(): string
+{
+    return "CASE
+        WHEN MAX(utm_medium) IN ('paid', 'cpc', 'cpm', 'ppc', 'retargeting', 'paid_social') THEN 'Paid'
+        WHEN MAX(utm_source) IS NOT NULL THEN 'Campaign'
+        WHEN MAX(referrer) IN ('Google', 'Bing') THEN 'Organic search'
+        WHEN MAX(referrer) IN ('Facebook', 'Instagram', 'Twitter/X', 'LinkedIn') THEN 'Social'
+        WHEN MAX(referrer) IS NOT NULL THEN 'Referral'
+        ELSE 'Direct'
+    END";
+}
+
+/**
+ * The summary rows of the sites' days in [$from, $to), from their pageviews, one pass per kind
+ * over the whole span: [site][date] => rows. Everything counted per visitor is grouped by day
+ * as well, so a summed period is the sum of its days even where an old hash spanned days. Ties
+ * in a visitor's first and last page (two pageviews in one second) are broken by id, so a day
+ * sums the same every time.
+ */
+function range_rows(PDO $db, array $sites, string $from, string $to): array
+{
+    $where = 'site IN (' . implode(',', array_fill(0, count($sites), '?')) . ') AND created_at >= ? AND created_at < ?';
+    $params = array_merge($sites, [$from, $to]);
+    $day = 'substr(created_at, 1, 10)';
+    $rows = [];
+    $each = function (string $sql, callable $row) use ($db, $params) {
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) $row($r);
+    };
+    $add = function (string $site, string $date, string $kind, $key, array $values) use (&$rows) {
+        $rows[$site][$date][] = ['kind' => $kind, 'key' => (string) ($key ?? '')] + $values + ['views' => 0, 'visitors' => 0, 'entries' => 0, 'bounces' => 0, 'exits' => 0];
+    };
+
+    $bounces = [];
+    $each("SELECT site, d, COUNT(*) as n FROM (SELECT site, {$day} as d FROM pageviews WHERE {$where} GROUP BY site, d, visitor_hash HAVING COUNT(*) = 1) GROUP BY site, d", function ($r) use (&$bounces) { $bounces[$r['site']][$r['d']] = (int) $r['n']; });
+    $each("SELECT site, {$day} as d, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$where} GROUP BY site, d", fn ($r) => $add($r['site'], $r['d'], 'day', '', ['views' => (int) $r['views'], 'visitors' => (int) $r['visitors'], 'bounces' => $bounces[$r['site']][$r['d']] ?? 0]));
+    $each("SELECT site, {$day} as d, CAST(strftime('%H', created_at) AS INTEGER) as k, COUNT(*) as views FROM pageviews WHERE {$where} GROUP BY site, d, k", fn ($r) => $add($r['site'], $r['d'], 'hour', $r['k'], ['views' => (int) $r['views']]));
+    $firstLast = [];
+    $each("SELECT site, d, path, SUM(is_entry) as entries, SUM(is_entry AND cnt = 1) as bounces, SUM(is_exit) as exits FROM (SELECT site, {$day} as d, path, ROW_NUMBER() OVER (PARTITION BY site, {$day}, visitor_hash ORDER BY created_at, id) = 1 as is_entry, ROW_NUMBER() OVER (PARTITION BY site, {$day}, visitor_hash ORDER BY created_at DESC, id DESC) = 1 as is_exit, COUNT(*) OVER (PARTITION BY site, {$day}, visitor_hash) as cnt FROM pageviews WHERE {$where}) WHERE is_entry OR is_exit GROUP BY site, d, path", function ($r) use (&$firstLast) {
+        $firstLast[$r['site']][$r['d']][$r['path']] = ['entries' => (int) $r['entries'], 'bounces' => (int) $r['bounces'], 'exits' => (int) $r['exits']];
+    });
+    $each("SELECT site, {$day} as d, path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$where} GROUP BY site, d, path", fn ($r) => $add($r['site'], $r['d'], 'path', $r['path'], ['views' => (int) $r['views'], 'visitors' => (int) $r['visitors']] + ($firstLast[$r['site']][$r['d']][$r['path']] ?? [])));
+    $each("SELECT site, {$day} as d, referrer as k, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$where} AND referrer IS NOT NULL GROUP BY site, d, referrer", fn ($r) => $add($r['site'], $r['d'], 'referrer', $r['k'], ['visitors' => (int) $r['visitors']]));
+    // The five values written as SQLite's json_array() writes them, so the rows query sorts ties the same way
+    $each("SELECT site, {$day} as d, utm_source, utm_medium, utm_campaign, utm_term, utm_content, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$where} AND utm_source IS NOT NULL GROUP BY site, d, utm_source, utm_medium, utm_campaign, utm_term, utm_content", fn ($r) => $add($r['site'], $r['d'], 'utm', json_encode([$r['utm_source'], $r['utm_medium'], $r['utm_campaign'], $r['utm_term'], $r['utm_content']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ['visitors' => (int) $r['visitors']]));
+    $each("SELECT site, d, channel as k, COUNT(*) as visitors, SUM(pv) as views FROM (SELECT site, {$day} as d, COUNT(*) as pv, " . channel_sql() . " as channel FROM pageviews WHERE {$where} GROUP BY site, d, visitor_hash) GROUP BY site, d, channel", fn ($r) => $add($r['site'], $r['d'], 'channel', $r['k'], ['views' => (int) $r['views'], 'visitors' => (int) $r['visitors']]));
+    $each("SELECT site, {$day} as d, country as k, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$where} AND country IS NOT NULL GROUP BY site, d, country", fn ($r) => $add($r['site'], $r['d'], 'country', $r['k'], ['visitors' => (int) $r['visitors']]));
+    foreach (['browser', 'device', 'language'] as $column) {
+        $each("SELECT site, {$day} as d, {$column} as k, COUNT(*) as views FROM pageviews WHERE {$where} GROUP BY site, d, {$column}", fn ($r) => $add($r['site'], $r['d'], $column, $r['k'], ['views' => (int) $r['views']]));
+    }
+    $each("SELECT site, d, duration as k, COUNT(*) as visitors FROM (SELECT site, {$day} as d, strftime('%s', MAX(created_at)) - strftime('%s', MIN(created_at)) as duration FROM pageviews WHERE {$where} GROUP BY site, d, visitor_hash HAVING COUNT(*) > 1) GROUP BY site, d, duration", fn ($r) => $add($r['site'], $r['d'], 'duration', $r['k'], ['visitors' => (int) $r['visitors']]));
+    return $rows;
+}
+
+// The last day that is over: yesterday, once five minutes of today have passed, so a request
+// still on its way at midnight lands in the day before it is summed
+function last_closed_day(): string
+{
+    return date('Y-m-d', strtotime(time() - strtotime('today') < 300 ? '-2 days' : '-1 day'));
+}
+
+/**
+ * Sums the days of the sites and period [$since, $until) that are over and not summed yet,
+ * newest first (the short periods most people look at come first), at most $limit of them,
+ * and returns how many are still missing. Days before a site's first pageview are not summed.
+ * A window of up to 31 days is counted in one pass and written in one short transaction, so
+ * filling an upgraded install costs about one read of its pageviews, and tracking is never
+ * held up for long.
+ */
+function sum_missing_days(PDO $db, array $sites, string $since, string $until, int $limit): int
+{
+    $last = last_closed_day();
+    $end = $until ? min($last, date('Y-m-d', strtotime($until . ' -1 day'))) : $last;
+    $firstSeen = $db->prepare('SELECT MIN(created_at) FROM pageviews WHERE site = ?');
+    $summed = $db->prepare("SELECT date FROM daily WHERE site = ? AND kind = 'day' AND date >= ? AND date <= ?");
+    $missing = [];
+    foreach ($sites as $site) {
+        $firstSeen->execute([$site]);
+        $first = $firstSeen->fetchColumn();
+        if (!$first) continue;
+        $start = max($since, substr($first, 0, 10));
+        if ($start > $end) continue;
+        $summed->execute([$site, $start, $end]);
+        $have = array_flip($summed->fetchAll(PDO::FETCH_COLUMN));
+        for ($d = $end; $d >= $start; $d = date('Y-m-d', strtotime($d . ' -1 day'))) {
+            if (!isset($have[$d])) $missing[] = [$site, $d];
+        }
+    }
+    usort($missing, fn ($a, $b) => strcmp($b[1], $a[1]) ?: strcmp($a[0], $b[0]));
+    $todo = array_slice($missing, 0, $limit);
+    while ($todo) {
+        $windowEnd = $todo[0][1];
+        $windowStart = date('Y-m-d', strtotime($windowEnd . ' -30 days'));
+        $window = array_values(array_filter($todo, fn ($m) => $m[1] >= $windowStart));
+        $todo = array_values(array_filter($todo, fn ($m) => $m[1] < $windowStart));
+        $start = end($window)[1];
+        $rows = range_rows($db, array_values(array_unique(array_column($window, 0))), $start, date('Y-m-d', strtotime($windowEnd . ' +1 day')));
+        store_days($db, array_map(fn ($m) => [$m[0], $m[1], $rows[$m[0]][$m[1]] ?? []], $window));
+    }
+    return max(0, count($missing) - $limit);
+}
+
+// Writes summed days, each [site, date, rows], replacing what was there, in one transaction. A day
+// without pageviews gets its day row as zero, so it is not summed again
+function store_days(PDO $db, array $days): void
+{
+    $own = !$db->inTransaction();
+    if ($own) $db->exec('BEGIN IMMEDIATE');
+    try {
+        $delete = $db->prepare('DELETE FROM daily WHERE site = ? AND date = ?');
+        $insert = $db->prepare('INSERT INTO daily (site, date, kind, key, views, visitors, entries, bounces, exits) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($days as [$site, $date, $rows]) {
+            $delete->execute([$site, $date]);
+            if (!$rows) $rows = [['kind' => 'day', 'key' => '', 'views' => 0, 'visitors' => 0, 'entries' => 0, 'bounces' => 0, 'exits' => 0]];
+            foreach ($rows as $r) {
+                $insert->execute([$site, $date, $r['kind'], $r['key'], $r['views'], $r['visitors'], $r['entries'], $r['bounces'], $r['exits']]);
+            }
+        }
+        if ($own) $db->exec('COMMIT');
+    } catch (Throwable $e) {
+        if ($own) $db->exec('ROLLBACK');
+        throw $e;
+    }
+}
+
+/**
+ * Once a day, at the first pageview after last_closed_day() moves on, that day is summed for
+ * every site that had a pageview in it, so the dashboard rarely meets a day not summed yet. A
+ * marker file holds the day, as for refresh_statistics()
+ */
+function sum_closed_day(PDO $db): void
+{
+    $day = last_closed_day();
+    $marker = dirname($db->query("PRAGMA database_list")->fetch()['file'] ?? __DIR__) . '/.summed';
+    if (file_exists($marker) && file_get_contents($marker) === $day) return;
+    $stmt = $db->prepare('SELECT DISTINCT site FROM pageviews WHERE created_at >= ? AND created_at < ?');
+    $stmt->execute([$day, date('Y-m-d', strtotime($day . ' +1 day'))]);
+    sum_missing_days($db, $stmt->fetchAll(PDO::FETCH_COLUMN), $day, date('Y-m-d', strtotime($day . ' +1 day')), PHP_INT_MAX);
+    file_put_contents($marker, $day);
+}
+
+/**
+ * The dashboard's pageview figures for a period [$since, $end) and the one before it, from the
+ * daily summary: the days that are over from the table, the days not over yet from their
+ * pageviews. Summing a missing day costs about what reading it from the rows does, so a request
+ * sums at most one window of 31 days; if days are still missing after that it returns null and
+ * the dashboard reads the rows, as before the summary. An upgraded install is summed over its
+ * first views of long periods, or at once with php puls stats:build. The same shapes as the queries over the rows in
+ * get_api_data(), which a path or a channel filter still uses; the tests compare the two field by
+ * field. Ties are broken by name, as those queries do, so both list the same rows in the same order.
+ */
+function summary_figures(PDO $db, array $sites, string $since, string $end, string $prevSince, array $limits): ?array
+{
+    if (sum_missing_days($db, $sites, $prevSince, $end, 31 * count($sites)) > 0) return null;
+    $last = last_closed_day();
+    // The days not over yet, counted from their pageviews: [date] => every site's rows of the day
+    $open = [];
+    $openFrom = max($prevSince, date('Y-m-d', strtotime($last . ' +1 day')));
+    if ($openFrom < $end) {
+        foreach (range_rows($db, $sites, $openFrom, $end) as $bySite) {
+            foreach ($bySite as $d => $rows) $open[$d] = array_merge($open[$d] ?? [], $rows);
+        }
+    }
+    $in = implode(',', array_fill(0, count($sites), '?'));
+
+    // Per kind and key, summed over a period
+    $sums = function (string $from, string $to) use ($db, $sites, $in, $last, $open): array {
+        $stmt = $db->prepare("SELECT kind, key, SUM(views) as views, SUM(visitors) as visitors, SUM(entries) as entries, SUM(bounces) as bounces, SUM(exits) as exits FROM daily WHERE site IN ({$in}) AND date >= ? AND date < ? AND date <= ? GROUP BY kind, key");
+        $stmt->execute(array_merge($sites, [$from, $to, $last]));
+        $out = [];
+        $add = function (array $r) use (&$out) {
+            $k = &$out[$r['kind']][$r['key']];
+            foreach (['views', 'visitors', 'entries', 'bounces', 'exits'] as $f) $k[$f] = ($k[$f] ?? 0) + (int) $r[$f];
+        };
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) $add($r);
+        foreach ($open as $d => $rows) {
+            if ($d >= $from && $d < $to) foreach ($rows as $r) $add($r);
+        }
+        return $out;
+    };
+    // One row per day with pageviews, as the chart wants
+    $days = function (string $from, string $to) use ($db, $sites, $in, $last, $open): array {
+        $stmt = $db->prepare("SELECT date, SUM(views) as views, SUM(visitors) as visitors FROM daily WHERE site IN ({$in}) AND kind = 'day' AND date >= ? AND date < ? AND date <= ? GROUP BY date HAVING SUM(views) > 0 ORDER BY date");
+        $stmt->execute(array_merge($sites, [$from, $to, $last]));
+        $out = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($open as $d => $rows) {
+            if ($d < $from || $d >= $to) continue;
+            $dayRows = array_filter($rows, fn ($r) => $r['kind'] === 'day');
+            $views = array_sum(array_column($dayRows, 'views'));
+            if ($views > 0) $out[] = ['date' => $d, 'views' => $views, 'visitors' => array_sum(array_column($dayRows, 'visitors'))];
+        }
+        usort($out, fn ($a, $b) => strcmp($a['date'], $b['date']));
+        return array_map(fn ($r) => ['date' => $r['date'], 'views' => (int) $r['views'], 'visitors' => (int) $r['visitors']], $out);
+    };
+    // Rows of a kind, biggest first, ties by key
+    $ranked = function (array $byKey, string $field) {
+        uksort($byKey, fn ($a, $b) => ($byKey[$b][$field] <=> $byKey[$a][$field]) ?: strcmp((string) $a, (string) $b));
+        return $byKey;
+    };
+    // The median of visit lengths, from counts per length: the row at n / 2, as the query does
+    $median = function (array $durations): ?int {
+        ksort($durations, SORT_NUMERIC);
+        $n = array_sum(array_column($durations, 'visitors'));
+        if (!$n) return null;
+        $at = intdiv($n, 2);
+        foreach ($durations as $seconds => $r) {
+            if ($at < $r['visitors']) return (int) $seconds;
+            $at -= $r['visitors'];
+        }
+        return null;
+    };
+
+    $cur = $sums($since, $end);
+    $prev = $sums($prevSince, $since);
+    $day = $cur['day'][''] ?? ['views' => 0, 'visitors' => 0, 'bounces' => 0];
+    $prevDay = $prev['day'][''] ?? ['views' => 0, 'visitors' => 0, 'bounces' => 0];
+
+    $pages = $ranked($cur['path'] ?? [], 'views');
+    $referrers = $ranked($cur['referrer'] ?? [], 'visitors');
+    $utm = $ranked($cur['utm'] ?? [], 'visitors');
+    $countries = $ranked($cur['country'] ?? [], 'visitors');
+    $channels = $ranked($cur['channel'] ?? [], 'visitors');
+    $counts = fn (string $kind, bool $skipNone) => array_values(array_filter(array_map(
+        fn ($key, $r) => ['name' => $key === '' ? null : (string) $key, 'cnt' => $r['views']],
+        array_keys($ranked($cur[$kind] ?? [], 'views')), $ranked($cur[$kind] ?? [], 'views')
+    ), fn ($r) => !$skipNone || $r['name'] !== null));
+    $weekdays = [];
+    foreach ($days($since, $end) as $r) {
+        $w = (int) date('w', strtotime($r['date']));
+        $weekdays[$w] = ($weekdays[$w] ?? 0) + $r['views'];
+    }
+    uksort($weekdays, fn ($a, $b) => ($weekdays[$b] <=> $weekdays[$a]) ?: $a <=> $b);
+    $hours = array_map(fn ($r) => $r['views'], $cur['hour'] ?? []);
+    uksort($hours, fn ($a, $b) => ($hours[$b] <=> $hours[$a]) ?: $a <=> $b);
+    $weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    return [
+        'byDay' => $days($since, $end),
+        'previousPageviews' => $days($prevSince, $since),
+        'totals' => ['views' => $day['views'], 'visitors' => $day['visitors']],
+        'previousTotals' => ['views' => $prevDay['views'], 'visitors' => $prevDay['visitors']],
+        'pages' => array_map(fn ($k, $r) => ['path' => (string) $k, 'views' => $r['views'], 'visitors' => $r['visitors']], array_keys(array_slice($pages, 0, $limits['pages'], true)), array_slice($pages, 0, $limits['pages'], true)),
+        'pagesTotal' => count($pages),
+        'referrers' => array_map(fn ($k, $r) => ['source' => (string) $k, 'visitors' => $r['visitors']], array_keys(array_slice($referrers, 0, $limits['referrers'], true)), array_slice($referrers, 0, $limits['referrers'], true)),
+        'referrersTotal' => count($referrers),
+        'bounceRate' => $day['visitors'] > 0 ? round(100 * $day['bounces'] / $day['visitors'], 1) : 0,
+        'previousBounceRate' => $prevDay['visitors'] > 0 ? round(100 * $prevDay['bounces'] / $prevDay['visitors'], 1) : null,
+        'medianSession' => $median($cur['duration'] ?? []) ?? 0,
+        'previousMedianSession' => $median($prev['duration'] ?? []),
+        'firstLast' => array_values(array_map(fn ($k, $r) => ['path' => (string) $k, 'entries' => $r['entries'], 'bounces' => $r['bounces'], 'exits' => $r['exits']], array_keys($cur['path'] ?? []), $cur['path'] ?? [])),
+        'browsers' => $counts('browser', false),
+        'devices' => $counts('device', false),
+        'languages' => $counts('language', true),
+        'utm' => array_map(function ($k, $r) {
+            [$source, $medium, $campaign, $term, $content] = json_decode($k, true);
+            return compact('source', 'medium', 'campaign', 'term', 'content') + ['visitors' => $r['visitors']];
+        }, array_keys(array_slice($utm, 0, $limits['utm'], true)), array_slice($utm, 0, $limits['utm'], true)),
+        'utmTotal' => count($utm),
+        'countries' => array_map(fn ($k, $r) => ['code' => (string) $k, 'visitors' => $r['visitors']], array_keys($countries), $countries),
+        'channels' => array_map(fn ($k, $r) => ['channel' => (string) $k, 'visitors' => $r['visitors'], 'views' => $r['views'], 'pages_per_visitor' => round($r['views'] / $r['visitors'], 1)], array_keys($channels), $channels),
+        'bestDay' => $day['views'] > 0 ? ['day' => $weekdayNames[array_key_first($weekdays)], 'views' => $weekdays[array_key_first($weekdays)]] : false,
+        'peakHour' => $hours ? ['hour' => (int) array_key_first($hours), 'views' => $hours[array_key_first($hours)]] : false,
+        'open' => $open,
+        'last' => $last,
+    ];
+}
+
+/**
+ * Per site, views and visitors over a period and views over the one before, for the site
+ * overview: from the summary, with the days not over yet counted from their pageviews
+ */
+function summary_sites(PDO $db, array $sites, string $since, string $end, string $prevSince, string $last): array
+{
+    $in = implode(',', array_fill(0, count($sites), '?'));
+    $open = max($prevSince, date('Y-m-d', strtotime($last . ' +1 day')));
+    $out = [];
+    $stmt = $db->prepare("SELECT site, SUM(CASE WHEN date >= ? THEN views END) as views, SUM(CASE WHEN date >= ? THEN visitors END) as visitors, SUM(CASE WHEN date < ? THEN views END) as prev FROM daily WHERE site IN ({$in}) AND kind = 'day' AND date >= ? AND date < ? AND date <= ? GROUP BY site");
+    $stmt->execute(array_merge([$since, $since, $since], $sites, [$prevSince, $end, $last]));
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $out[$r['site']] = ['views' => (int) $r['views'], 'visitors' => (int) $r['visitors'], 'prev' => (int) $r['prev']];
+    }
+    $stmt = $db->prepare("SELECT site, SUM(created_at >= ?) as views, COUNT(DISTINCT CASE WHEN created_at >= ? THEN visitor_hash END) as visitors, SUM(created_at < ?) as prev FROM pageviews WHERE site IN ({$in}) AND created_at >= ? AND created_at < ? GROUP BY site");
+    $stmt->execute(array_merge([$since, $since, $since], $sites, [$open, $end]));
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        foreach (['views', 'visitors', 'prev'] as $f) $out[$r['site']][$f] = ($out[$r['site']][$f] ?? 0) + (int) $r[$f];
+    }
+    return $out;
+}
+
+// Visitors who viewed a path, per day of a period, from the summary (a page goal's days)
+function summary_path_days(PDO $db, array $sites, string $path, string $from, string $end, array $open, string $last): array
+{
+    $in = implode(',', array_fill(0, count($sites), '?'));
+    $stmt = $db->prepare("SELECT date, SUM(visitors) as visitors FROM daily WHERE site IN ({$in}) AND kind = 'path' AND key = ? AND date >= ? AND date < ? AND date <= ? GROUP BY date");
+    $stmt->execute(array_merge($sites, [$path, $from, $end, $last]));
+    $out = array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'visitors', 'date'));
+    foreach ($open as $d => $rows) {
+        if ($d < $from || $d >= $end) continue;
+        foreach ($rows as $r) {
+            if ($r['kind'] === 'path' && $r['key'] === $path && $r['visitors']) $out[$d] = ($out[$d] ?? 0) + $r['visitors'];
+        }
+    }
+    return $out;
+}
+
+// Sums one site's day into the summary, replacing what was there
+function sum_day(PDO $db, string $site, string $date): void
+{
+    $rows = range_rows($db, [$site], $date, date('Y-m-d', strtotime($date . ' +1 day')));
+    store_days($db, [[$site, $date, $rows[$site][$date] ?? []]]);
 }
 
 // =====================================================================
@@ -974,17 +1340,7 @@ function get_api_data(array $config, array $user): string
 
     // List all sites (filtered by user access)
     if (isset($_GET['sites'])) {
-        // Loose index scan: walk idx_site_date_visitor one distinct site at a time
-        // instead of scanning every row. Cost follows the number of sites,
-        // not the size of the table, so it stays flat as history accumulates.
-        $stmt = $db->query('WITH RECURSIVE tracked(site) AS (
-                SELECT MIN(site) FROM pageviews
-                UNION ALL
-                SELECT (SELECT MIN(site) FROM pageviews WHERE site > tracked.site)
-                FROM tracked WHERE tracked.site IS NOT NULL
-            )
-            SELECT site FROM tracked WHERE site IS NOT NULL ORDER BY site');
-        $sites = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $sites = tracked_sites($db);
         if (!empty($allowedSites)) {
             $sites = array_values(array_intersect($sites, $allowedSites));
         }
@@ -1101,18 +1457,41 @@ function get_api_data(array $config, array $user): string
         return json_encode(['date' => $hoursDay, 'hours' => $hours, 'today' => date('Y-m-d'), 'hourNow' => (int) date('G')]);
     }
 
-    $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY date ORDER BY date");
-    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
-    $byDay = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Previous period for trend comparison (same length, immediately before current period)
+    $prevSince = date('Y-m-d', strtotime($since . " -{$days} days"));
+
+    // Without a path or a channel filter, the pageview figures come from the daily summary
+    // (summary_figures); with one, from the rows, as below
+    $fig = null;
+    if (!$path && !$channel && ($config['daily_summary'] ?? true)) {
+        $scope = $site ? [$site] : (!empty($allowedSites) ? $allowedSites : tracked_sites($db));
+        $limits = [
+            'pages' => $expand === 'pages' ? 1000 : 10,
+            'referrers' => $expand === 'referrers' ? 1000 : 10,
+            'utm' => $expand === 'utm' ? 1000 : 10,
+        ];
+        if ($scope) $fig = summary_figures($db, $scope, $since, $until ?: date('Y-m-d', strtotime('+1 day')), $prevSince, $limits);
+    }
+
+    if ($fig) {
+        $byDay = $fig['byDay'];
+    } else {
+        $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY date ORDER BY date");
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+        $byDay = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     // Pages table (skip when filtered to a single path)
     $pages = [];
     $pagesTotal = 0;
-    if (!$path) {
+    if ($fig) {
+        $pages = $fig['pages'];
+        $pagesTotal = $fig['pagesTotal'];
+    } elseif (!$path) {
         $limit = $expand === 'pages' ? 1000 : 10;
         // The number of pages beyond the limit rides along as a window over the groups, so
         // the rows are read once; the same for sources and campaigns below
-        $stmt = $db->prepare("SELECT path, views, visitors, COUNT(*) OVER () as total FROM (SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$channelFilter} GROUP BY path) ORDER BY views DESC LIMIT {$limit}");
+        $stmt = $db->prepare("SELECT path, views, visitors, COUNT(*) OVER () as total FROM (SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$channelFilter} GROUP BY path) ORDER BY views DESC, path LIMIT {$limit}");
         $stmt->execute(array_merge($dateParams, $siteParams, $channelParams));
         $pages = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $pagesTotal = (int) ($pages[0]['total'] ?? 0);
@@ -1120,28 +1499,34 @@ function get_api_data(array $config, array $user): string
         unset($pg);
     }
 
-    $refLimit = $expand === 'referrers' ? 1000 : 10;
-    $stmt = $db->prepare("SELECT source, visitors, COUNT(*) OVER () as total FROM (SELECT referrer as source, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} AND referrer IS NOT NULL GROUP BY referrer) ORDER BY visitors DESC LIMIT {$refLimit}");
-    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
-    $referrers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $referrersTotal = (int) ($referrers[0]['total'] ?? 0);
-    foreach ($referrers as &$ref) unset($ref['total']);
-    unset($ref);
+    if ($fig) {
+        $referrers = $fig['referrers'];
+        $referrersTotal = $fig['referrersTotal'];
+        $totals = $fig['totals'];
+        $previousTotals = $fig['previousTotals'];
+        $previousPageviews = $fig['previousPageviews'];
+    } else {
+        $refLimit = $expand === 'referrers' ? 1000 : 10;
+        $stmt = $db->prepare("SELECT source, visitors, COUNT(*) OVER () as total FROM (SELECT referrer as source, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} AND referrer IS NOT NULL GROUP BY referrer) ORDER BY visitors DESC, source LIMIT {$refLimit}");
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+        $referrers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $referrersTotal = (int) ($referrers[0]['total'] ?? 0);
+        foreach ($referrers as &$ref) unset($ref['total']);
+        unset($ref);
 
-    $stmt = $db->prepare("SELECT COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter}");
-    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
-    $totals = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt = $db->prepare("SELECT COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter}");
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+        $totals = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // Previous period for trend comparison (same length, immediately before current period)
-    $prevSince = date('Y-m-d', strtotime($since . " -{$days} days"));
-    $stmt = $db->prepare("SELECT COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$pathFilter} {$channelFilter}");
-    $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
-    $previousTotals = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt = $db->prepare("SELECT COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$pathFilter} {$channelFilter}");
+        $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
+        $previousTotals = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // Previous period daily breakdown (for chart comparison overlay)
-    $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY date ORDER BY date");
-    $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
-    $previousPageviews = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // Previous period daily breakdown (for chart comparison overlay)
+        $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY date ORDER BY date");
+        $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
+        $previousPageviews = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     // Event drill-down (?event=<name>): answered here with only what the panel
     // needs, so a click does not re-run every dashboard query.
@@ -1321,7 +1706,12 @@ function get_api_data(array $config, array $user): string
     $previousBounceRate = null;
     $medianSession = 0;
     $previousMedianSession = null;
-    if (!$path) {
+    if ($fig) {
+        $bounceRate = $fig['bounceRate'];
+        $previousBounceRate = $fig['previousBounceRate'];
+        $medianSession = $fig['medianSession'];
+        $previousMedianSession = $fig['previousMedianSession'];
+    } elseif (!$path) {
         $stmt = $db->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN cnt = 1 THEN 1 ELSE 0 END) as bounced FROM (SELECT visitor_hash, COUNT(*) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$channelFilter} GROUP BY visitor_hash)");
         $stmt->execute(array_merge($dateParams, $siteParams, $channelParams));
         $bounceData = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -1356,12 +1746,16 @@ function get_api_data(array $config, array $user): string
         // Each visitor's first and last page in one pass over the period's rows (the two
         // window orderings still sort twice, but the rows are read once). Bounces per entry
         // page use the same definition as the site bounce rate: one pageview per visitor_hash
-        $stmt = $db->prepare("SELECT path, SUM(is_entry) as entries, SUM(is_entry AND cnt = 1) as bounces, SUM(is_exit) as exits FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at ASC) = 1 as is_entry, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at DESC) = 1 as is_exit, COUNT(*) OVER (PARTITION BY visitor_hash) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$channelFilter}) WHERE is_entry OR is_exit GROUP BY path");
-        $stmt->execute(array_merge($dateParams, $siteParams, $channelParams));
-        $firstLast = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if ($fig) {
+            $firstLast = $fig['firstLast'];
+        } else {
+            $stmt = $db->prepare("SELECT path, SUM(is_entry) as entries, SUM(is_entry AND cnt = 1) as bounces, SUM(is_exit) as exits FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at, id) = 1 as is_entry, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at DESC, id DESC) = 1 as is_exit, COUNT(*) OVER (PARTITION BY visitor_hash) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$channelFilter}) WHERE is_entry OR is_exit GROUP BY path");
+            $stmt->execute(array_merge($dateParams, $siteParams, $channelParams));
+            $firstLast = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
 
         $entries = array_values(array_filter($firstLast, fn($r) => $r['entries'] > 0));
-        usort($entries, fn($a, $b) => $b['entries'] <=> $a['entries']);
+        usort($entries, fn($a, $b) => ($b['entries'] <=> $a['entries']) ?: strcmp($a['path'], $b['path']));
         $entryPages = array_map(fn($e) => [
             'path' => $e['path'],
             'entries' => (int) $e['entries'],
@@ -1370,37 +1764,55 @@ function get_api_data(array $config, array $user): string
         ], array_slice($entries, 0, $entryLimit));
 
         $exits = array_values(array_filter($firstLast, fn($r) => $r['exits'] > 0));
-        usort($exits, fn($a, $b) => $b['exits'] <=> $a['exits']);
+        usort($exits, fn($a, $b) => ($b['exits'] <=> $a['exits']) ?: strcmp($a['path'], $b['path']));
         $exitPages = array_map(fn($e) => ['path' => $e['path'], 'exits' => (int) $e['exits']], array_slice($exits, 0, $exitLimit));
     }
 
-    $stmt = $db->prepare("SELECT browser as name, COUNT(*) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY browser ORDER BY cnt DESC");
-    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
-    $browsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if ($fig) {
+        $browsers = $fig['browsers'];
+    } else {
+        $stmt = $db->prepare("SELECT browser as name, COUNT(*) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY browser ORDER BY cnt DESC, name");
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+        $browsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
     $total = array_sum(array_column($browsers, 'cnt'));
     $smartPct = fn($cnt, $sum) => $sum > 0 ? (($p = $cnt / $sum * 100) < 1 && $p > 0 ? round($p, 1) : round($p)) : 0;
     $browsers = array_map(fn($b) => ['name' => $b['name'], 'pct' => $smartPct($b['cnt'], $total)], $browsers);
 
-    $stmt = $db->prepare("SELECT device as name, COUNT(*) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY device ORDER BY cnt DESC");
-    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
-    $devices = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if ($fig) {
+        $devices = $fig['devices'];
+    } else {
+        $stmt = $db->prepare("SELECT device as name, COUNT(*) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY device ORDER BY cnt DESC, name");
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+        $devices = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
     $devices = array_map(fn($d) => ['name' => $d['name'], 'pct' => $smartPct($d['cnt'], $total)], $devices);
 
     $stmt = $db->prepare("SELECT COUNT(DISTINCT visitor_hash) as live FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter}");
     $stmt->execute(array_merge([date('Y-m-d H:i:s', strtotime('-5 minutes'))], $siteParams, $pathParams, $channelParams));
     $live = $stmt->fetch(PDO::FETCH_ASSOC)['live'] ?? 0;
 
-    $utmLimit = $expand === 'utm' ? 1000 : 10;
-    $stmt = $db->prepare("SELECT source, medium, campaign, term, content, visitors, COUNT(*) OVER () as total FROM (SELECT utm_source as source, utm_medium as medium, utm_campaign as campaign, utm_term as term, utm_content as content, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} AND utm_source IS NOT NULL GROUP BY utm_source, utm_medium, utm_campaign, utm_term, utm_content) ORDER BY visitors DESC LIMIT {$utmLimit}");
-    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
-    $utm = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $utmTotal = (int) ($utm[0]['total'] ?? 0);
-    foreach ($utm as &$u) unset($u['total']);
-    unset($u);
+    if ($fig) {
+        $utm = $fig['utm'];
+        $utmTotal = $fig['utmTotal'];
+    } else {
+        $utmLimit = $expand === 'utm' ? 1000 : 10;
+        // Ties in the order the summary's key sorts in: the five values as a JSON array
+        $stmt = $db->prepare("SELECT source, medium, campaign, term, content, visitors, COUNT(*) OVER () as total FROM (SELECT utm_source as source, utm_medium as medium, utm_campaign as campaign, utm_term as term, utm_content as content, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} AND utm_source IS NOT NULL GROUP BY utm_source, utm_medium, utm_campaign, utm_term, utm_content) ORDER BY visitors DESC, json_array(source, medium, campaign, term, content) LIMIT {$utmLimit}");
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+        $utm = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $utmTotal = (int) ($utm[0]['total'] ?? 0);
+        foreach ($utm as &$u) unset($u['total']);
+        unset($u);
+    }
 
-    $stmt = $db->prepare("SELECT language as name, COUNT(*) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} AND language IS NOT NULL GROUP BY language ORDER BY cnt DESC");
-    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
-    $languages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if ($fig) {
+        $languages = $fig['languages'];
+    } else {
+        $stmt = $db->prepare("SELECT language as name, COUNT(*) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} AND language IS NOT NULL GROUP BY language ORDER BY cnt DESC, name");
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+        $languages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
     $langTotal = array_sum(array_column($languages, 'cnt'));
     $langNames = ['sv' => 'Swedish', 'en' => 'English', 'nb' => 'Norwegian', 'da' => 'Danish', 'fi' => 'Finnish',
                    'de' => 'German', 'fr' => 'French', 'es' => 'Spanish', 'nl' => 'Dutch', 'pl' => 'Polish',
@@ -1432,38 +1844,38 @@ function get_api_data(array $config, array $user): string
         'ZA' => 'South Africa', 'NG' => 'Nigeria', 'EG' => 'Egypt', 'KE' => 'Kenya',
         'AL' => 'Albania', 'GE' => 'Georgia', 'IR' => 'Iran', 'BD' => 'Bangladesh',
     ];
-    $stmt = $db->prepare("SELECT country as code, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} AND country IS NOT NULL GROUP BY country ORDER BY visitors DESC");
-    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
-    $countries = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if ($fig) {
+        $countries = $fig['countries'];
+    } else {
+        $stmt = $db->prepare("SELECT country as code, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} AND country IS NOT NULL GROUP BY country ORDER BY visitors DESC, code");
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+        $countries = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
     $countries = array_map(fn($c) => [
         'code' => $c['code'],
         'name' => $countryNames[$c['code']] ?? $c['code'],
         'visitors' => (int) $c['visitors'],
     ], $countries);
 
-    // Traffic channels: classify each visitor's first pageview
-    $stmt = $db->prepare("
-        SELECT channel, COUNT(*) as visitors, SUM(pv) as views,
-               ROUND(AVG(pv), 1) as pages_per_visitor
-        FROM (
-            SELECT visitor_hash, COUNT(*) as pv,
-                CASE
-                    WHEN MAX(utm_medium) IN ('paid', 'cpc', 'cpm', 'ppc', 'retargeting', 'paid_social') THEN 'Paid'
-                    WHEN MAX(utm_source) IS NOT NULL THEN 'Campaign'
-                    WHEN MAX(referrer) IN ('Google', 'Bing') THEN 'Organic search'
-                    WHEN MAX(referrer) IN ('Facebook', 'Instagram', 'Twitter/X', 'LinkedIn') THEN 'Social'
-                    WHEN MAX(referrer) IS NOT NULL THEN 'Referral'
-                    ELSE 'Direct'
-                END as channel
-            FROM pageviews
-            WHERE {$dateFilter} {$siteFilter} {$pathFilter}
-            GROUP BY visitor_hash
-        )
-        GROUP BY channel
-        ORDER BY visitors DESC
-    ");
-    $stmt->execute(array_merge($dateParams, $siteParams, $pathParams));
-    $channels = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Traffic channels: classify each visitor's pageviews of a day (channel_sql)
+    if ($fig) {
+        $channels = $fig['channels'];
+    } else {
+        $stmt = $db->prepare("
+            SELECT channel, COUNT(*) as visitors, SUM(pv) as views,
+                   ROUND(AVG(pv), 1) as pages_per_visitor
+            FROM (
+                SELECT visitor_hash, COUNT(*) as pv, " . channel_sql() . " as channel
+                FROM pageviews
+                WHERE {$dateFilter} {$siteFilter} {$pathFilter}
+                GROUP BY visitor_hash
+            )
+            GROUP BY channel
+            ORDER BY visitors DESC, channel
+        ");
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams));
+        $channels = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     // Bot data
     $botsLimit = $expand === 'bots' ? 1000 : 10;
@@ -1558,22 +1970,35 @@ function get_api_data(array $config, array $user): string
     $siteOverview = [];
     if (!$site && !$path && !$channel) {
         // The join has two site columns, so a user's site restriction names p.site
-        $joinSiteFilter = preg_replace('/^AND site\b/', 'AND p.site', $siteFilter);
-        $stmt = $db->prepare("SELECT p.site, COUNT(*) as views, COUNT(DISTINCT p.visitor_hash) as visitors, f.first_seen
-            FROM pageviews p
-            LEFT JOIN (SELECT site, MIN(created_at) as first_seen FROM pageviews GROUP BY site) f ON f.site = p.site
-            WHERE p.{$dateFilter} {$joinSiteFilter}
-            GROUP BY p.site ORDER BY views DESC");
-        $stmt->execute(array_merge($dateParams, $siteParams));
-        $currentSites = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if ($fig) {
+            $currentSites = [];
+            $prevMap = [];
+            $firstSeen = $db->prepare('SELECT MIN(created_at) FROM pageviews WHERE site = ?');
+            foreach (summary_sites($db, $scope, $since, $until ?: date('Y-m-d', strtotime('+1 day')), $prevSince, $fig['last']) as $name => $r) {
+                if ($r['prev']) $prevMap[$name] = $r['prev'];
+                if (!$r['views']) continue;
+                $firstSeen->execute([$name]);
+                $currentSites[] = ['site' => $name, 'views' => $r['views'], 'visitors' => $r['visitors'], 'first_seen' => $firstSeen->fetchColumn()];
+            }
+            usort($currentSites, fn ($a, $b) => ($b['views'] <=> $a['views']) ?: strcmp($a['site'], $b['site']));
+        } else {
+            $joinSiteFilter = preg_replace('/^AND site\b/', 'AND p.site', $siteFilter);
+            $stmt = $db->prepare("SELECT p.site, COUNT(*) as views, COUNT(DISTINCT p.visitor_hash) as visitors, f.first_seen
+                FROM pageviews p
+                LEFT JOIN (SELECT site, MIN(created_at) as first_seen FROM pageviews GROUP BY site) f ON f.site = p.site
+                WHERE p.{$dateFilter} {$joinSiteFilter}
+                GROUP BY p.site ORDER BY views DESC, p.site");
+            $stmt->execute(array_merge($dateParams, $siteParams));
+            $currentSites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT site, COUNT(*) as views
-            FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter}
-            GROUP BY site");
-        $stmt->execute(array_merge([$prevSince, $since], $siteParams));
-        $prevMap = [];
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $prevMap[$row['site']] = (int) $row['views'];
+            $stmt = $db->prepare("SELECT site, COUNT(*) as views
+                FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter}
+                GROUP BY site");
+            $stmt->execute(array_merge([$prevSince, $since], $siteParams));
+            $prevMap = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $prevMap[$row['site']] = (int) $row['views'];
+            }
         }
 
         $stmt = $db->prepare("SELECT site, COUNT(DISTINCT visitor_hash) as live
@@ -1605,20 +2030,25 @@ function get_api_data(array $config, array $user): string
     // Summary insights (skip when filtered to path/channel)
     $summary = null;
     if (!$path && !$channel) {
-        $stmt = $db->prepare("SELECT CASE CAST(strftime('%w', created_at) AS INTEGER)
-            WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday'
-            WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday'
-            WHEN 6 THEN 'Saturday' END as day, COUNT(*) as views
-            FROM pageviews WHERE {$dateFilter} {$siteFilter}
-            GROUP BY strftime('%w', created_at) ORDER BY views DESC LIMIT 1");
-        $stmt->execute(array_merge($dateParams, $siteParams));
-        $bestDay = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($fig) {
+            $bestDay = $fig['bestDay'];
+            $peakHour = $fig['peakHour'];
+        } else {
+            $stmt = $db->prepare("SELECT CASE CAST(strftime('%w', created_at) AS INTEGER)
+                WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday'
+                WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday'
+                WHEN 6 THEN 'Saturday' END as day, COUNT(*) as views
+                FROM pageviews WHERE {$dateFilter} {$siteFilter}
+                GROUP BY strftime('%w', created_at) ORDER BY views DESC, strftime('%w', created_at) LIMIT 1");
+            $stmt->execute(array_merge($dateParams, $siteParams));
+            $bestDay = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare("SELECT CAST(strftime('%H', created_at) AS INTEGER) as hour, COUNT(*) as views
-            FROM pageviews WHERE {$dateFilter} {$siteFilter}
-            GROUP BY hour ORDER BY views DESC LIMIT 1");
-        $stmt->execute(array_merge($dateParams, $siteParams));
-        $peakHour = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt = $db->prepare("SELECT CAST(strftime('%H', created_at) AS INTEGER) as hour, COUNT(*) as views
+                FROM pageviews WHERE {$dateFilter} {$siteFilter}
+                GROUP BY hour ORDER BY views DESC, hour LIMIT 1");
+            $stmt->execute(array_merge($dateParams, $siteParams));
+            $peakHour = $stmt->fetch(PDO::FETCH_ASSOC);
+        }
 
         // The top page besides the start page and the top source come from the tables above,
         // which hold the same period with no filter here: the first page that is not '/' is
@@ -1671,10 +2101,14 @@ function get_api_data(array $config, array $user): string
             // A goal is a page path or an event name; both count distinct visitors who reached it,
             // per day over this and the previous period. Visitor hashes change every day, so no
             // visitor is counted on two days and a period's visitors are the sum of its days.
-            [$table, $column] = $g['type'] === 'event' ? ['events', 'event_name'] : ['pageviews', 'path'];
-            $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(DISTINCT visitor_hash) as visitors FROM {$table} WHERE {$column} = ? AND created_at >= ? {$untilFilter} {$siteFilter} GROUP BY date");
-            $stmt->execute(array_merge([$g['path'], $prevSince], $untilParams, $siteParams));
-            $perDay = array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'visitors', 'date'));
+            if ($fig && $g['type'] !== 'event') {
+                $perDay = summary_path_days($db, $scope, $g['path'], $prevSince, $until ?: date('Y-m-d', strtotime('+1 day')), $fig['open'], $fig['last']);
+            } else {
+                [$table, $column] = $g['type'] === 'event' ? ['events', 'event_name'] : ['pageviews', 'path'];
+                $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(DISTINCT visitor_hash) as visitors FROM {$table} WHERE {$column} = ? AND created_at >= ? {$untilFilter} {$siteFilter} GROUP BY date");
+                $stmt->execute(array_merge([$g['path'], $prevSince], $untilParams, $siteParams));
+                $perDay = array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'visitors', 'date'));
+            }
             $series = [];
             for ($i = 0; $i < $days; $i++) {
                 $series[] = $perDay[date('Y-m-d', strtotime("+{$i} days", strtotime($since)))] ?? 0;
@@ -2250,7 +2684,7 @@ function site_groups(PDO $db): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 28; // Bump this when adding new migrations
+    $currentVersion = 29; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -2738,6 +3172,12 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
     // were stored as "Unknown crawler" (v25's step again)
     if ($version < 28) {
         rename_unknown_bots($db);
+    }
+
+    // v29: the daily summary (create_daily_table). Empty here: days are summed as they are
+    // needed, a few at a time, never all at once inside this write lock
+    if ($version < 29) {
+        create_daily_table($db);
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);
