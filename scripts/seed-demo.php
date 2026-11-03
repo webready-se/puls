@@ -149,6 +149,8 @@ $languages = [
 // UTM campaigns
 $campaigns = [
     ['google', 'cpc', 'brand-search'],
+    ['ig', 'paid', 'autumn-sale'],
+    ['fb', 'paid', 'autumn-sale'],
     ['facebook', 'paid_social', 'retargeting'],
     ['newsletter', 'email', 'weekly-digest'],
     ['twitter', 'social', 'launch-post'],

@@ -95,6 +95,11 @@ async function main() {
   execFileSync('php', ['-d', `date.timezone=${TIMEZONE}`, '-r', `
     $db = new PDO('sqlite:' . $argv[1]);
     $now = date('Y-m-d H:i:s');
+    // Campaigns as Meta's ads and Google Ads tag them, many enough to be in the top ten
+    $ads = $db->prepare("INSERT INTO pageviews (site, path, visitor_hash, utm_source, utm_medium, utm_campaign, created_at) VALUES ('demo.example.com', '/', ?, ?, ?, 'smoke-ads', ?)");
+    foreach ([['ig', 'paid'], ['fb', 'paid'], ['google', 'cpc']] as [$source, $medium]) {
+        for ($i = 0; $i < 400; $i++) $ads->execute(["ads-{$source}-{$i}", $source, $medium, $now]);
+    }
     $db->exec("INSERT INTO breakdowns (site, label, event_name, group_key, created_at) VALUES ('demo.example.com', 'Smoke card', 'cta_click', 'location', '$now')");
     // A second card, so the logged-in view can arrange them
     $db->exec("INSERT INTO breakdowns (site, label, event_name, group_key, created_at) VALUES ('demo.example.com', 'Versions', 'cta_click', '@version', '$now')");
@@ -506,6 +511,14 @@ async function main() {
       q('#sr-status').textContent = '';
       q('.period-btn[data-days="7"]').click();
       await waitFor(() => /last 7 days/.test(q('#sr-status').textContent), 'back to 7 days after the custom range');
+    }
+
+    // A campaign's source reads in words, the title keeps what was sent
+    {
+      const row = (sent) => [...document.querySelectorAll('.trow-label')].find((l) => l.title === sent);
+      expect(row('ig / paid — smoke-ads')?.textContent === 'Instagram / paid — smoke-ads', "Meta's ig reads Instagram");
+      expect(row('fb / paid — smoke-ads')?.textContent === 'Facebook / paid — smoke-ads', "Meta's fb reads Facebook");
+      expect(row('google / cpc — smoke-ads')?.textContent === 'Google Ads — smoke-ads', 'google with cpc reads Google Ads');
     }
 
     // A day opens its hours under the chart, on demand
