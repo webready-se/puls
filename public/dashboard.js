@@ -2429,9 +2429,10 @@
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
-  // Close date picker when clicking outside
+  // Close date picker when clicking outside. Contains, not the target itself: a click on the
+  // button lands on its icon, and this listener runs after the one that opened the picker
   document.addEventListener('click', function(e) {
-    if (datePicker.classList.contains('open') && !datePicker.contains(e.target) && e.target !== customRangeBtn) {
+    if (datePicker.classList.contains('open') && !datePicker.contains(e.target) && !customRangeBtn.contains(e.target)) {
       datePicker.classList.remove('open');
     }
   });

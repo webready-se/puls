@@ -386,6 +386,13 @@ async function main() {
       await waitFor(() => q('.breakdown-card .event-detail') && q('.breakdown-card .event-detail')._state && q('.breakdown-card .event-detail')._state.data.days === 30, 'card drill-down kept across period change', 8000);
     }
 
+    // The date range button opens its picker from its icon, which is what a click lands on, and a
+    // click outside closes it again
+    q('#custom-range-btn svg path').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(q('#date-picker').classList.contains('open'), 'a click on the date range icon opens the picker');
+    q('#app').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(!q('#date-picker').classList.contains('open'), 'a click outside closes the date picker');
+
     // The 1-day period starts at midnight, so it reads as today, not the last 24 hours
     const todayBtn = q('.period-btn[data-days="1"]');
     expect(todayBtn.textContent === 'Today', 'the 1-day period button reads Today');
