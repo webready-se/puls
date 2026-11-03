@@ -26,6 +26,7 @@ All requests are `GET` with query parameters.
 | `?api&groups` | The site groups and their sites, as `{"Shops": ["a", "b"]}`, limited to the sites you can read. `{}` without groups |
 | `?api` | The dashboard data for a period (below) |
 | `?api&event=<name>` | One event's drill-down (below) |
+| `?api&hours=<date>` | One day by hour (below) |
 | `?api&search=<text>` | Up to 20 paths containing the text (2+ characters), with views and visitors |
 
 ### Common parameters
@@ -71,6 +72,19 @@ Every response compares with the previous period of the same length, in the `pre
 | `bots`, `botCategories`, `botPages`, `botActivity` | Crawler and AI bot visits |
 | `live` | Visitors in the last 5 minutes |
 | `now`, `timezone` | The server's time and its time zone (`TIMEZONE`). Every time in the API is in that zone and carries no offset |
+
+## Hours of a day
+
+`?api&hours=2026-11-03` returns one day's pageviews and visitors per hour, the data behind the card that opens under the chart when a day is clicked. It takes the same `site`, `path` and `channel` as the dashboard data, and `days` or `from`/`to` for the period the channel is judged over.
+
+```json
+{"date": "2026-11-03", "hours": [{"hour": 0, "views": 0, "visitors": 0}, ...], "today": "2026-11-03", "hourNow": 14}
+```
+
+- `hours` always has 24 rows, 0 to 23, in the install's time zone (`TIMEZONE`)
+- `today` and `hourNow` say where the server's clock is, so the hours of today still to come can be told from hours without visits
+- A visitor seen in two hours counts in both, so the hours' visitors can add up to more than the day's; pageviews add up exactly
+- A date that is not `YYYY-MM-DD`, or does not exist (`2026-02-30`), returns `{"error": "Invalid date"}`
 
 ## Event drill-down
 

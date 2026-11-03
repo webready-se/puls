@@ -27,6 +27,7 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `GET /?api&days=7[&site=x]` | Yes | JSON API |
 | `GET /?api&sites` | Yes | List tracked sites |
 | `GET /?api&groups` | Yes | The site groups and their sites (`{group: [sites]}`, limited to the user's sites) |
+| `GET /?api&hours=YYYY-MM-DD` | Yes | One day's pageviews and visitors per hour, with the dashboard's filters (the hourly card); also with a share token |
 | `GET /` | Yes | Dashboard |
 | `POST /?login` | No | Login form submission |
 | `POST /?goal_add` | Yes | Add a conversion goal (page path or event name) |

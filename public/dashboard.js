@@ -120,6 +120,9 @@
     'cancel-goal-target-on-escape': function(el, e) { if (e.key === 'Escape') editGoalTarget(null); },
     'edit-goal-target': function(el) { editGoalTarget(el.dataset.key); },
     'chart-mode': function(el) { switchChartMode(el); },
+    // A tap on a release or note label shows its list, not the day's hours
+    'pick-day': function(el, e) { if (!e.target.closest('.chart-release, .chart-note, .mark-tip')) pickDay(el.dataset.date); },
+    'close-hours': function() { closeHours(); },
     'toggle-compare': function(el) { toggleCompareMode(el); },
     'toggle-note-form': function() { toggleNoteForm(); },
     'note-form-to-settings': function() { toggleNoteForm(); openMenu('notes'); },
@@ -404,6 +407,16 @@
     return url;
   }
 
+  // The API URL for what is on screen: the period, site, path and channel. The hours of a day
+  // ask with the same, so the card counts what the chart counts
+  function viewUrl() {
+    var url = currentFrom && currentTo ? apiUrl('?api&from=' + currentFrom + '&to=' + currentTo) : apiUrl('?api&days=' + currentDays);
+    if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
+    if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
+    if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
+    return url;
+  }
+
   // auto: the 60 s refresh, which keeps the current view if the request fails; quiet: pull-to-
   // refresh, which shows its own spinner. Only the latest load renders: a slow answer for a
   // period chosen before must not replace the one chosen after
@@ -412,15 +425,7 @@
     var seq = ++loadSeq;
     currentDays = days;
     lastLoad = Date.now();
-    let url;
-    if (currentFrom && currentTo) {
-      url = apiUrl('?api&from=' + currentFrom + '&to=' + currentTo);
-    } else {
-      url = apiUrl('?api&days=' + days);
-    }
-    if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
-    if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
-    if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
+    var url = viewUrl();
     if (!lastData) loading(true, true);
     else if (!auto && !quiet) loading(true);
     return fetch(url)
@@ -436,6 +441,7 @@
         if (!data || seq !== loadSeq) return;
         if (data.now) serverSkew = wallClock(data.now) - Date.now();
         render(data);
+        fetchHours();
       })
       .catch(function() {
         if (auto || seq !== loadSeq) return;
@@ -714,6 +720,7 @@
     // cards after them. The summary sits above the Goals heading so it does not read as goals.
     html += island('stats', renderStats(d, totalViews, totalVisitors, pagesPerVisitor, viewsTrend, visitorsTrend, ppvTrend, bounceTrend, sessionTrend)) +
       island('chart', renderChart(d)) +
+      island('hours', renderHours()) +
       island('sites', renderSiteOverview(d.siteOverview)) +
       island('summary', renderSummary(d.summary)) +
       renderGoals(d.goals);
@@ -1003,6 +1010,19 @@
     if ((e.key === 'Enter' || e.key === ' ') && (role === 'button' || role === 'tab') && t.tagName !== 'BUTTON') {
       e.preventDefault();
       t.click();
+      return;
+    }
+    // The chart's days are one tab stop: the arrows, Home and End move between them, and Enter
+    // or Space (above) picks one
+    if (t.hasAttribute && t.hasAttribute('data-date') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End')) {
+      var days = [].slice.call(t.parentNode.querySelectorAll('[data-date]'));
+      var at = days.indexOf(t);
+      var to = e.key === 'Home' ? 0 : e.key === 'End' ? days.length - 1
+        : Math.min(days.length - 1, Math.max(0, at + (e.key === 'ArrowRight' ? 1 : -1)));
+      e.preventDefault();
+      t.tabIndex = -1;
+      days[to].tabIndex = 0;
+      days[to].focus();
       return;
     }
     if (role === 'tab' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End')) {
@@ -1331,6 +1351,7 @@
   var compareMode = localStorage.getItem('puls-compare') === '1';
 
   function renderChart(d) {
+    if (hourOpen) hourDay = hourDayIn(d);
     if (!d.pageviews || !d.pageviews.length) return '';
     var siteName = currentSite || 'all sites';
     var hasCompare = d.previousPageviews && d.previousPageviews.length > 0;
@@ -1442,10 +1463,17 @@
       allVals = allVals.concat(previousPageviews.map(function(p) { return +p[key]; }));
     }
     var maxVal = Math.max.apply(null, allVals.concat([1]));
+    // Each day is a button that opens its hours: one tab stop for them all, on the picked day
+    // or else the latest, and the tooltip says what a click does
+    var stop = hourOpen && hourDay ? hourDay : pageviews[pageviews.length - 1].date;
     var bars = '';
     pageviews.forEach(function(p, i) {
       var h = Math.max(4, (+p[key] / maxVal) * 128);
       var label = formatDay(p.date);
+      var picked = hourOpen && p.date === hourDay;
+      var day = ' data-date="' + p.date + '" data-action="pick-day" role="button" tabindex="' + (p.date === stop ? 0 : -1) + '" aria-pressed="' + picked + '"' +
+        ' aria-label="' + esc(label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors. ' + (picked ? 'Close the hours' : 'See by hour')) + '"';
+      var hint = '<div class="tip-hint">' + (picked ? 'Click to close' : 'Click to see by hour') + '</div>';
       var prev = showCompare && previousPageviews[i] ? previousPageviews[i] : null;
       var prevH = prev ? Math.max(4, (+prev[key] / maxVal) * 128) : 0;
 
@@ -1462,9 +1490,10 @@
           '<div class="tip-head">' + label + '<span class="tip-delta" data-color="' + deltaColor + '">' + deltaStr + '</span></div>' +
           '<div>' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
           (prev ? '<div class="tip-prev">vs ' + prevLabel + ': ' + num(prev.views) + ' / ' + num(prev.visitors) + '</div>' : '') +
+          hint +
         '</div>';
 
-        bars += '<div class="chart-col chart-col-compare' + (marks[p.date] ? marks[p.date].cls : '') + '">' +
+        bars += '<div class="chart-col chart-col-compare' + (marks[p.date] ? marks[p.date].cls : '') + (picked ? ' selected' : '') + '"' + day + '>' +
           (marks[p.date] ? marks[p.date].html : '') +
           combinedTip +
           '<div class="chart-bars">' +
@@ -1480,11 +1509,11 @@
           axisDate(p.date) +
         '</div>';
       } else {
-        bars += '<div class="chart-col' + (marks[p.date] ? marks[p.date].cls : '') + '">' +
+        bars += '<div class="chart-col' + (marks[p.date] ? marks[p.date].cls : '') + (picked ? ' selected' : '') + '"' + day + '>' +
           (marks[p.date] ? marks[p.date].html : '') +
           '<span class="chart-val">' + num(p[key]) + '</span>' +
           '<div class="chart-bar" data-h="' + h + '">' +
-            '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
+            '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors' + hint + '</div>' +
           '</div>' +
           axisDate(p.date) +
         '</div>';
@@ -1502,6 +1531,8 @@
     var chartEl = card.querySelector('.chart');
     chartEl.innerHTML = buildBars(lastData.pageviews, lastData.previousPageviews);
     placeMonthPin(chartEl.parentNode);
+    // The hours follow the tab
+    patchHours();
   };
 
   window.toggleCompareMode = function(el) {
@@ -1517,6 +1548,117 @@
     // An open event drill-down follows the same compare setting
     document.querySelectorAll('.event-detail').forEach(function(d) { if (d._state) renderEventDetail(d); });
   };
+
+  // --- Hours of a day ---
+  // A day in the chart opens its hours in a card under it, on demand: closed by default, a click
+  // on a day opens it on that day, on another day switches, on the picked day (or the card's x)
+  // closes it. Whether it is open is remembered, like Compare, and then it opens on the latest
+  // day. Nothing is asked for while it is closed. Its own island, so a refresh that brings the
+  // same hours leaves the card alone, a tooltip being read included
+  var hourOpen = localStorage.getItem('puls-hours') === '1';
+  var hourDay = '', hourData = null, hourSeq = 0;
+
+  // The picked day while it is in the period, else the latest day
+  function hourDayIn(d) {
+    var dates = (d && d.pageviews || []).map(function(p) { return p.date; });
+    return dates.indexOf(hourDay) >= 0 ? hourDay : dates[dates.length - 1] || '';
+  }
+
+  function hoursKey() { return viewUrl() + '|' + hourDay; }
+
+  function fetchHours() {
+    if (!hourOpen || !hourDay) return;
+    var seq = ++hourSeq, key = hoursKey();
+    fetch(viewUrl() + '&hours=' + hourDay)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (seq !== hourSeq || !hourOpen || !data || data.error) return;
+        data.key = key;
+        hourData = data;
+        patchHours();
+      })
+      .catch(function() {});
+  }
+
+  function renderHours() {
+    if (!hourOpen || !hourDay) return '';
+    var key = chartMode === 'visitors' ? 'visitors' : 'views';
+    var what = key === 'visitors' ? 'Visitors' : 'Pageviews';
+    var data = hourData && hourData.key === hoursKey() ? hourData : null;
+    // The hours are the install's; when its clock is not the viewer's, the card says whose
+    var body = '<div class="hours-loading muted">Loading\u2026</div>', sub = 'By hour' + zoneNote();
+    if (data) {
+      // Today's hours still to come have no bar
+      var last = data.date === data.today ? data.hourNow : 23;
+      var max = Math.max.apply(null, data.hours.map(function(r) { return r[key]; }).concat([1]));
+      var peak = data.hours.reduce(function(a, r) { return r[key] > a[key] ? r : a; }, data.hours[0]);
+      var span = function(h) { return clock(h) + '\u2013' + clock((h + 1) % 24); };
+      // The busiest hour is the number most people look for, as Peak hour is for the period
+      sub += ' \u00b7 ' + (peak[key] ? 'peak ' + span(peak.hour) + ', ' + num(peak[key]) : 'no') + ' ' + (key === 'visitors' ? 'visitors' : 'views');
+      body = '<div class="hours-chart" role="img" aria-label="' + esc(what + ' by hour on ' + formatDay(data.date) + ': ' +
+        (peak[key] ? 'busiest ' + span(peak.hour) + ' with ' + num(peak[key]) : 'none')) + '">' +
+        data.hours.map(function(r) {
+          var h = r.hour;
+          // Early and late hours anchor their tooltip inward, so it stays on a phone's screen
+          return '<div class="hour-col' + (h < 6 ? ' tip-start' : h > 17 ? ' tip-end' : '') + '">' +
+            // An hour without visits is a faint line without a number, so the night stays quiet
+            (h <= last ? (r[key] ? '<span class="chart-val hour-val">' + num(r[key]) + '</span>' : '') +
+              '<div class="chart-bar' + (r[key] ? '' : ' hour-zero') + '" data-h="' + Math.max(3, r[key] / max * 90) + '"><div class="tip">' + span(h) + ': ' + num(r.views) + ' views, ' + num(r.visitors) + ' visitors</div></div>' : '') +
+            '<span class="hour-label' + (h % 3 ? ' hour-minor' : '') + '">' + clock(h) + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+    return '<div class="card hours-card" id="hours-card">' +
+      '<div class="card-header">' +
+        '<span class="card-title">' + formatDay(hourDay) + '</span>' +
+        '<span class="hours-head"><span class="card-subtitle">' + sub + '</span>' +
+        '<button class="card-close" data-action="close-hours" aria-label="Close the hours"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></span>' +
+      '</div>' + body +
+    '</div>';
+  }
+
+  // Brings the hours island up to date on its own, as patchIslands would (compared as parsed
+  // HTML), so new hours or the chart tab leave the chart, its scroll and focus alone
+  function patchHours() {
+    var chart = app.querySelector(':scope > [data-island="chart"]');
+    if (!chart) return;
+    var tpl = document.createElement('template');
+    tpl.innerHTML = island('hours', renderHours());
+    var next = tpl.content.firstElementChild, html = next ? next.outerHTML : undefined;
+    if (islandHtml.hours === html) return;
+    var cur = app.querySelector(':scope > [data-island="hours"]');
+    if (cur) cur.remove();
+    if (next) chart.after(next);
+    if (html) islandHtml.hours = html; else delete islandHtml.hours;
+  }
+
+  function pickDay(date) {
+    if (hourOpen && hourDay === date) { closeHours(); return; }
+    var refocus = document.activeElement && document.activeElement.getAttribute('data-date') === date;
+    hourOpen = true;
+    hourDay = date;
+    localStorage.setItem('puls-hours', '1');
+    render(lastData);
+    fetchHours();
+    announce('By hour, ' + formatDay(date));
+    if (refocus) focusDay(date);
+  }
+
+  // Focus goes back to the day, also from the card's x, which is gone with the card
+  function closeHours() {
+    var day = hourDay;
+    hourOpen = false;
+    localStorage.setItem('puls-hours', '0');
+    render(lastData);
+    announce('Hours closed');
+    focusDay(day);
+  }
+
+  function focusDay(date) {
+    var el = document.querySelector('#chart-card [data-date="' + date + '"]');
+    if (el) el.focus({ preventScroll: true });
+  }
 
   function renderTable(title, rows, labelKey, valKey, color) {
     if (!rows || !rows.length) {

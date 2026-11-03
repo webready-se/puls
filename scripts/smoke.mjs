@@ -407,6 +407,14 @@ async function main() {
     const denseDates = [...document.querySelectorAll('.event-detail .event-chart.dense .chart-date')].map((d) => d.textContent.trim()).filter(Boolean);
     expect(denseDates.length && denseDates.every((t) => /^[A-Z][a-z]{2} \d{1,2}$/.test(t)), 'the dense chart labels its dates with the month');
     expect(!q('.event-detail .event-chart.dense + .chart-pin'), 'the dense chart has no pin');
+    // The picked day's ring fits at the scroll end too: the chart keeps its padding there
+    q('#chart-card .chart-scroll').scrollLeft = 1e6;
+    q('#chart-card .chart-col:last-child').click();
+    if (await waitFor(() => q('#chart-card .chart-col.selected'), 'the last day picked in a scrolled chart')) {
+      const edge = q('#chart-card .chart-scroll').getBoundingClientRect().right, bar = q('#chart-card .chart-col.selected .chart-bar').getBoundingClientRect().right;
+      expect(edge - bar >= 4, `the picked last day's ring is not cut off by the scroll edge (${Math.round(edge - bar)} px of room)`);
+      q('#chart-card .chart-col.selected').click();
+    }
     expect(q('.event-detail') && q('.event-detail')._state && q('.event-detail')._state.then, 'funnel choice kept across period change');
 
     // Breakdown card opens the same drill-down inside the card, grouped on its key
@@ -498,6 +506,61 @@ async function main() {
       q('#sr-status').textContent = '';
       q('.period-btn[data-days="7"]').click();
       await waitFor(() => /last 7 days/.test(q('#sr-status').textContent), 'back to 7 days after the custom range');
+    }
+
+    // A day opens its hours under the chart, on demand
+    {
+      const hoursAsked = [], realFetch = window.fetch;
+      window.fetch = (url, ...rest) => { if (/[?&]hours=/.test(String(url))) hoursAsked.push(String(url)); return realFetch(url, ...rest); };
+      const col = (date) => q(`#chart-card .chart-col[data-date="${date}"]`), picked = () => q('#chart-card .chart-col.selected');
+      const refresh = async (what) => { q('#sr-status').textContent = ''; q('.period-btn.active').click(); await waitFor(() => /Showing/.test(q('#sr-status').textContent), what); };
+      const dates = [...document.querySelectorAll('#chart-card .chart-col[data-date]')].map((c) => c.dataset.date);
+      const [day, latest] = dates.slice(-2);
+      expect(!q('#hours-card') && !picked() && !hoursAsked.length, 'the hours are closed on load, no day picked, nothing asked for');
+      expect(document.querySelectorAll('#chart-card .chart-col[tabindex="0"]').length === 1 && col(latest).tabIndex === 0, 'the chart is one tab stop, on the latest day');
+      expect(/Click to see by hour/.test(col(day).querySelector('.tip').textContent), "a day's tooltip says a click shows its hours");
+
+      col(day).click();
+      if (await waitFor(() => q('#hours-card .hours-chart'), 'the hours of a clicked day')) {
+        expect(hoursAsked.length === 1 && hoursAsked[0].includes(`hours=${day}`), 'one request, for the clicked day');
+        expect(q('#hours-card .hours-chart').children.length === 24, 'the card has 24 hours');
+        expect(picked()?.dataset.date === day && picked().getAttribute('aria-pressed') === 'true' && /Click to close/.test(picked().querySelector('.tip').textContent), 'the picked day is marked, and its tooltip says a click closes');
+        expect(localStorage.getItem('puls-hours') === '1', 'an open card is remembered');
+        expect(/^By hour \u00b7 .* views$/.test(q('#hours-card .card-subtitle').textContent), `the card counts what the chart tab shows (says "${q('#hours-card .card-subtitle').textContent}")`);
+        expect(getComputedStyle(q('#chart-card')).marginBottom === '0px' && getComputedStyle(q('#hours-card')).borderTopStyle === 'none', 'the open card hangs from the chart');
+      }
+      // A refresh that brings the same hours leaves the card as it is
+      const card = q('#hours-card');
+      await refresh('a refresh with the card open');
+      await waitFor(() => hoursAsked.length === 2, 'the hours asked for again on a refresh');
+      await sleep(300);
+      expect(q('#hours-card') === card, 'a refresh with the same hours leaves the card alone');
+      // The tab switches the card too, and the chart (and focus on its tab) stays as it is
+      const tab = q('#chart-card .card-tab[data-chart="visitors"]');
+      tab.focus();
+      tab.click();
+      expect(/visitors$/.test(q('#hours-card .card-subtitle')?.textContent || ''), 'the card follows the Visitors tab');
+      expect(document.activeElement === tab && q('#chart-card .card-tab[data-chart="visitors"]') === tab, 'switching the tab with the card open keeps the chart and its focus');
+      q('#chart-card .card-tab[data-chart="views"]').click();
+      // Another day switches, the picked day closes
+      col(latest).click();
+      await waitFor(() => picked()?.dataset.date === latest && hoursAsked.at(-1).includes(`hours=${latest}`) && q('#hours-card .hours-chart'), 'another day switches the card');
+      col(latest).click();
+      expect(!q('#hours-card') && !picked() && localStorage.getItem('puls-hours') === '0', 'a click on the picked day closes the card, and closed is remembered');
+      // The keyboard: the arrows move between days, Enter opens, the card's x closes and focus goes back to the day
+      col(latest).focus();
+      col(latest).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      expect(document.activeElement === col(day) && col(day).tabIndex === 0 && col(latest).tabIndex === -1, 'the left arrow moves to the day before');
+      col(day).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await waitFor(() => picked()?.dataset.date === day && q('#hours-card .hours-chart'), 'Enter opens the hours of the focused day');
+      q('#hours-card [data-action="close-hours"]').click();
+      expect(!q('#hours-card') && document.activeElement === col(day), "the card's x closes it and focus goes back to the day");
+      // Closed, nothing is asked for
+      const asked = hoursAsked.length;
+      await refresh('a refresh with the card closed');
+      await sleep(300);
+      expect(hoursAsked.length === asked, 'no request for hours while the card is closed');
+      window.fetch = realFetch;
     }
 
     // Light theme renders too
@@ -922,8 +985,27 @@ async function main() {
     if (shown.result?.value !== tab) failures.push(`chart opens on ${tab} after picking it (showed ${shown.result?.value})`);
   }
 
-  // 10. A viewer in another time zone: the footer names the install's, in plain words
+  // 9b. An open hours card is remembered across a reload, and opens on the latest day
+  await send('Runtime.evaluate', { expression: `localStorage.setItem('puls-hours', '1')` });
+  const wait6b = loaded();
+  await send('Page.navigate', { url: `${base}/` });
+  await wait6b;
+  const hoursOnLoad = async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let t = 0; t < 5000 && !document.querySelector('#hours-card .hours-chart'); t += 100) await sleep(100);
+    const days = [...document.querySelectorAll('#chart-card .chart-col[data-date]')];
+    const picked = document.querySelector('#chart-card .chart-col.selected');
+    localStorage.removeItem('puls-hours');
+    if (!document.querySelector('#hours-card .hours-chart')) return 'no hours card after a reload with it open';
+    return picked && picked === days.at(-1) ? '' : `the remembered card opens on the latest day (picked ${picked?.dataset.date})`;
+  };
+  const hoursShown = await send('Runtime.evaluate', { expression: `(${hoursOnLoad.toString()})()`, awaitPromise: true, returnByValue: true });
+  if (hoursShown.result?.value) failures.push(hoursShown.result.value);
+
+  // 10. A viewer in another time zone: the footer names the install's, in plain words, and so
+  // does an open hours card
   await send('Emulation.setTimezoneOverride', { timezoneId: 'America/New_York' });
+  await send('Runtime.evaluate', { expression: `localStorage.setItem('puls-hours', '1')` });
   const wait7 = loaded();
   await send('Page.navigate', { url: `${base}/` });
   await wait7;
@@ -934,6 +1016,14 @@ async function main() {
   };
   const footText = (await send('Runtime.evaluate', { expression: `(${zoneFoot.toString()})()`, awaitPromise: true, returnByValue: true })).result?.value || '';
   if (!/updated \d\d:\d\d, Stockholm time$/.test(footText)) failures.push(`footer names the install's zone for a viewer elsewhere (shows "${footText}")`);
+  const zoneHours = async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let t = 0; t < 5000 && !document.querySelector('#hours-card .hours-chart'); t += 100) await sleep(100);
+    localStorage.removeItem('puls-hours');
+    return document.querySelector('#hours-card .card-subtitle')?.textContent || '';
+  };
+  const hoursSub = (await send('Runtime.evaluate', { expression: `(${zoneHours.toString()})()`, awaitPromise: true, returnByValue: true })).result?.value || '';
+  if (!/^By hour, Stockholm time \u00b7 /.test(hoursSub)) failures.push(`the hours card names the install's zone for a viewer elsewhere (shows "${hoursSub}")`);
   await send('Emulation.setTimezoneOverride', { timezoneId: TIMEZONE });
 
   // 11. The tracking script on a page: sendBeacon is recorded instead of sent, so what the script

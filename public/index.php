@@ -1078,6 +1078,25 @@ function get_api_data(array $config, array $user): string
         }
     }
 
+    // One day by hour (?hours=<date>): pageviews and visitors per hour for the card under the
+    // chart, with the chart's site, path and channel filters, before the dashboard's queries so
+    // a picked day costs one small query. A visitor seen in two hours counts in both, so the
+    // hours' visitors can add up to more than the day's
+    $hoursDay = $_GET['hours'] ?? '';
+    if ($hoursDay !== '') {
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $hoursDay, $ymd) || !checkdate((int) $ymd[2], (int) $ymd[3], (int) $ymd[1])) {
+            return json_encode(['error' => 'Invalid date']);
+        }
+        $stmt = $db->prepare("SELECT CAST(strftime('%H', created_at) AS INTEGER) as hour, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE created_at >= ? AND created_at < ? {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY hour");
+        $stmt->execute(array_merge([$hoursDay, date('Y-m-d', strtotime($hoursDay . ' +1 day'))], $siteParams, $pathParams, $channelParams));
+        $byHour = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), null, 'hour');
+        $hours = [];
+        for ($h = 0; $h < 24; $h++) {
+            $hours[] = ['hour' => $h, 'views' => (int) ($byHour[$h]['views'] ?? 0), 'visitors' => (int) ($byHour[$h]['visitors'] ?? 0)];
+        }
+        return json_encode(['date' => $hoursDay, 'hours' => $hours, 'today' => date('Y-m-d'), 'hourNow' => (int) date('G')]);
+    }
+
     $stmt = $db->prepare("SELECT DATE(created_at) as date, COUNT(*) as views, COUNT(DISTINCT visitor_hash) as visitors FROM pageviews WHERE {$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter} GROUP BY date ORDER BY date");
     $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
     $byDay = $stmt->fetchAll(PDO::FETCH_ASSOC);
