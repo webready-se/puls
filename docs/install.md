@@ -158,6 +158,8 @@ The repository also has configs for [Railway](https://railway.app) (`railway.tom
 
 Replace the files with the ones from the new release and keep `data/`, `users.json` and `.env`. The database is migrated on the first request after the upgrade. Read the [changelog](../CHANGELOG.md) first: it says when something needs your attention.
 
+Releases are gathered, so an install is not asked to upgrade every few days: a minor release about every one or two weeks, holding the features and fixes since the last one, and a patch release at once for a security fix, data loss or a broken install or upgrade. To hear about them, watch the repository on GitHub for releases only (Watch, Custom, Releases).
+
 ## Development
 
 ```bash
