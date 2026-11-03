@@ -444,7 +444,9 @@ body {
 .card-subtitle { font-size: 12px; color: var(--text-3); }
 .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-top: 30px; padding-bottom: 12px; }
 .chart-scroll.compare { padding-top: 80px; }
-.chart { display: flex; align-items: flex-end; gap: 6px; height: 158px; padding: 0 4px; }
+/* At least as wide as its days, so a period that scrolls keeps the padding at its end too: the
+   picked day's ring on the last day was cut off there */
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 158px; padding: 0 4px; min-width: max-content; }
 @media (max-width: 600px) { .chart { gap: 3px; } }
 .chart-col { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; min-width: 36px; padding: 0 2px; }
 .chart-val { font-size: 10px; color: var(--text-2); font-weight: 600; white-space: nowrap; }
@@ -492,6 +494,31 @@ body {
 .chart-month::before { content: ''; position: absolute; left: 0; top: -15px; bottom: 0; border-left: 1px solid var(--line-strong); }
 .chart-pin { left: 4px; pointer-events: none; }
 .chart-pin[data-covered] { visibility: hidden; }
+/* A day opens its hours (renderHours in dashboard.js): the picked day's bar gets a ring and
+   its date the accent */
+.chart-col[data-date] { cursor: pointer; }
+.chart-col.selected .chart-bar:not(.chart-bar-prev) { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent-tile); }
+.chart-col.selected .chart-date { color: var(--accent); font-weight: 600; }
+/* Open, the hours hang from the chart: one card with a hairline between, since they are the
+   chart's day opened up, not a section of their own */
+[data-island="chart"]:has(+ [data-island="hours"]) > .card { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: none; }
+.hours-card { border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; }
+.hours-card .card-header { flex-direction: row; align-items: center; }
+.hours-head { display: flex; align-items: center; gap: 12px; }
+.hours-chart, .hours-loading { height: 136px; }
+.hours-chart { display: flex; align-items: flex-end; gap: 4px; padding-top: 22px; }
+.hours-loading { display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.hour-col { position: relative; flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; container-type: inline-size; }
+.hour-col:hover { z-index: 10; }
+.hour-label { font-size: 10px; color: var(--text-3); white-space: nowrap; }
+.hour-minor { visibility: hidden; }
+.hour-zero { opacity: 0.35; }
+.hour-col.tip-start .chart-bar > .tip { left: 0; transform: none; }
+.hour-col.tip-start .chart-bar > .tip::after { left: 50cqw; }
+.hour-col.tip-end .chart-bar > .tip { left: auto; right: 0; transform: none; }
+.hour-col.tip-end .chart-bar > .tip::after { left: auto; right: 50cqw; transform: translateX(50%); }
+/* All 24 hours fit the card, so it never scrolls: on a narrow screen the numbers go */
+@media (max-width: 800px) { .hours-chart { gap: 2px; } .hour-val { display: none; } }
 /* Release and note markers: one line from the label down to above the date, drawn by the day
    itself, so its parts cannot land a pixel apart; the bar value sits on top of it */
 .chart-col.has-release::before, .chart-col.has-note::before { content: ''; position: absolute; left: 50%; top: -14px; bottom: 22px; border-left: 1px solid var(--note); }
@@ -797,13 +824,13 @@ body {
   padding-bottom: 14px; border-bottom: 1px solid var(--line);
 }
 .menu-header span { font-weight: 600; font-size: 14px; color: var(--text); }
-.menu-close {
+.menu-close, .card-close {
   width: 28px; height: 28px; border-radius: 8px; border: none;
   background: var(--surface-2); cursor: pointer; color: var(--text-2);
   display: flex; align-items: center; justify-content: center;
 }
-.menu-close:hover { color: var(--text); }
-.menu-close svg { width: 16px; height: 16px; }
+.menu-close:hover, .card-close:hover { color: var(--text); }
+.menu-close svg, .card-close svg { width: 16px; height: 16px; }
 .menu-section { display: flex; flex-direction: column; gap: 8px; }
 /* Folded menu sections: the label with the chevron on the right, so labels line up with
    Appearance and Export, and the summary under it, as the panel is narrow */
@@ -1054,6 +1081,7 @@ body[data-first-load] .load-status { animation-delay: .3s; }
 .tip-head { font-weight: 600; margin-bottom: 4px; }
 .tip-delta { font-weight: 500; }
 .tip-prev { color: var(--text-3); margin-top: 2px; }
+.tip-hint { color: var(--text-3); margin-top: 2px; }
 .bot-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .bot-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
 .bl-row { padding: 8px 0; border-bottom: 1px solid var(--line); }
