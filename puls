@@ -689,9 +689,13 @@ function statsBuild(string $dbPath): void
     foreach ($sites as $site) {
         $count->execute([$site]);
         $before = (int) $count->fetchColumn();
+        // An open statement keeps its read going, and SQLite then refuses the write at once when
+        // tracking has written meanwhile, instead of waiting (SQLITE_BUSY_SNAPSHOT)
+        $count->closeCursor();
         sum_missing_days($db, [$site], '0000-00-00', '', PHP_INT_MAX);
         $count->execute([$site]);
         $summed = (int) $count->fetchColumn() - $before;
+        $count->closeCursor();
         $total += $summed;
         echo "  {$site}: " . ($summed ? "{$summed} days summed" : 'up to date') . "\n";
     }
