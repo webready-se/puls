@@ -11,6 +11,9 @@ test('detects AI bots', function (string $ua, string $name) {
     ['Mozilla/5.0 (compatible; PerplexityBot/1.0)', 'PerplexityBot'],
     ['Mozilla/5.0 (compatible; Bytespider)', 'Bytespider'],
     ['Meta-ExternalAgent/1.0', 'Meta AI'],
+    // Their user agents link to Meta's crawler page, so they matched the generic "crawler" before
+    ['meta-webindexer/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)', 'Meta AI search'],
+    ['meta-externalfetcher/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)', 'Meta AI fetcher'],
 ]);
 
 test('detects search engine bots', function (string $ua, string $name) {
@@ -30,6 +33,7 @@ test('detects social bots', function (string $ua, string $name) {
         ->and($result['category'])->toBe('Social');
 })->with([
     ['facebookexternalhit/1.1', 'Facebook'],
+    ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 (compatible; meta-externalads/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler))', 'Meta Ads'],
     ['Twitterbot/1.0', 'Twitterbot'],
     ['LinkedInBot/1.0', 'LinkedInBot'],
 ]);

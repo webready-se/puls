@@ -31,3 +31,23 @@ test('migration v25 renames stored unknown visits that detect_bot() knows now', 
     preg_match('/\$currentVersion = (\d+);/', file_get_contents(__DIR__ . '/../../public/index.php'), $m);
     expect((int) $db->query('PRAGMA user_version')->fetchColumn())->toBe((int) $m[1]);
 });
+
+test('migration v28 names Meta\'s crawlers stored as unknown', function () {
+    $db = botTestDb();
+    $db->exec('PRAGMA user_version = 27');
+    $insert = $db->prepare("INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES ('s', '/', 'Unknown crawler', 'Other', ?, '2026-01-01 10:00:00')");
+    $insert->execute(['meta-webindexer/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)']);
+    $insert->execute(['meta-externalfetcher/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)']);
+    $insert->execute(['Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 (compatible; meta-externalads/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler))']);
+    $insert->execute(['br-crawler/0.5']);
+
+    run_migrations($db);
+
+    $rows = $db->query('SELECT bot_name, bot_category FROM bot_visits ORDER BY id')->fetchAll(PDO::FETCH_NUM);
+    expect($rows)->toBe([
+        ['Meta AI search', 'AI'],
+        ['Meta AI fetcher', 'AI'],
+        ['Meta Ads', 'Social'],
+        ['Unknown crawler', 'Other'],
+    ]);
+});
