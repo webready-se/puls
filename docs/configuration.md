@@ -133,4 +133,5 @@ php puls exclude:add <site> <ip>         # Stop counting an IP or range (e.g. 81
 php puls exclude:list                    # List excluded IPs
 php puls exclude:remove <site> <ip>      # Count an excluded IP again
 php puls nginx:config                    # Generate Nginx config for a site
+php puls stats:build                     # Sum every finished day into the dashboard's daily summary at once
 ```

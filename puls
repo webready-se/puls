@@ -21,6 +21,7 @@
  *   php puls exclude:list [<site>]                 List excluded IPs
  *   php puls exclude:remove [<site> <ip>]          Count an excluded IP again
  *   php puls nginx:config                          Generate Nginx config for a site
+ *   php puls stats:build                           Sum every finished day for the dashboard at once
  */
 
 $config = require __DIR__ . '/config.php';
@@ -44,6 +45,7 @@ match ($command) {
     'exclude:list'  => excludeList($config, $argv[2] ?? null),
     'exclude:remove' => excludeRemove($config, $argv[2] ?? null, $argv[3] ?? null),
     'nginx:config'  => nginxConfig(),
+    'stats:build'   => statsBuild($config['db_path']),
     default         => printHelp(),
 };
 
@@ -444,7 +446,7 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
     // Rename in all tables
     $db->beginTransaction();
 
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns', 'annotations', 'excluded_ips', 'site_groups'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns', 'annotations', 'excluded_ips', 'site_groups', 'daily'];
     // Skip tables a not-yet-migrated database does not have
     $existing = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
     foreach (array_intersect($tables, $existing) as $table) {
@@ -640,9 +642,60 @@ function sitesCleanPaths(array $config, array $argv): void
             $stmt->execute([$path, $id]);
         }
     }
+    // The site's daily summary counted the old paths; it is a cache, summed again as needed
+    if (isset($changes['pageviews']) && $db->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'daily'")->fetchColumn()) {
+        $db->prepare('DELETE FROM daily WHERE site = ?')->execute([$siteName]);
+    }
     $db->commit();
 
     echo "\nCleaned paths for '{$siteName}'.\n";
+}
+
+// =====================================================================
+// stats:build
+// =====================================================================
+
+/**
+ * Sums every finished day of every site into the daily summary, so the dashboard reads long
+ * periods from it from the first view. Without it the dashboard sums the days it meets, a few
+ * per view, and the daily job sums each day as it ends; this is for an upgraded install that
+ * wants it done at once. The summing is the dashboard's own, read from public/index.php
+ */
+function statsBuild(string $dbPath): void
+{
+    if (!file_exists($dbPath)) {
+        echo "No database found. Start tracking to create it.\n";
+        exit(1);
+    }
+    $source = file_get_contents(__DIR__ . '/public/index.php');
+    foreach (['create_daily_table', 'channel_sql', 'range_rows', 'store_days', 'last_closed_day', 'sum_missing_days'] as $name) {
+        if (function_exists($name)) continue;
+        if (!preg_match('/^function ' . $name . '\([^)]*\)(?:: [^\n]+)?\n\{.+?\n\}/ms', $source, $m)) {
+            echo "Could not read {$name}() from public/index.php.\n";
+            exit(1);
+        }
+        eval($m[0]);
+    }
+
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // Tracking goes on writing meanwhile: wait for it rather than fail; each day is a short write
+    $db->exec('PRAGMA busy_timeout = 10000');
+    create_daily_table($db);
+
+    $sites = $db->query('SELECT DISTINCT site FROM pageviews ORDER BY site')->fetchAll(PDO::FETCH_COLUMN);
+    $count = $db->prepare("SELECT COUNT(*) FROM daily WHERE site = ? AND kind = 'day'");
+    $total = 0;
+    foreach ($sites as $site) {
+        $count->execute([$site]);
+        $before = (int) $count->fetchColumn();
+        sum_missing_days($db, [$site], '0000-00-00', '', PHP_INT_MAX);
+        $count->execute([$site]);
+        $summed = (int) $count->fetchColumn() - $before;
+        $total += $summed;
+        echo "  {$site}: " . ($summed ? "{$summed} days summed" : 'up to date') . "\n";
+    }
+    echo "\n" . ($total ? "Summed {$total} days." : 'Every finished day was summed already.') . " The dashboard reads them from the summary; today is always read from the pageviews.\n";
 }
 
 // =====================================================================
@@ -882,7 +935,7 @@ function sitesRemove(array $config, ?string $siteName): void
     }
 
     $db->beginTransaction();
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns', 'annotations', 'excluded_ips', 'site_groups'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns', 'annotations', 'excluded_ips', 'site_groups', 'daily'];
     // Skip tables a not-yet-migrated database does not have
     $existing = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
     foreach (array_intersect($tables, $existing) as $table) {
@@ -1494,6 +1547,7 @@ function printHelp(): void
       php puls exclude:list [<site>]           List excluded IPs
       php puls exclude:remove [<site> <ip>]    Count an excluded IP again
       php puls nginx:config                    Generate Nginx config for a site
+      php puls stats:build                     Sum every finished day for the dashboard at once
 
     Options:
       --sites    Comma-separated list of sites the user can access.

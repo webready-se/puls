@@ -192,3 +192,15 @@ it('replaces token and UUID segments with --tokens', function () {
     $db = new PDO('sqlite:' . $this->dbPath);
     expect($db->query("SELECT page_path FROM events")->fetchColumn())->toBe('/:token');
 });
+
+it('drops the daily summary of the site whose paths it cleaned', function () {
+    $db = createCleanPathsDb($this->dbPath);
+    create_daily_table($db);
+    $db->exec("INSERT INTO pageviews (site, path) VALUES ('intra', '/search?q=abc123')");
+    $db->exec("INSERT INTO daily (site, date, kind, key, views) VALUES ('intra', '2026-03-10', 'path', '/search?q=abc123', 1), ('other', '2026-03-10', 'path', '/', 1)");
+
+    expect(runCleanPaths($this->tmpDir, ['intra', '--query'])['exit'])->toBe(0);
+    $sites = (new PDO('sqlite:' . $this->dbPath))->query('SELECT site FROM daily')->fetchAll(PDO::FETCH_COLUMN);
+    // The summary is a cache: the dashboard sums the site's days again from the cleaned paths
+    expect($sites)->toBe(['other']);
+});
