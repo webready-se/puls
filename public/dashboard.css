@@ -962,18 +962,25 @@ body {
 .foot-marks svg { width: 16px; height: 16px; display: block; }
 @media (max-width: 600px) { .foot { justify-content: center; text-align: center; } }
 
-/* Empty + Loading */
+/* Empty */
 .empty { text-align: center; padding: 80px 20px; color: var(--text-2); }
 .empty svg { width: 48px; height: 48px; color: var(--line); margin-bottom: 16px; }
 .empty p { max-width: 360px; margin: 0 auto; }
-.loading { text-align: center; padding: 100px 20px; color: var(--text-2); }
-.loading-spinner {
-  width: 32px; height: 32px; border: 3px solid var(--line);
-  border-top-color: var(--accent-tile); border-radius: 50%;
-  animation: spin 0.8s linear infinite; margin: 0 auto 12px;
-}
 @keyframes spin { to { transform: rotate(360deg); } }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+/* The page loading (loading() in dashboard.js): a bar runs along the foot of the header and the
+   page dims, both after a moment so a quick answer flashes neither, and a line under the header
+   says what is loading; it fades in, after 300 ms on the first load. The bar moves its
+   background, so nothing sticks out of the page */
+.header::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; opacity: 0; pointer-events: none; background: linear-gradient(90deg, transparent, var(--accent-tile), transparent) no-repeat; background-size: 40% 100%; transition: opacity .15s; }
+body[data-loading] .header::after { opacity: 1; transition: opacity .2s .15s; animation: load-bar 1.2s ease-in-out infinite; }
+@keyframes load-bar { from { background-position: -67% 0; } to { background-position: 167% 0; } }
+#app { transition: opacity .15s; }
+body[data-loading] #app { opacity: .5; transition: opacity .2s .15s; }
+.load-status { position: absolute; top: calc(100% + 12px); left: 50%; transform: translateX(-50%); z-index: 1; max-width: calc(100% - 32px); padding: 6px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--text-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 4px 12px rgba(0,0,0,0.12); animation: load-status-in .2s both; }
+@keyframes load-status-in { from { opacity: 0; } }
+body[data-first-load] .load-status { animation-delay: .3s; }
+@media (prefers-reduced-motion: reduce) { body[data-loading] .header::after { animation: none; background: var(--accent-tile); } }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 32px); padding: 8px 8px 8px 16px; border-radius: 10px; background: var(--text); color: var(--bg); font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 .toast[hidden] { display: none; }
 .toast button { background: none; border: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 4px 8px; border-radius: 6px; }

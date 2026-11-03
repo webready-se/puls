@@ -16,7 +16,7 @@
 <script src="theme.js?v=__PULS_VERSION__"></script>
 <link rel="stylesheet" href="dashboard.css?v=__PULS_VERSION__">
 </head>
-<body>
+<body data-loading data-first-load>
 
 <a href="#app" class="skip-link">Skip to content</a>
 <div class="header">
@@ -61,6 +61,7 @@
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12h16"/><path d="M4 6h16"/><path d="M4 18h16"/></svg>
     </button>
   </div>
+  <div class="load-status" id="load-status">Loading…</div>
 </div>
 
 <div class="ptr-indicator" id="ptr">
@@ -70,12 +71,7 @@
 
 <div class="sr-only" id="sr-status" role="status" aria-live="polite" aria-atomic="true"></div>
 <div class="toast" id="toast" hidden><span id="toast-text"></span><button type="button" id="toast-undo">Undo</button></div>
-<main class="wrap" id="app">
-  <div class="loading">
-    <div class="loading-spinner" aria-hidden="true"></div>
-    Loading stats...
-  </div>
-</main>
+<main class="wrap" id="app" aria-busy="true"></main>
 
 <div class="menu-overlay" id="menu-overlay" data-action="close-menu"></div>
 <div class="menu-panel" id="menu-panel" role="dialog" aria-modal="true" aria-labelledby="menu-title">
