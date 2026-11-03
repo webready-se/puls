@@ -372,6 +372,41 @@ async function main() {
       expect(t.left >= content - 1 && t.right <= contentEnd + 1 && Math.abs(arrow - (c.left + c.width / 2)) < 2, `tooltip on the ${edge} day stays inside the chart and points at its day`);
       tip.style.display = '';
     }
+    // The months under the dates: each starts at its 1st, and the month in view stays at the left
+    // edge (the pin), a month's own label taking over at the edge; the tooltip names the month
+    // too, and the dense chart's labels carry it
+    const cols = [...mainScroll.querySelectorAll('.chart-col')], pin = mainScroll.nextElementSibling;
+    const dateOf = (c) => c.querySelector('.chart-date').textContent;
+    const monthOf = (c) => (c.querySelector('.tip')?.textContent.match(/^[A-Z][a-z]{2}, ([A-Z][a-z]{2})/) || [])[1];
+    expect(cols.every((c) => /^[A-Z][a-z]{2} \d{1,2}$/.test(dateOf(c)) && !!c.querySelector('.chart-month') === / 1$/.test(dateOf(c))), 'the dates read "Tue 3", and a month label sits on each 1st and no other day');
+    expect(/^[A-Z][a-z]{2}, [A-Z][a-z]{2} \d{1,2}(, \d{4})?:/.test(cols.at(-1).querySelector('.tip')?.textContent || ''), 'the chart tooltip names the month');
+    expect(mainScroll.scrollHeight <= mainScroll.clientHeight, 'the month line fits under the chart without a vertical scroll');
+    // The pin shows the month of the first day in view, or steps aside for a month label at the edge
+    const pinRight = () => {
+      const p = pin.getBoundingClientRect(), first = cols.find((c) => c.getBoundingClientRect().right > p.left + 1);
+      if (pin.hasAttribute('data-covered')) return [...mainScroll.querySelectorAll('.chart-month')].some((m) => { const r = m.getBoundingClientRect(); return r.left < p.right + 8 && r.right > p.left; });
+      return getComputedStyle(pin).visibility === 'visible' && pin.textContent === monthOf(first);
+    };
+    expect(pin?.classList.contains('chart-pin') && pinRight(), 'the scrolled chart shows the month in view at its left edge');
+    const startCol = cols.find((c) => c.querySelector('.chart-month'));
+    if (startCol) {
+      expect(Math.abs(pin.getBoundingClientRect().top - startCol.querySelector('.chart-month').getBoundingClientRect().top) < 1, 'the pin sits on the line of the month labels');
+      // Narrowed, so the 1st can reach the left edge whatever day the test runs (it can be the last)
+      mainScroll.style.width = Math.min(60, mainScroll.scrollWidth - startCol.offsetLeft) + 'px';
+      mainScroll.scrollLeft = startCol.offsetLeft - 4;
+      await waitFor(() => pin.hasAttribute('data-covered') && pinRight(), 'a month label at the edge takes over from the pin');
+      const past = startCol.offsetLeft + startCol.offsetWidth + 8;
+      if (past <= mainScroll.scrollWidth - mainScroll.clientWidth) {
+        mainScroll.scrollLeft = past;
+        await waitFor(() => !pin.hasAttribute('data-covered') && pin.textContent === startCol.querySelector('.chart-month').textContent && pinRight(), 'past the 1st, the pin shows the new month');
+      }
+      mainScroll.style.width = '';
+    }
+    mainScroll.scrollLeft = 0;
+    await waitFor(() => pinRight() && pin.textContent === pin.dataset.first, 'at the start, the edge shows the first month');
+    const denseDates = [...document.querySelectorAll('.event-detail .event-chart.dense .chart-date')].map((d) => d.textContent.trim()).filter(Boolean);
+    expect(denseDates.length && denseDates.every((t) => /^[A-Z][a-z]{2} \d{1,2}$/.test(t)), 'the dense chart labels its dates with the month');
+    expect(!q('.event-detail .event-chart.dense + .chart-pin'), 'the dense chart has no pin');
     expect(q('.event-detail') && q('.event-detail')._state && q('.event-detail')._state.then, 'funnel choice kept across period change');
 
     // Breakdown card opens the same drill-down inside the card, grouped on its key
@@ -385,6 +420,13 @@ async function main() {
       q('.period-btn[data-days="30"]').click();
       await waitFor(() => q('.breakdown-card .event-detail') && q('.breakdown-card .event-detail')._state && q('.breakdown-card .event-detail')._state.data.days === 30, 'card drill-down kept across period change', 8000);
     }
+
+    // The date range button opens its picker from its icon, which is what a click lands on, and a
+    // click outside closes it again
+    q('#custom-range-btn svg path').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(q('#date-picker').classList.contains('open'), 'a click on the date range icon opens the picker');
+    q('#app').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(!q('#date-picker').classList.contains('open'), 'a click outside closes the date picker');
 
     // The 1-day period starts at midnight, so it reads as today, not the last 24 hours
     const todayBtn = q('.period-btn[data-days="1"]');
@@ -442,6 +484,21 @@ async function main() {
     await waitFor(() => apiCalls > 0, 'a period that ends today is still refreshed', 7000);
     Date.now = realNow;
     window.fetch = realFetch;
+
+    // A custom range is told to screen readers like a period, its dates as words
+    {
+      const ago = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+      const words = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const [from, to] = [ago(20), ago(10)];
+      q('#sr-status').textContent = '';
+      q('#date-from').value = from;
+      q('#date-to').value = to;
+      q('.date-picker-apply').click();
+      await waitFor(() => q('#sr-status').textContent.includes(`, ${words(from)} to ${words(to)}:`), 'screen reader status announces a custom range');
+      q('#sr-status').textContent = '';
+      q('.period-btn[data-days="7"]').click();
+      await waitFor(() => /last 7 days/.test(q('#sr-status').textContent), 'back to 7 days after the custom range');
+    }
 
     // Light theme renders too
     document.documentElement.setAttribute('data-theme', 'light');

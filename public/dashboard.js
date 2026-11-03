@@ -196,9 +196,26 @@
   }
   function decode(s) { try { return decodeURIComponent(s); } catch(e) { return s; } }
 
+  // A day in a tooltip or a note: "Tue, Nov 3", with the year when it is not this one
   function formatDay(dateStr) {
     const dt = new Date(dateStr + 'T00:00:00');
-    return dt.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+    return dt.toLocaleDateString('en-US', yearIfOther(dt, { weekday: 'short', day: 'numeric', month: 'short' }));
+  }
+  function yearIfOther(dt, opts) {
+    if (dt.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    return opts;
+  }
+
+  // The date under a bar ("Tue 3"). The 1st also starts its month on the line below, with a
+  // tick between the months; the month in view is the chart's pin (monthPin)
+  function axisDate(dateStr) {
+    const dt = new Date(dateStr + 'T00:00:00');
+    return '<span class="chart-date">' + dt.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + dt.getDate() + '</span>' +
+      (dt.getDate() === 1 ? '<span class="chart-month">' + monthName(dateStr) + '</span>' : '');
+  }
+  function monthName(dateStr) {
+    const dt = new Date(dateStr + 'T00:00:00');
+    return dt.toLocaleDateString('en-US', yearIfOther(dt, { month: 'short' }));
   }
 
   // --- Events ---
@@ -608,7 +625,7 @@
   function render(d) {
     lastData = d;
     if (pendingAnnouncement && d && d.totals) {
-      var period = currentFrom && currentTo ? currentFrom + ' to ' + currentTo : periodLabel();
+      var period = currentFrom && currentTo ? formatDateLabel(currentFrom) + ' to ' + formatDateLabel(currentTo) : periodLabel();
       announce('Showing ' + (currentSite || 'all sites') + ', ' + period + ': ' + num(d.totals.views) + ' pageviews, ' + num(d.totals.visitors) + ' visitors');
       pendingAnnouncement = '';
     }
@@ -730,7 +747,7 @@
     var keepLeft = oldScroll && sameView && oldScroll.scrollLeft + oldScroll.clientWidth < oldScroll.scrollWidth - 1 ? oldScroll.scrollLeft : null;
     patchIslands(html, sameView).forEach(showLatestDays);
     var newScroll = app.querySelector('#chart-card .chart-scroll');
-    if (keepLeft !== null && newScroll && newScroll !== oldScroll) newScroll.scrollLeft = keepLeft;
+    if (keepLeft !== null && newScroll && newScroll !== oldScroll) { newScroll.scrollLeft = keepLeft; placeMonthPin(newScroll); }
 
     activeTabs.forEach(function(id) {
       var tab = document.querySelector('.card-tab[data-tab="' + id + '"]');
@@ -1334,15 +1351,42 @@
         '<div class="chart-legend-item"><span class="chart-legend-dot current"></span>Current period</div>' +
         '<div class="chart-legend-item"><span class="chart-legend-dot prev"></span>Previous period</div>' +
       '</div>' : '') +
-      '<div class="chart-scroll' + (compareMode && hasCompare ? ' compare' : '') + (marksFor(d, d.pageviews.map(function(p) { return p.date; })).stacked ? ' stacked-marks' : '') + '"><div class="chart">' + buildBars(d.pageviews, d.previousPageviews) + '</div></div>' +
+      '<div class="chart-frame"><div class="chart-scroll' + (compareMode && hasCompare ? ' compare' : '') + (marksFor(d, d.pageviews.map(function(p) { return p.date; })).stacked ? ' stacked-marks' : '') + '"><div class="chart">' + buildBars(d.pageviews, d.previousPageviews) + '</div></div>' + monthPin(d.pageviews) + '</div>' +
     '</div>';
   }
 
   // A long period is wider than the card and scrolls; open it on the latest days
   var lastViewKey = '';
   function showLatestDays(root) {
-    root.querySelectorAll('.chart-scroll').forEach(function(el) { el.scrollLeft = el.scrollWidth; });
+    root.querySelectorAll('.chart-scroll').forEach(function(el) { el.scrollLeft = el.scrollWidth; placeMonthPin(el); });
   }
+
+  // The month in view stays at the chart's left edge, outside the part that scrolls, and a
+  // month's own label takes over as it reaches the edge. Data attributes, not classes, so
+  // scrolling does not wake the class observer
+  function monthPin(series) {
+    var first = series.length ? monthName(series[0].date) : '';
+    return '<span class="chart-pin" aria-hidden="true" data-first="' + esc(first) + '">' + esc(first) + '</span>';
+  }
+  function placeMonthPin(scroller) {
+    var pin = scroller.nextElementSibling;
+    if (!pin || !pin.classList.contains('chart-pin')) return;
+    var chart = scroller.querySelector('.chart');
+    pin.style.top = (chart.offsetTop + chart.offsetHeight) + 'px';
+    var labels = [].map.call(scroller.querySelectorAll('.chart-month'), function(m) { return { text: m.textContent, box: m.getBoundingClientRect() }; });
+    var left = pin.getBoundingClientRect().left, month = pin.dataset.first;
+    labels.forEach(function(l) { if (l.box.left <= left + 1) month = l.text; });
+    pin.textContent = month;
+    var right = pin.getBoundingClientRect().right + 8;
+    if (labels.some(function(l) { return l.box.left < right && l.box.right > left; })) pin.setAttribute('data-covered', '');
+    else pin.removeAttribute('data-covered');
+  }
+  var pinFrame = 0;
+  document.addEventListener('scroll', function(e) {
+    var el = e.target;
+    if (pinFrame || !el.classList || !el.classList.contains('chart-scroll')) return;
+    pinFrame = requestAnimationFrame(function() { pinFrame = 0; placeMonthPin(el); });
+  }, { capture: true, passive: true });
 
   // Chart markers per date: release markers for app versions first seen that day, and
   // annotations. A range annotation tints every day it covers and is labelled on its first
@@ -1400,10 +1444,10 @@
     var maxVal = Math.max.apply(null, allVals.concat([1]));
     var bars = '';
     pageviews.forEach(function(p, i) {
-      var h = Math.max(4, (+p[key] / maxVal) * 140);
+      var h = Math.max(4, (+p[key] / maxVal) * 128);
       var label = formatDay(p.date);
       var prev = showCompare && previousPageviews[i] ? previousPageviews[i] : null;
-      var prevH = prev ? Math.max(4, (+prev[key] / maxVal) * 140) : 0;
+      var prevH = prev ? Math.max(4, (+prev[key] / maxVal) * 128) : 0;
 
       if (showCompare) {
         var curVal = +p[key];
@@ -1433,7 +1477,7 @@
               '<div class="chart-bar chart-bar-prev" data-h="' + prevH + '"></div>' +
             '</div>' +
           '</div>' +
-          '<span class="chart-date">' + label + '</span>' +
+          axisDate(p.date) +
         '</div>';
       } else {
         bars += '<div class="chart-col' + (marks[p.date] ? marks[p.date].cls : '') + '">' +
@@ -1442,7 +1486,7 @@
           '<div class="chart-bar" data-h="' + h + '">' +
             '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
           '</div>' +
-          '<span class="chart-date">' + label + '</span>' +
+          axisDate(p.date) +
         '</div>';
       }
     });
@@ -1457,6 +1501,7 @@
     el.classList.add('active');
     var chartEl = card.querySelector('.chart');
     chartEl.innerHTML = buildBars(lastData.pageviews, lastData.previousPageviews);
+    placeMonthPin(chartEl.parentNode);
   };
 
   window.toggleCompareMode = function(el) {
@@ -1466,7 +1511,9 @@
     var card = el.closest('.card');
     var wrapper = document.createElement('div');
     wrapper.innerHTML = renderChart(lastData);
-    card.replaceWith(wrapper.firstChild);
+    var newCard = wrapper.firstChild;
+    card.replaceWith(newCard);
+    newCard.querySelectorAll('.chart-scroll').forEach(placeMonthPin);
     // An open event drill-down follows the same compare setting
     document.querySelectorAll('.event-detail').forEach(function(d) { if (d._state) renderEventDetail(d); });
   };
@@ -2449,6 +2496,7 @@
     currentFrom = from;
     currentTo = to;
     currentDays = Math.max(1, Math.round((new Date(to) - new Date(from)) / 86400000) + 1);
+    pendingAnnouncement = 'period';
     periodGroup.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
     customRangeBtn.classList.add('active');
     customRangeBtn.textContent = formatDateLabel(from) + ' – ' + formatDateLabel(to);
@@ -2466,9 +2514,10 @@
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
-  // Close date picker when clicking outside
+  // Close date picker when clicking outside. Contains, not the target itself: a click on the
+  // button lands on its icon, and this listener runs after the one that opened the picker
   document.addEventListener('click', function(e) {
-    if (datePicker.classList.contains('open') && !datePicker.contains(e.target) && e.target !== customRangeBtn) {
+    if (datePicker.classList.contains('open') && !datePicker.contains(e.target) && !customRangeBtn.contains(e.target)) {
       datePicker.classList.remove('open');
     }
   });
@@ -2570,9 +2619,9 @@
         '<button class="event-chip' + (eventChartMode === 'rate' ? ' active' : '') + '" data-mode="rate" data-action="event-chart-mode">Per 100 visitors</button>' +
         (showCompare ? '<span class="event-chips-label ml-auto">vs previous period</span>' : '') +
       '</div>' +
-      '<div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + (dense ? ' dense' : '') + (marksFor(d, d.eventSeries.map(function(r) { return r.date; })).stacked ? ' stacked-marks' : '') + '"><div class="chart">' +
+      '<div class="chart-frame"><div class="chart-scroll event-chart' + (showCompare ? ' compare' : '') + (dense ? ' dense' : '') + (marksFor(d, d.eventSeries.map(function(r) { return r.date; })).stacked ? ' stacked-marks' : '') + '"><div class="chart">' +
         buildEventBars(d.eventSeries, showCompare ? d.previousEventSeries : null, d.pageviews, d.previousPageviews, dense, d) +
-      '</div></div>';
+      '</div></div>' + (dense ? '' : monthPin(d.eventSeries)) + '</div>';
     }
 
     html += renderEventFunnel(st, d);
@@ -2663,7 +2712,7 @@
       var tipBody = num(row.count) + ' events, ' + num(row.visitors) + ' visitors';
       // Dense ranges: no per-bar values, about six date labels, tooltip keeps the detail
       var valHtml = dense ? '' : '<span class="chart-val">' + fmt(v) + '</span>';
-      var dateHtml = '<span class="chart-date">' + (dense && i % labelStep !== labelOffset ? '&nbsp;' : label) + '</span>';
+      var dateHtml = !dense ? axisDate(row.date) : '<span class="chart-date">' + (i % labelStep !== labelOffset ? '&nbsp;' : formatDateLabel(row.date)) + '</span>';
       if (prevSeries) {
         var p = prevSeries[i], pv = p ? val(p) : 0, ph = p ? Math.max(3, (pv / maxVal) * 60) : 0;
         var delta = pv > 0 ? Math.round(((v - pv) / pv) * 100) : null;

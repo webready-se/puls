@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The chart names the month.** The dates under the bars said only the day and the weekday ("3 Tue"), so a long period or a custom range, scrolled back, did not say which month a day was in. Each month now starts on a line under the dates, at a small tick between the 31st and the 1st, and the month in view stays at the chart's left edge while it scrolls, until the next month's label reaches it. The bars are 12 px lower to make room, so the chart keeps its height. The dates read "Tue 3"; tooltips, notes and a release's "First seen" read "Tue, Nov 3", with the year when it is not this one; a drill-down chart over more than 31 days labels its dates "Nov 3".
 - The 60 s refresh leaves a range that ends before today alone. It cannot change, and a long range is the dearest request the dashboard makes: a tab left open on January to September asked the server for all of it again every minute.
 - `php puls nginx:config` prints a mirror block that works on a Forge server as it is: `resolver 127.0.0.53` (systemd-resolved) instead of Google's, no request body sent to Puls, and timeouts of a few seconds so a slow Puls never holds a visitor's connection. The mirror snippet in `docs/integrations.md` has the same lines; it lacked `resolver` and `proxy_ssl_server_name on`, and failed silently without them: Nginx logs "no resolver defined" and drops the mirror, and without SNI the copy reaches the server's default HTTPS site instead of Puls. The docs now also say how to see that the mirror fires, that server-level `if` rules apply to the mirror too, and that a page can mirror more than once.
 - `docs/install.md` says that Forge's default `try_files $uri $uri/ ...` answers an `OPTIONS` request with 405 before PHP runs, so a `fetch()` with a JSON content type fails its preflight (`sendBeacon` and the tracking script are not affected), and how to change the line.
@@ -22,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The date range button opened its picker only from the edge around its icon: a click on the icon itself opened it and closed it again at once. It broke in 1.30.0, when the inline handlers became one listener per event type, since the picker's stopPropagation no longer kept the click from reaching the listener that closes it.
+- A custom date range was not told to screen readers: a period or a site change says "Showing …, last 7 days: … pageviews", a range said nothing. It does now, with its dates as words ("Oct 14 to Oct 24") rather than read out digit by digit.
 - A slow answer for a period chosen earlier could replace the view chosen after it: click 90 days, then 7 days before the 90 have loaded, and the 90 days arrived last and were drawn under the 7-day button. Only the latest load is drawn now.
 - `php puls sites:list` ran a site name of 22 characters or more into its first date ("a-long-shop-name.example2026-11-02"). The site column is now as wide as the longest name needs, under a group too, so every column stays under its header.
 

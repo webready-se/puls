@@ -442,9 +442,9 @@ body {
 @media (max-width: 600px) { .card-header { flex-direction: column; align-items: flex-start; } }
 .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
 .card-subtitle { font-size: 12px; color: var(--text-3); }
-.chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-top: 30px; }
+.chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-top: 30px; padding-bottom: 12px; }
 .chart-scroll.compare { padding-top: 80px; }
-.chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding: 0 4px; }
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 158px; padding: 0 4px; }
 @media (max-width: 600px) { .chart { gap: 3px; } }
 .chart-col { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; justify-content: flex-end; height: 100%; min-width: 36px; padding: 0 2px; }
 .chart-val { font-size: 10px; color: var(--text-2); font-weight: 600; white-space: nowrap; }
@@ -483,6 +483,15 @@ body {
 }
 .chart-col-compare:hover > .tip { display: block; }
 .chart-date { font-size: 10px; color: var(--text-3); white-space: nowrap; }
+/* The months on a line under the dates: each starts at a tick between the 31st and the 1st,
+   and the month in view stays at the left edge (the pin) until the next one reaches it. The
+   chart is 12px lower for that line, so the card keeps its height */
+.chart-frame { position: relative; }
+.chart-month, .chart-pin { position: absolute; font-size: 10px; line-height: 12px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
+.chart-month { top: 100%; left: -3px; padding-left: 4px; }
+.chart-month::before { content: ''; position: absolute; left: 0; top: -15px; bottom: 0; border-left: 1px solid var(--line-strong); }
+.chart-pin { left: 4px; pointer-events: none; }
+.chart-pin[data-covered] { visibility: hidden; }
 /* Release and note markers: one line from the label down to above the date, drawn by the day
    itself, so its parts cannot land a pixel apart; the bar value sits on top of it */
 .chart-col.has-release::before, .chart-col.has-note::before { content: ''; position: absolute; left: 50%; top: -14px; bottom: 22px; border-left: 1px solid var(--note); }
@@ -605,6 +614,7 @@ body {
 .event-chip:hover { color: var(--text); border-color: var(--accent); }
 .event-chip.active { color: var(--accent); border-color: var(--accent); background: var(--surface); }
 .event-chart.chart-scroll { padding-top: 34px; }
+.event-chart.dense.chart-scroll { padding-bottom: 0; }
 .event-chart.chart-scroll.compare { padding-top: 44px; }
 .event-chart .chart { height: 96px; gap: 4px; }
 .event-chart .chart-col { min-width: 26px; }
