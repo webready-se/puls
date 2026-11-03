@@ -18,6 +18,7 @@ afterAll(function () {
     if (isset($GLOBALS['restricted_server'])) stopServer($GLOBALS['restricted_server']);
     if (isset($GLOBALS['proxy_server'])) stopServer($GLOBALS['proxy_server']);
     if (isset($GLOBALS['zone_server'])) stopServer($GLOBALS['zone_server']);
+    if (isset($GLOBALS['concurrent_server'])) stopServer($GLOBALS['concurrent_server']);
     exec('rm -rf ' . escapeshellarg($GLOBALS['test_dir']));
 });
 
@@ -1939,4 +1940,65 @@ test('a session id replaced more than a minute ago no longer logs in', function 
     expect(http('GET', '/?api&sites', ['header' => $old], 8090)['status'])->toBe(401)
         ->and(file_exists($file))->toBeFalse()
         ->and(http('GET', '/?api&sites', ['header' => $new], 8090)['status'])->toBe(200);
+});
+
+test('a request does not wait for another from the same browser while that one reads the data', function () {
+    // Its own server with workers, so two requests run at once, and enough pageviews for one
+    // dashboard request to take a while. PHP keeps a session locked from session_start() until it
+    // is written, so a request that held it through the data made every other request from the
+    // same browser (the hours, a drill-down, another tab) wait for it
+    $dir = $GLOBALS['test_dir'] . '/concurrent';
+    mkdir($dir);
+    $users = $dir . '/users.json';
+    file_put_contents($users, json_encode(['admin' => ['password' => password_hash('admin-pass', PASSWORD_BCRYPT, ['cost' => 4]), 'sites' => []]]));
+    $db = get_db($dir . '/puls.sqlite');
+    $db->beginTransaction();
+    $insert = $db->prepare('INSERT INTO pageviews (site, path, referrer, country, visitor_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    for ($i = 0; $i < 60000; $i++) {
+        $insert->execute(['busy.example', '/page-' . ($i % 400), ['Google', 'Facebook', null][$i % 3], ['SE', 'NO', 'DK'][$i % 3], 'v' . ($i % 9000), date('Y-m-d H:i:s', time() - ($i % 29) * 86400 - $i % 3600)]);
+    }
+    $db->commit();
+    $GLOBALS['concurrent_server'] = startServer(8093, ['USERS_FILE' => $users, 'DB_PATH' => $dir . '/puls.sqlite', 'PHP_CLI_SERVER_WORKERS' => '4']);
+
+    $r = http('GET', '/?csrf', [], 8093);
+    preg_match('/^Set-Cookie:\s*([^=]+=[^;]+)/mi', implode("\n", $r['headers']), $m);
+    $cookie = $m[1];
+    $r = http('POST', '/?login', [
+        'header' => "Content-Type: application/x-www-form-urlencoded\r\nCookie: {$cookie}",
+        'content' => http_build_query(['_login' => 1, '_token' => json_decode($r['body'], true)['token'], 'username' => 'admin', 'password' => 'admin-pass']),
+    ], 8093);
+    if (preg_match('/^Set-Cookie:\s*(PHPSESSID=[^;]+)/mi', implode("\n", $r['headers']), $m)) $cookie = $m[1];
+
+    // The dashboard's request first, then a small one from the same browser while it runs
+    $base = 'http://localhost:' . $GLOBALS['test_ports'][8093];
+    $request = function (string $query) use ($base, $cookie) {
+        $ch = curl_init($base . $query);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ["Cookie: {$cookie}"]]);
+        return $ch;
+    };
+    $multi = curl_multi_init();
+    $heavy = $request('/?api&days=30&site=busy.example');
+    $light = $request('/?api&sites');
+    curl_multi_add_handle($multi, $heavy);
+    $start = microtime(true);
+    $done = [];
+    $lightAdded = false;
+    do {
+        curl_multi_exec($multi, $running);
+        if (!$lightAdded && microtime(true) - $start > 0.05) {
+            curl_multi_add_handle($multi, $light);
+            $lightAdded = true;
+            $running = true;
+        }
+        while ($info = curl_multi_info_read($multi)) {
+            $done[$info['handle'] === $heavy ? 'heavy' : 'light'] = microtime(true) - $start;
+        }
+        curl_multi_select($multi, 0.01);
+    } while ($running || count($done) < 2);
+    expect(curl_getinfo($heavy, CURLINFO_RESPONSE_CODE))->toBe(200)
+        ->and(curl_getinfo($light, CURLINFO_RESPONSE_CODE))->toBe(200)
+        ->and(curl_multi_getcontent($light))->toContain('busy.example');
+    // Only telling if the dashboard's request takes a while; then the small one is back long before
+    expect($done['heavy'])->toBeGreaterThan(0.3)
+        ->and($done['light'])->toBeLessThan($done['heavy'] - 0.2);
 });
