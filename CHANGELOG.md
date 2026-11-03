@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A slow answer for a period chosen earlier could replace the view chosen after it: click 90 days, then 7 days before the 90 have loaded, and the 90 days arrived last and were drawn under the 7-day button. Only the latest load is drawn now.
 - `php puls sites:list` ran a site name of 22 characters or more into its first date ("a-long-shop-name.example2026-11-02"). The site column is now as wide as the longest name needs, under a group too, so every column stays under its header.
 
 ## [1.30.0] - 2026-11-02

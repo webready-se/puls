@@ -387,8 +387,11 @@
     return url;
   }
 
-  // auto: the 60 s refresh, which keeps the current view if the request fails
+  // auto: the 60 s refresh, which keeps the current view if the request fails. Only the latest
+  // load renders: a slow answer for a period chosen before must not replace the one chosen after
+  var loadSeq = 0;
   function load(days, auto) {
+    var seq = ++loadSeq;
     currentDays = days;
     lastLoad = Date.now();
     let url;
@@ -402,6 +405,7 @@
     if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
     return fetch(url)
       .then(function(r) {
+        if (seq !== loadSeq) return;
         if (r.status === 401) {
           if (isShared) { app.innerHTML = '<div class="empty"><p>This link has expired or is no longer valid.</p></div>'; return; }
           location.href = '/?login'; return;
@@ -409,12 +413,12 @@
         return r.json();
       })
       .then(function(data) {
-        if (!data) return;
+        if (!data || seq !== loadSeq) return;
         if (data.now) serverSkew = wallClock(data.now) - Date.now();
         render(data);
       })
       .catch(function() {
-        if (auto) return;
+        if (auto || seq !== loadSeq) return;
         app.innerHTML = '<div class="empty">' + icons.chart +
           '<p>Could not load data. Check that everything is configured correctly.</p></div>';
       });

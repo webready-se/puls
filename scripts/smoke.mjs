@@ -396,6 +396,19 @@ async function main() {
       expect(/today/.test(sub) && !/last 1 days/.test(sub), 'chart subtitle says today');
     }
 
+    // A slow answer for an earlier choice never replaces the view chosen after it
+    const realFetch = window.fetch, mainApi = (url, days) => new RegExp('\\?api&days=' + days + '(&|$)').test(String(url));
+    let slowDone = false;
+    window.fetch = (url, ...rest) => mainApi(url, 90)
+      ? sleep(800).then(() => realFetch(url, ...rest)).then((r) => { slowDone = true; return r; })
+      : realFetch(url, ...rest);
+    q('.period-btn[data-days="90"]').click();
+    q('.period-btn[data-days="7"]').click();
+    await waitFor(() => slowDone, 'the slow 90-day answer arrives');
+    await sleep(300);
+    window.fetch = realFetch;
+    expect(q('#chart-card .chart').children.length <= 7, 'a slow answer for an earlier period does not replace the later one');
+
     // Light theme renders too
     document.documentElement.setAttribute('data-theme', 'light');
     expect(getComputedStyle(document.body).backgroundColor !== '', 'light theme applies');
