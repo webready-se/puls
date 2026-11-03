@@ -404,8 +404,12 @@
     return url;
   }
 
-  // auto: the 60 s refresh, which keeps the current view if the request fails
-  function load(days, auto) {
+  // auto: the 60 s refresh, which keeps the current view if the request fails; quiet: pull-to-
+  // refresh, which shows its own spinner. Only the latest load renders: a slow answer for a
+  // period chosen before must not replace the one chosen after
+  var loadSeq = 0;
+  function load(days, auto, quiet) {
+    var seq = ++loadSeq;
     currentDays = days;
     lastLoad = Date.now();
     let url;
@@ -417,8 +421,11 @@
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
     if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
     if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
+    if (!lastData) loading(true, true);
+    else if (!auto && !quiet) loading(true);
     return fetch(url)
       .then(function(r) {
+        if (seq !== loadSeq) return;
         if (r.status === 401) {
           if (isShared) { app.innerHTML = '<div class="empty"><p>This link has expired or is no longer valid.</p></div>'; return; }
           location.href = '/?login'; return;
@@ -426,15 +433,43 @@
         return r.json();
       })
       .then(function(data) {
-        if (!data) return;
+        if (!data || seq !== loadSeq) return;
         if (data.now) serverSkew = wallClock(data.now) - Date.now();
         render(data);
       })
       .catch(function() {
-        if (auto) return;
+        if (auto || seq !== loadSeq) return;
         app.innerHTML = '<div class="empty">' + icons.chart +
           '<p>Could not load data. Check that everything is configured correctly.</p></div>';
-      });
+      })
+      .then(function() { if (seq === loadSeq) loading(false); });
+  }
+
+  // The whole page loads one way: a bar along the header, the page dimmed, and a line under the
+  // header that says what is loading. The first load starts that way in the HTML, before the
+  // script runs, with nothing to dim and its line after 300 ms (CSS); a later one the viewer
+  // asked for dims after a moment, so a quick answer flashes nothing, and gets its line after a
+  // second. The 60 s refresh stays quiet, and a part that opens in place (a drill-down) shows
+  // its own "Loading…" where it opens
+  var loadStatus = document.getElementById('load-status'), loadTimer = 0;
+  function loadingWhat() {
+    return currentFrom && currentTo ? formatDateLabel(currentFrom) + ' \u2013 ' + formatDateLabel(currentTo) : currentDays === 1 ? 'today' : 'the last ' + currentDays + ' days';
+  }
+  // first: nothing on screen yet (the first load, or a retry after it failed), so the line shows
+  // at once; on the first load the CSS still holds it back for 300 ms
+  function loading(on, first) {
+    clearTimeout(loadTimer);
+    document.body.toggleAttribute('data-loading', on);
+    if (!first) document.body.removeAttribute('data-first-load');
+    app.setAttribute('aria-busy', on ? 'true' : 'false');
+    loadStatus.hidden = !first;
+    if (first) loadStatus.textContent = 'Loading ' + loadingWhat() + '\u2026';
+    if (!on || first) return;
+    loadTimer = setTimeout(function() {
+      loadStatus.textContent = 'Loading ' + loadingWhat() + '\u2026';
+      loadStatus.hidden = false;
+      announce('Loading ' + loadingWhat());
+    }, 1000);
   }
 
   // Shared mode: hide admin UI
@@ -484,7 +519,9 @@
 
   // Auto-refresh every 60 seconds. Held while the tab is hidden, while the viewer is using the
   // page (pointer, scroll or keys in the last 10 s), and while the UTM wizard, the note form,
-  // a goal target or a card rename is in use; it runs as soon as none of that applies.
+  // a goal target or a card rename is in use; it runs as soon as none of that applies. Never for
+  // a range that ends before today in the install's zone: it cannot change, and a long one is
+  // the dearest request the dashboard makes.
   function utmWizardActive() {
     var path = document.getElementById('utm-path');
     var campaign = document.getElementById('utm-campaign');
@@ -499,6 +536,7 @@
   setInterval(function() {
     if (Date.now() - lastLoad < 60000 || document.hidden || Date.now() - lastActivity < 10000) return;
     if (utmWizardActive() || noteFormOpen() || editingTarget !== null || (document.activeElement && document.activeElement.isContentEditable)) return;
+    if (currentTo && currentTo < new Date(Date.now() + serverSkew).toISOString().slice(0, 10)) return;
     load(currentDays, true);
   }, 5000);
 
@@ -2382,7 +2420,7 @@
     var overlayTitle = document.getElementById('overlay-title');
     var overlayContent = document.getElementById('overlay-content');
     overlayTitle.textContent = title;
-    overlayContent.innerHTML = '<p class="muted fs-13">Loading...</p>';
+    overlayContent.innerHTML = '<p class="muted fs-13">Loading\u2026</p>';
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
     dialogOpened(overlay.querySelector('.overlay-panel'));
@@ -2503,7 +2541,7 @@
   function openEventDetail(row, eventName, group, showAll, then, quiet) {
     var detail = document.createElement('div');
     detail.className = 'event-detail';
-    detail.innerHTML = '<span class="muted">Loading...</span>';
+    detail.innerHTML = '<span class="muted">Loading\u2026</span>';
     row.after(detail);
     fetchEventDetail(detail, eventName, group, showAll, then, quiet);
   }
@@ -2788,7 +2826,7 @@
 
     var detail = document.createElement('div');
     detail.className = 'event-detail';
-    detail.innerHTML = '<span class="muted">Loading...</span>';
+    detail.innerHTML = '<span class="muted">Loading\u2026</span>';
     el.after(detail);
 
     fetch(fetchUrl)
@@ -3560,10 +3598,11 @@
         ptr.classList.remove('pulling');
         ptr.classList.add('releasing', 'refreshing');
         ptr.style.height = '44px';
-        ptrText.textContent = 'Loading...';
+        ptrText.textContent = 'Loading\u2026';
 
-        // Same request as the dashboard: custom date range and share token included
-        load(currentDays)
+        // Same request as the dashboard: custom date range and share token included; quiet, since
+        // the pull shows its own spinner
+        load(currentDays, false, true)
           .finally(function() {
             ptr.classList.add('releasing');
             ptr.classList.remove('refreshing');

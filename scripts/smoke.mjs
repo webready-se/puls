@@ -438,6 +438,53 @@ async function main() {
       expect(/today/.test(sub) && !/last 1 days/.test(sub), 'chart subtitle says today');
     }
 
+    // A slow answer for an earlier choice never replaces the view chosen after it
+    const realFetch = window.fetch, mainApi = (url, days) => new RegExp('\\?api&days=' + days + '(&|$)').test(String(url));
+    let slowDone = false;
+    window.fetch = (url, ...rest) => mainApi(url, 90)
+      ? sleep(800).then(() => realFetch(url, ...rest)).then((r) => { slowDone = true; return r; })
+      : realFetch(url, ...rest);
+    q('.period-btn[data-days="90"]').click();
+    q('.period-btn[data-days="7"]').click();
+    await waitFor(() => slowDone, 'the slow 90-day answer arrives');
+    await sleep(300);
+    window.fetch = realFetch;
+    expect(q('#chart-card .chart').children.length <= 7, 'a slow answer for an earlier period does not replace the later one');
+
+    // A load the viewer asked for shows that it is under way: busy at once, the page dimmed and a
+    // line that says what is loading after a second, all gone when the answer is in
+    window.fetch = (url, ...rest) => mainApi(url, 30) ? sleep(1500).then(() => realFetch(url, ...rest)) : realFetch(url, ...rest);
+    q('.period-btn[data-days="30"]').click();
+    expect(q('#app').getAttribute('aria-busy') === 'true' && document.body.hasAttribute('data-loading') && q('#load-status').hidden, 'a load marks the page busy at once, with no line yet');
+    if (await waitFor(() => !q('#load-status').hidden, 'after a second, a line says what is loading')) {
+      expect(q('#load-status').textContent === 'Loading the last 30 days…', `the line names the period (got ${q('#load-status').textContent})`);
+      expect(+getComputedStyle(q('#app')).opacity < 0.6, 'the page dims while it loads');
+    }
+    await waitFor(() => q('#app').getAttribute('aria-busy') === 'false' && !document.body.hasAttribute('data-loading') && q('#load-status').hidden, 'the busy state clears when the answer is in');
+    window.fetch = realFetch;
+
+    // A range that ends before today cannot change, so the 60 s refresh leaves it alone; a period
+    // that ends today is still refreshed. The clock is moved two minutes on to reach the refresh
+    const realNow = Date.now, dayAgo = (n) => new Date(realNow() - n * 86400000).toISOString().slice(0, 10);
+    let apiCalls = 0;
+    window.fetch = (url, ...rest) => { if (/\?api&(days|from)=/.test(String(url))) apiCalls++; return realFetch(url, ...rest); };
+    q('#date-from').value = dayAgo(20);
+    q('#date-to').value = dayAgo(10);
+    q('.date-picker-apply').click();
+    await waitFor(() => q('#chart-card .chart')?.children.length === 11 && q('#app').getAttribute('aria-busy') === 'false', 'a past range loads');
+    apiCalls = 0;
+    Date.now = () => realNow() + 120000;
+    await sleep(5500);
+    expect(apiCalls === 0, 'a range that ends before today is not refreshed');
+    Date.now = realNow;
+    q('.period-btn[data-days="7"]').click();
+    await waitFor(() => q('#chart-card .chart')?.children.length <= 7 && q('#app').getAttribute('aria-busy') === 'false', 'back to 7 days');
+    apiCalls = 0;
+    Date.now = () => realNow() + 120000;
+    await waitFor(() => apiCalls > 0, 'a period that ends today is still refreshed', 7000);
+    Date.now = realNow;
+    window.fetch = realFetch;
+
     // A custom range is told to screen readers like a period, its dates as words
     {
       const ago = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
@@ -807,6 +854,8 @@ async function main() {
   const range = { from: day(20), to: day(10) };
   await send('Runtime.evaluate', { expression: `localStorage.setItem('puls-from', '${range.from}'); localStorage.setItem('puls-to', '${range.to}')` });
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `Object.defineProperty(navigator, 'standalone', { value: true })` });
+  // The page's first answer for the range comes late, so its first load can be seen
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => { const f = window.fetch; let slow = true; window.fetch = function(url) { if (slow && /[?]api&from=/.test(String(url))) { slow = false; return new Promise((r) => setTimeout(r, 1500)).then(() => f.apply(this, arguments)); } return f.apply(this, arguments); }; })()` });
   const wait4 = loaded();
   await send('Page.navigate', { url: `${base}/` });
   await wait4;
@@ -818,7 +867,16 @@ async function main() {
       fails.push(`timed out waiting for ${what}`);
       return false;
     };
+    // The first load is the page loader too: the bar, and the line naming the range after 300 ms
+    // (no spinner); nothing of it is left once the dashboard is in
+    const status = document.getElementById('load-status');
+    const label = [range.from, range.to].map((d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })).join(' \u2013 ');
+    if (await waitFor(() => document.body.hasAttribute('data-first-load') && !status.hidden && getComputedStyle(status).opacity === '1', 'the line on the first load')) {
+      if (status.textContent !== `Loading ${label}\u2026`) fails.push(`the first load's line names the range (got ${status.textContent})`);
+      if (!document.body.hasAttribute('data-loading') || document.getElementById('app').getAttribute('aria-busy') !== 'true' || document.querySelector('.loading-spinner')) fails.push('the first load shows the page loader and no spinner');
+    }
     if (!await waitFor(() => document.querySelector('#chart-card'), 'dashboard in the installed app')) return fails;
+    if (!await waitFor(() => !document.body.hasAttribute('data-loading') && !document.body.hasAttribute('data-first-load') && status.hidden && document.getElementById('app').getAttribute('aria-busy') === 'false', 'no loading state left after the first load')) return fails;
     const urls = [];
     const realFetch = window.fetch;
     window.fetch = function(url) { urls.push(String(url)); return realFetch.apply(this, arguments); };
@@ -830,6 +888,7 @@ async function main() {
     touch('touchmove', 160);
     touch('touchend');
     if (!await waitFor(() => urls.some((u) => u.includes('?api')), 'pull-to-refresh request')) return fails;
+    if (document.body.hasAttribute('data-loading')) fails.push('pull-to-refresh shows its own spinner, not the page loader as well');
     const url = urls.find((u) => u.includes('?api'));
     if (!url.includes(`from=${range.from}`) || !url.includes(`to=${range.to}`)) fails.push(`pull-to-refresh keeps the custom date range (requested ${url})`);
     return fails;
