@@ -38,6 +38,13 @@ Several small releases in one day is a smell: batch them. (On 2026-10-09 nine
 tags shipped in a day; v1.13 to v1.18 could have been one or two releases, and
 only v1.19.1, a broken fresh install, needed to go out on its own.)
 
+**The rhythm:** a minor release about every one or two weeks, not sooner than
+about a week after the last tag, even when an epic is done: a self-hoster
+upgrades every time we tag, and a version needs time to be the stable one.
+Until then the next minor gathers more; the production installs have it from
+main anyway. A patch release (above) is not held back. v1.22 to v1.30 were
+ten tags in three weeks; the same work fits in two or three releases.
+
 ## CHANGELOG rule
 
 `CHANGELOG.md` always has **exactly one** `## [Unreleased]` section. Every PR

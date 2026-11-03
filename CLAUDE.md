@@ -226,7 +226,7 @@ On session start:
 
 Merging to main deploys the production installs (Forge); that alone needs no release.
 Tagged releases are for self-hosters and are batched, see `.claude/skills/release/`:
-- Epic or coherent feature set completed → suggest a minor release
+- Epic or coherent feature set completed → suggest a minor release, but not sooner than about a week after the last one: a self-hoster upgrades every time we tag, and a version needs time to be the stable one. Until then the next minor gathers more (the production installs already have it from main)
 - Security, data loss, or broken install/upgrade fix → suggest a patch release immediately
 - Tests, CI, docs, screenshots → never a release of their own
 - `CHANGELOG.md` keeps exactly one `## [Unreleased]` section

@@ -18,6 +18,8 @@ For a new feature or a visible change to the dashboard, open an issue or a draft
 3. Run tests: `./vendor/bin/pest`
 4. Open a pull request with a clear description of what and why
 
+A merged pull request reaches self-hosters with the next minor release, which comes about every one or two weeks; a security fix, data loss or a broken install or upgrade gets a patch release at once.
+
 ## Development Setup
 
 ```bash
