@@ -307,6 +307,10 @@ if ((isset($_GET['exclude_add']) || isset($_GET['exclude_remove'])) && $_SERVER[
 if (isset($_GET['api'])) {
     require_auth();
     $user = get_current_user_data($config);
+    // Reading needs nothing more from the session, and PHP holds it locked until it is written:
+    // release it, so other requests from the same browser (the hours, a drill-down, another
+    // tab) do not wait seconds for this one's data
+    session_write_close();
     respond(get_api_data($config, $user), 200, 'application/json');
 }
 
