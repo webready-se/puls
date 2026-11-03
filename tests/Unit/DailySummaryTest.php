@@ -206,3 +206,22 @@ test('stats:build sums every finished day of every site, and says when there is 
     [$code, $out] = $run();
     expect($out)->toContain('a.example: up to date')->and($out)->toContain('Every finished day was summed already.');
 });
+
+test('a busy database means the rows are read and the day summed later, not an error', function () {
+    $db = summaryTestDb();
+    $file = $db->query('PRAGMA database_list')->fetch()['file'];
+    $day = last_closed_day();
+    summaryPageview($db, 's', "{$day} 12:00:00", 'a', '/');
+    // Another connection holds the write lock, and this one does not wait for it
+    $other = new PDO('sqlite:' . $file);
+    $other->exec('BEGIN IMMEDIATE');
+    $db->exec('PRAGMA busy_timeout = 0');
+
+    expect(summary_figures($db, ['s'], $day, date('Y-m-d', strtotime('+1 day')), $day, ['pages' => 10, 'referrers' => 10, 'utm' => 10]))->toBeNull();
+    sum_closed_day($db);
+    expect(file_exists(dirname($file) . '/.summed'))->toBeFalse();
+
+    $other->exec('ROLLBACK');
+    sum_closed_day($db);
+    expect(file_get_contents(dirname($file) . '/.summed'))->toBe($day);
+});
