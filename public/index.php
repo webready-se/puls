@@ -2246,7 +2246,7 @@ function site_groups(PDO $db): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 27; // Bump this when adding new migrations
+    $currentVersion = 28; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -2730,6 +2730,12 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
         )');
     }
 
+    // v28: detect_bot() learned Meta's ads crawler, AI search indexer and AI fetcher, which
+    // were stored as "Unknown crawler" (v25's step again)
+    if ($version < 28) {
+        rename_unknown_bots($db);
+    }
+
     $db->exec('PRAGMA user_version = ' . $currentVersion);
 }
 
@@ -2832,6 +2838,10 @@ function detect_bot(string $ua): ?array
         ['pattern' => 'Applebot-Extended', 'name' => 'Applebot-Extended','category' => 'AI'],
         ['pattern' => 'cohere-ai',         'name' => 'Cohere',           'category' => 'AI'],
         ['pattern' => 'Meta-ExternalAgent','name' => 'Meta AI',          'category' => 'AI'],
+        // Meta's other crawlers link to its crawler page, which the generic "crawler" would catch.
+        // The fetcher gets a link a person asked Meta AI about, so it may skip robots.txt (as ChatGPT-User)
+        ['pattern' => 'meta-webindexer',  'name' => 'Meta AI search',  'category' => 'AI'],
+        ['pattern' => 'meta-externalfetcher','name' => 'Meta AI fetcher','category' => 'AI'],
         ['pattern' => 'OAI-SearchBot',    'name' => 'OAI-SearchBot',   'category' => 'AI'],
         ['pattern' => 'Amazonbot',        'name' => 'Amazonbot',       'category' => 'AI'],
         ['pattern' => 'ExaSearchBot',     'name' => 'Exa',             'category' => 'AI'],
@@ -2857,6 +2867,7 @@ function detect_bot(string $ua): ?array
         ['pattern' => 'SeekportBot',       'name' => 'Seekport',         'category' => 'Search engine'],
         // Social
         ['pattern' => 'facebookexternalhit','name' => 'Facebook',        'category' => 'Social'],
+        ['pattern' => 'meta-externalads', 'name' => 'Meta Ads',        'category' => 'Social'],
         ['pattern' => 'Twitterbot',        'name' => 'Twitterbot',       'category' => 'Social'],
         ['pattern' => 'LinkedInBot',       'name' => 'LinkedInBot',      'category' => 'Social'],
         ['pattern' => 'Slackbot',          'name' => 'Slackbot',         'category' => 'Social'],

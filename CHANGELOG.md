@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Meta's ads crawler, AI search indexer and AI fetcher are named instead of counted as "Unknown crawler".** `meta-externalads` (Meta Ads, Social), `meta-webindexer` (Meta AI search, AI) and `meta-externalfetcher` (Meta AI fetcher, AI) fell through to the generic pattern, since their user agents link to Meta's crawler page. The fetcher gets a link a person asked Meta AI about, so it may skip robots.txt, as ChatGPT-User does. Visits already stored under the unknown name are renamed when Puls upgrades. Reported by @isaacgerg (#124).
 - The date range button opened its picker only from the edge around its icon: a click on the icon itself opened it and closed it again at once. It broke in 1.30.0, when the inline handlers became one listener per event type, since the picker's stopPropagation no longer kept the click from reaching the listener that closes it.
 - A custom date range was not told to screen readers: a period or a site change says "Showing …, last 7 days: … pageviews", a range said nothing. It does now, with its dates as words ("Oct 14 to Oct 24") rather than read out digit by digit.
 - A slow answer for a period chosen earlier could replace the view chosen after it: click 90 days, then 7 days before the 90 have loaded, and the 90 days arrived last and were drawn under the 7-day button. Only the latest load is drawn now.
