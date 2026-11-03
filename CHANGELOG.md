@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The date range button opened its picker only from the edge around its icon: a click on the icon itself opened it and closed it again at once. It broke in 1.30.0, when the inline handlers became one listener per event type, since the picker's stopPropagation no longer kept the click from reaching the listener that closes it.
+- A custom date range was not told to screen readers: a period or a site change says "Showing …, last 7 days: … pageviews", a range said nothing. It does now, with its dates as words ("Oct 14 to Oct 24") rather than read out digit by digit.
 - `php puls sites:list` ran a site name of 22 characters or more into its first date ("a-long-shop-name.example2026-11-02"). The site column is now as wide as the longest name needs, under a group too, so every column stays under its header.
 
 ## [1.30.0] - 2026-11-02
