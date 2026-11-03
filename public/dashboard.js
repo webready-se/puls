@@ -2019,6 +2019,16 @@
     load(currentDays);
   };
 
+  // A campaign's source in words: Meta's ads fill utm_source with its own codes, and a cost per
+  // click from Google is Google Ads. Only the label: the API and the exports keep what was sent,
+  // and the row's title shows it, so a tag can still be found
+  var metaSources = { ig: 'Instagram', fb: 'Facebook', msg: 'Messenger', an: 'Audience Network' };
+  function utmSourceLabel(r) {
+    var source = String(r.source).toLowerCase();
+    if (source === 'google' && /^(cpc|ppc|paid)$/i.test(r.medium || '')) return 'Google Ads';
+    return esc(metaSources[source] || r.source) + (r.medium ? ' / ' + esc(r.medium) : '');
+  }
+
   function renderUtmContent(rows) {
     if (!rows || !rows.length) {
       return '<p class="muted fs-13 mt-12">No data yet</p>';
@@ -2027,9 +2037,10 @@
     var html = '';
     rows.forEach(function(r) {
       var pct = (+r.visitors / max) * 100;
-      var label = esc(r.source) + (r.medium ? ' / ' + esc(r.medium) : '') + (r.campaign ? ' — ' + esc(r.campaign) : '') + (r.term ? ' [' + esc(r.term) + ']' : '') + (r.content ? ' (' + esc(r.content) + ')' : '');
+      var rest = (r.campaign ? ' — ' + esc(r.campaign) : '') + (r.term ? ' [' + esc(r.term) + ']' : '') + (r.content ? ' (' + esc(r.content) + ')' : '');
+      var sent = esc(r.source) + (r.medium ? ' / ' + esc(r.medium) : '') + rest;
       html += '<div class="trow">' +
-        '<span class="trow-label" title="' + label + '">' + label + '</span>' +
+        '<span class="trow-label" title="' + sent + '">' + utmSourceLabel(r) + rest + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="#059669"></div></div>' +
         '<span class="trow-val">' + num(r.visitors) + '</span>' +
       '</div>';

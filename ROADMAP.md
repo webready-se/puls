@@ -230,6 +230,7 @@ Two customer sites stored personal data in paths without noticing: an internal a
 
 From customer integrations. Traffic per channel and campaign exists; what happens after the click does not. A same-campaign comparison done by hand showed video-ad visitors clicking through 10x more often than image-ad visitors, which no ad platform shows. Not decided yet.
 
+- [x] **Campaigns name the platform** - `ig`, `fb`, `msg` and `an` read as Meta's platforms and `google` with a cost per click as Google Ads, in the label only. Splitting the Paid channel per platform was set aside for now: it adds rows that are always on, and a click on Paid already filters to its campaigns, which now say the platform
 - [ ] **Events, goals and bounce per channel and campaign** — today the channel filter only affects pageview stats and hides goals. Include the Meta ad format (`media_type`) as a campaign attribute
 - [ ] **Goal with a data condition** — event + key=value, e.g. `form-success` where `type=service-booking`, or outbound clicks to one domain
 - [ ] **Path groups** — filter or group pageviews by prefix (`/workshop/*`), also as an API prefix filter
