@@ -396,6 +396,21 @@ async function main() {
       expect(/today/.test(sub) && !/last 1 days/.test(sub), 'chart subtitle says today');
     }
 
+    // A custom range is told to screen readers like a period, its dates as words
+    {
+      const ago = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+      const words = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const [from, to] = [ago(20), ago(10)];
+      q('#sr-status').textContent = '';
+      q('#date-from').value = from;
+      q('#date-to').value = to;
+      q('.date-picker-apply').click();
+      await waitFor(() => q('#sr-status').textContent.includes(`, ${words(from)} to ${words(to)}:`), 'screen reader status announces a custom range');
+      q('#sr-status').textContent = '';
+      q('.period-btn[data-days="7"]').click();
+      await waitFor(() => /last 7 days/.test(q('#sr-status').textContent), 'back to 7 days after the custom range');
+    }
+
     // Light theme renders too
     document.documentElement.setAttribute('data-theme', 'light');
     expect(getComputedStyle(document.body).backgroundColor !== '', 'light theme applies');
