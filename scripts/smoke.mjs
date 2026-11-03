@@ -421,6 +421,13 @@ async function main() {
       await waitFor(() => q('.breakdown-card .event-detail') && q('.breakdown-card .event-detail')._state && q('.breakdown-card .event-detail')._state.data.days === 30, 'card drill-down kept across period change', 8000);
     }
 
+    // The date range button opens its picker from its icon, which is what a click lands on, and a
+    // click outside closes it again
+    q('#custom-range-btn svg path').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(q('#date-picker').classList.contains('open'), 'a click on the date range icon opens the picker');
+    q('#app').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(!q('#date-picker').classList.contains('open'), 'a click outside closes the date picker');
+
     // The 1-day period starts at midnight, so it reads as today, not the last 24 hours
     const todayBtn = q('.period-btn[data-days="1"]');
     expect(todayBtn.textContent === 'Today', 'the 1-day period button reads Today');
@@ -429,6 +436,21 @@ async function main() {
     if (await waitFor(() => /, today:/.test(q('#sr-status').textContent), 'screen reader status says today')) {
       const sub = q('#chart-card .card-subtitle')?.textContent || '';
       expect(/today/.test(sub) && !/last 1 days/.test(sub), 'chart subtitle says today');
+    }
+
+    // A custom range is told to screen readers like a period, its dates as words
+    {
+      const ago = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+      const words = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const [from, to] = [ago(20), ago(10)];
+      q('#sr-status').textContent = '';
+      q('#date-from').value = from;
+      q('#date-to').value = to;
+      q('.date-picker-apply').click();
+      await waitFor(() => q('#sr-status').textContent.includes(`, ${words(from)} to ${words(to)}:`), 'screen reader status announces a custom range');
+      q('#sr-status').textContent = '';
+      q('.period-btn[data-days="7"]').click();
+      await waitFor(() => /last 7 days/.test(q('#sr-status').textContent), 'back to 7 days after the custom range');
     }
 
     // Light theme renders too

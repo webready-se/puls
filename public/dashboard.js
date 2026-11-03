@@ -587,7 +587,7 @@
   function render(d) {
     lastData = d;
     if (pendingAnnouncement && d && d.totals) {
-      var period = currentFrom && currentTo ? currentFrom + ' to ' + currentTo : periodLabel();
+      var period = currentFrom && currentTo ? formatDateLabel(currentFrom) + ' to ' + formatDateLabel(currentTo) : periodLabel();
       announce('Showing ' + (currentSite || 'all sites') + ', ' + period + ': ' + num(d.totals.views) + ' pageviews, ' + num(d.totals.visitors) + ' visitors');
       pendingAnnouncement = '';
     }
@@ -2458,6 +2458,7 @@
     currentFrom = from;
     currentTo = to;
     currentDays = Math.max(1, Math.round((new Date(to) - new Date(from)) / 86400000) + 1);
+    pendingAnnouncement = 'period';
     periodGroup.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
     customRangeBtn.classList.add('active');
     customRangeBtn.textContent = formatDateLabel(from) + ' – ' + formatDateLabel(to);
@@ -2475,9 +2476,10 @@
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
-  // Close date picker when clicking outside
+  // Close date picker when clicking outside. Contains, not the target itself: a click on the
+  // button lands on its icon, and this listener runs after the one that opened the picker
   document.addEventListener('click', function(e) {
-    if (datePicker.classList.contains('open') && !datePicker.contains(e.target) && e.target !== customRangeBtn) {
+    if (datePicker.classList.contains('open') && !datePicker.contains(e.target) && !customRangeBtn.contains(e.target)) {
       datePicker.classList.remove('open');
     }
   });
