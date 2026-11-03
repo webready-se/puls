@@ -908,11 +908,15 @@ function sum_missing_days(PDO $db, array $sites, string $since, string $until, i
     foreach ($sites as $site) {
         $firstSeen->execute([$site]);
         $first = $firstSeen->fetchColumn();
+        // A statement left open keeps its read going, and when tracking writes meanwhile SQLite
+        // refuses this connection's write at once, without waiting (SQLITE_BUSY_SNAPSHOT)
+        $firstSeen->closeCursor();
         if (!$first) continue;
         $start = max($since, substr($first, 0, 10));
         if ($start > $end) continue;
         $summed->execute([$site, $start, $end]);
         $have = array_flip($summed->fetchAll(PDO::FETCH_COLUMN));
+        $summed->closeCursor();
         for ($d = $end; $d >= $start; $d = date('Y-m-d', strtotime($d . ' -1 day'))) {
             if (!isset($have[$d])) $missing[] = [$site, $d];
         }
@@ -966,7 +970,14 @@ function sum_closed_day(PDO $db): void
     if (file_exists($marker) && file_get_contents($marker) === $day) return;
     $stmt = $db->prepare('SELECT DISTINCT site FROM pageviews WHERE created_at >= ? AND created_at < ?');
     $stmt->execute([$day, date('Y-m-d', strtotime($day . ' +1 day'))]);
-    sum_missing_days($db, $stmt->fetchAll(PDO::FETCH_COLUMN), $day, date('Y-m-d', strtotime($day . ' +1 day')), PHP_INT_MAX);
+    $sites = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $stmt->closeCursor();
+    // The pageview is stored already; a busy database only means the day is summed later
+    try {
+        sum_missing_days($db, $sites, $day, date('Y-m-d', strtotime($day . ' +1 day')), PHP_INT_MAX);
+    } catch (PDOException $e) {
+        return;
+    }
     file_put_contents($marker, $day);
 }
 
@@ -982,7 +993,12 @@ function sum_closed_day(PDO $db): void
  */
 function summary_figures(PDO $db, array $sites, string $since, string $end, string $prevSince, array $limits): ?array
 {
-    if (sum_missing_days($db, $sites, $prevSince, $end, 31 * count($sites)) > 0) return null;
+    // If summing fails (the database busy), the dashboard reads the rows this time rather than fail
+    try {
+        if (sum_missing_days($db, $sites, $prevSince, $end, 31 * count($sites)) > 0) return null;
+    } catch (PDOException $e) {
+        return null;
+    }
     $last = last_closed_day();
     // The days not over yet, counted from their pageviews: [date] => every site's rows of the day
     $open = [];
