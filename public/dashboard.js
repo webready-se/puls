@@ -502,7 +502,9 @@
 
   // Auto-refresh every 60 seconds. Held while the tab is hidden, while the viewer is using the
   // page (pointer, scroll or keys in the last 10 s), and while the UTM wizard, the note form,
-  // a goal target or a card rename is in use; it runs as soon as none of that applies.
+  // a goal target or a card rename is in use; it runs as soon as none of that applies. Never for
+  // a range that ends before today in the install's zone: it cannot change, and a long one is
+  // the dearest request the dashboard makes.
   function utmWizardActive() {
     var path = document.getElementById('utm-path');
     var campaign = document.getElementById('utm-campaign');
@@ -517,6 +519,7 @@
   setInterval(function() {
     if (Date.now() - lastLoad < 60000 || document.hidden || Date.now() - lastActivity < 10000) return;
     if (utmWizardActive() || noteFormOpen() || editingTarget !== null || (document.activeElement && document.activeElement.isContentEditable)) return;
+    if (currentTo && currentTo < new Date(Date.now() + serverSkew).toISOString().slice(0, 10)) return;
     load(currentDays, true);
   }, 5000);
 

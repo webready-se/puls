@@ -421,6 +421,28 @@ async function main() {
     await waitFor(() => q('#app').getAttribute('aria-busy') === 'false' && !document.body.hasAttribute('data-loading') && q('#load-status').hidden, 'the busy state clears when the answer is in');
     window.fetch = realFetch;
 
+    // A range that ends before today cannot change, so the 60 s refresh leaves it alone; a period
+    // that ends today is still refreshed. The clock is moved two minutes on to reach the refresh
+    const realNow = Date.now, dayAgo = (n) => new Date(realNow() - n * 86400000).toISOString().slice(0, 10);
+    let apiCalls = 0;
+    window.fetch = (url, ...rest) => { if (/\?api&(days|from)=/.test(String(url))) apiCalls++; return realFetch(url, ...rest); };
+    q('#date-from').value = dayAgo(20);
+    q('#date-to').value = dayAgo(10);
+    q('.date-picker-apply').click();
+    await waitFor(() => q('#chart-card .chart')?.children.length === 11 && q('#app').getAttribute('aria-busy') === 'false', 'a past range loads');
+    apiCalls = 0;
+    Date.now = () => realNow() + 120000;
+    await sleep(5500);
+    expect(apiCalls === 0, 'a range that ends before today is not refreshed');
+    Date.now = realNow;
+    q('.period-btn[data-days="7"]').click();
+    await waitFor(() => q('#chart-card .chart')?.children.length <= 7 && q('#app').getAttribute('aria-busy') === 'false', 'back to 7 days');
+    apiCalls = 0;
+    Date.now = () => realNow() + 120000;
+    await waitFor(() => apiCalls > 0, 'a period that ends today is still refreshed', 7000);
+    Date.now = realNow;
+    window.fetch = realFetch;
+
     // Light theme renders too
     document.documentElement.setAttribute('data-theme', 'light');
     expect(getComputedStyle(document.body).backgroundColor !== '', 'light theme applies');
