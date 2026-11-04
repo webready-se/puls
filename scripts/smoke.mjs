@@ -582,7 +582,7 @@ async function main() {
     // The shared footer: name, version and freshness, then the Webready credit with the family's marks
     const foot = q('#app .foot');
     expect(foot && /^Puls \d+\.\d+\.\d+ · from the tracking script, updated \d\d:\d\d$/.test(foot.firstElementChild.textContent), 'footer names Puls, its version and when it was updated (no zone: the viewer shares it)');
-    expect(foot && foot.querySelector('a[href="https://webready.se"]') && foot.querySelectorAll('.foot-marks svg').length === 1 && foot.querySelector('.foot-marks a[href="https://github.com/webready-se/puls"]'), 'footer credit links Webready, with only the public tools\' marks (today Puls), each linked');
+    expect(foot && foot.querySelector('a[href="https://webready.se"]') && foot.querySelectorAll('.foot-marks svg').length === 2 && foot.querySelector('.foot-marks a[href="https://github.com/webready-se/puls"]') && foot.querySelector('.foot-marks a[href="https://github.com/webready-se/vaka"]'), 'footer credit links Webready, with only the public tools\' marks (today Puls and Vaka), each linked');
     // Figtree, self-hosted, actually loads (a CSP without font-src would block it silently)
     await document.fonts.ready;
     expect([...document.fonts].some((f) => f.family.replace(/"/g, '') === 'Figtree' && f.status === 'loaded'), 'Figtree is loaded');
