@@ -521,6 +521,35 @@ async function main() {
       expect(row('google / cpc — smoke-ads')?.textContent === 'Google Ads — smoke-ads', 'google with cpc reads Google Ads');
     }
 
+    // The tooltip over the tallest day fits above it, with Compare off and on: the scroll box
+    // clips what sticks out, and the day's figures are the tooltip's first line
+    {
+      // Measured without the room stacked marks add too, which the seeded data always has
+      const tipOverflow = () => {
+        const scroll = q('#chart-card .chart-scroll'), stacked = scroll.classList.contains('stacked-marks');
+        const tall = [...scroll.querySelectorAll('.chart-bar')].reduce((a, b) => (b.offsetHeight > a.offsetHeight ? b : a));
+        const tip = tall.closest('.chart-col').querySelector(':scope > .tip, .chart-bar > .tip');
+        scroll.classList.remove('stacked-marks');
+        tip.style.display = 'block';
+        const over = scroll.getBoundingClientRect().top - tip.getBoundingClientRect().top;
+        tip.style.display = '';
+        scroll.classList.toggle('stacked-marks', stacked);
+        return over;
+      };
+      const compared = () => !!q('#chart-card .chart-scroll.compare');
+      const setCompare = async (on) => {
+        if (compared() !== on) q('#chart-card [data-action="toggle-compare"]')?.click();
+        return waitFor(() => compared() === on, `Compare ${on ? 'on' : 'off'} on the chart`);
+      };
+      const before = compared();
+      for (const on of [false, true]) {
+        if (!await setCompare(on)) continue;
+        const over = tipOverflow();
+        expect(over <= 0, `the tooltip over the tallest day fits above it with Compare ${on ? 'on' : 'off'} (sticks out ${over}px)`);
+      }
+      await setCompare(before);
+    }
+
     // A day opens its hours under the chart, on demand
     {
       const hoursAsked = [], realFetch = window.fetch;
