@@ -127,6 +127,10 @@ location / {
 }
 ```
 
+**Forge's frame header.** Forge's default Nginx configuration adds `X-Frame-Options "SAMEORIGIN"`, `X-XSS-Protection` and `X-Content-Type-Options "nosniff"` to every answer, on top of what Puls sends, so `X-Frame-Options` goes out as both `DENY` (Puls) and `SAMEORIGIN` (Forge). It does no harm, since `frame-ancestors 'none'` in Puls's CSP overrules both, but a header check flags it, and nobody can tell from the answer who adds which.
+
+In the site's `…` menu, choose **Edit Nginx configuration** and the file **General site configuration**. Remove the lines for `X-Frame-Options` and `X-XSS-Protection`, which is obsolete, and keep `X-Content-Type-Options`: it is where the files Nginx serves itself get theirs. On the server that file is `/etc/nginx/forge-conf/<site id>/site.conf`. `sites-available/<site>` holds only `include` lines, so searching there finds nothing.
+
 ## Docker
 
 ```bash
