@@ -107,7 +107,7 @@ test('pixel endpoint returns gif', function () {
 
 test('collect endpoint accepts POST', function () {
     $r = http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode([
             'u' => '/test-page',
             'r' => '',
@@ -118,11 +118,51 @@ test('collect endpoint accepts POST', function () {
     expect($r['status'])->toBe(204);
 });
 
+test('collect logs a browser that sends no language as a bot, not as a visitor', function () {
+    $db = getTestDb();
+    $send = fn (string $language) => http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0{$language}",
+        'content' => json_encode(['u' => '/page', 'site' => 'no-language']),
+    ]);
+    $count = fn (string $table) => (int) $db->query("SELECT COUNT(*) FROM {$table} WHERE site = 'no-language'")->fetchColumn();
+    try {
+        expect($send('')['status'])->toBe(204)
+            ->and($count('pageviews'))->toBe(0)
+            ->and($count('bot_visits'))->toBe(1)
+            ->and($db->query("SELECT bot_name FROM bot_visits WHERE site = 'no-language'")->fetchColumn())->toBe('Automated browser');
+
+        $send("\r\nAccept-Language: sv-SE,sv;q=0.9");
+        expect($count('pageviews'))->toBe(1)
+            ->and($count('bot_visits'))->toBe(1);
+    } finally {
+        $db->exec("DELETE FROM pageviews WHERE site = 'no-language'");
+        $db->exec("DELETE FROM bot_visits WHERE site = 'no-language'");
+    }
+});
+
+test('event drops a browser that sends no language', function () {
+    $db = getTestDb();
+    $send = fn (string $language) => http('POST', '/?event', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0{$language}",
+        'content' => json_encode(['event_name' => 'signup', 'site' => 'no-language', 'page_path' => '/']),
+    ]);
+    $count = fn () => (int) $db->query("SELECT COUNT(*) FROM events WHERE site = 'no-language'")->fetchColumn();
+    try {
+        $send('');
+        expect($count())->toBe(0);
+
+        $send("\r\nAccept-Language: sv-SE,sv;q=0.9");
+        expect($count())->toBe(1);
+    } finally {
+        $db->exec("DELETE FROM events WHERE site = 'no-language'");
+    }
+});
+
 test('collect strips markup characters from the site name', function () {
     $db = getTestDb();
     try {
         http('POST', '/?collect', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
             'content' => json_encode(['u' => '/', 'site' => '<img src=x onerror=alert(1)>']),
         ]);
         $sites = $db->query("SELECT DISTINCT site FROM pageviews WHERE site LIKE '%onerror%'")->fetchAll(PDO::FETCH_COLUMN);
@@ -134,7 +174,7 @@ test('collect strips markup characters from the site name', function () {
 
 test('collect endpoint stores utm term and content', function () {
     $r = http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode([
             'u' => '/test-utm',
             'r' => '',
@@ -154,7 +194,7 @@ test('collect endpoint stores utm term and content', function () {
 
 test('collect endpoint normalizes path with tracking params', function () {
     $r = http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode([
             'u' => '/?fbclid=abc123&utm_source=ig',
             'r' => '',
@@ -178,7 +218,7 @@ test('js snippet detects Google Ads gad_source param', function () {
 
 test('collect endpoint detects Google Ads params server-side', function () {
     $r = http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode([
             'u' => '/dackhotell?gad_source=1&gad_campaignid=21828512064',
             'r' => '',
@@ -193,7 +233,7 @@ test('collect strips brid from Meta ad traffic only and keeps media_type', funct
     $site = 'meta_' . uniqid();
     foreach ([['ig', '/stock?media_type=video&brid=YWdncwE7'], [null, '/library?brid=abc']] as [$source, $u]) {
         http('POST', '/?collect', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
             'content' => json_encode(['u' => $u, 'r' => '', 'w' => 400, 'site' => $site, 'utm' => $source ? ['source' => $source, 'medium' => 'paid'] : null]),
         ]);
     }
@@ -395,21 +435,21 @@ test('collect rejects unknown origin when ALLOWED_ORIGINS is set', function () {
     try {
         // Unknown domain — should be rejected
         $r = http('POST', '/?collect', [
-            'header' => "Content-Type: application/json\r\nOrigin: https://evil.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'header' => "Content-Type: application/json\r\nOrigin: https://evil.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
             'content' => json_encode(['u' => '/should-not-store', 'site' => 'origin-test']),
         ], 8090);
         expect($r['status'])->toBe(403);
 
         // Exact domain — should be allowed
         $r = http('POST', '/?collect', [
-            'header' => "Content-Type: application/json\r\nOrigin: https://allowed.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'header' => "Content-Type: application/json\r\nOrigin: https://allowed.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
             'content' => json_encode(['u' => '/should-store', 'site' => 'origin-test']),
         ], 8090);
         expect($r['status'])->toBe(204);
 
         // Subdomain — should be allowed
         $r = http('POST', '/?collect', [
-            'header' => "Content-Type: application/json\r\nOrigin: https://www.allowed.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'header' => "Content-Type: application/json\r\nOrigin: https://www.allowed.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
             'content' => json_encode(['u' => '/subdomain-ok', 'site' => 'origin-test']),
         ], 8090);
         expect($r['status'])->toBe(204);
@@ -420,7 +460,7 @@ test('collect rejects unknown origin when ALLOWED_ORIGINS is set', function () {
 
 test('collect accepts any origin when ALLOWED_ORIGINS is empty', function () {
     $r = http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nOrigin: https://random-site.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nOrigin: https://random-site.com\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode(['u' => '/any-origin', 'site' => 'test']),
     ]);
     expect($r['status'])->toBe(204);
@@ -749,7 +789,7 @@ test('share endpoint does not start a session', function () {
 
 test('event endpoint accepts POST', function () {
     $r = http('POST', '/?event', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode([
             'event_name' => 'signup',
             'site' => 'test',
@@ -762,7 +802,7 @@ test('event endpoint accepts POST', function () {
 
 test('event endpoint rejects empty event_name', function () {
     $r = http('POST', '/?event', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode([
             'site' => 'test',
             'page_path' => '/',
@@ -773,7 +813,7 @@ test('event endpoint rejects empty event_name', function () {
 
 test('event endpoint filters bots', function () {
     $r = http('POST', '/?event', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 (compatible; GPTBot/1.0)",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 (compatible; GPTBot/1.0)\r\nAccept-Language: sv",
         'content' => json_encode([
             'event_name' => 'bot_event',
             'site' => 'test',
@@ -785,7 +825,7 @@ test('event endpoint filters bots', function () {
 test('event endpoint deduplicates same event and data within 10 seconds', function () {
     $name = 'dedup_test_' . uniqid();
     $opts = [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode([
             'event_name' => $name,
             'site' => 'test',
@@ -809,7 +849,7 @@ test('event endpoint keeps same event with different data within 10 seconds', fu
             $payload['event_data'] = $data;
         }
         return http('POST', '/?event', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
             'content' => json_encode($payload),
         ])['status'];
     };
@@ -825,7 +865,7 @@ test('event endpoint keeps same event with different data within 10 seconds', fu
 test('api includes events data', function () {
     // Send an event
     http('POST', '/?event', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode([
             'event_name' => 'api_test_event',
             'site' => 'test',
@@ -861,7 +901,7 @@ test('api returns up to 50 event names without expand', function () {
 test('api event drill-down returns zero-filled daily series and totals', function () {
     $name = 'series_test_' . uniqid();
     http('POST', '/?event', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
     ]);
 
@@ -887,7 +927,7 @@ test('api event drill-down discovers data keys and groups by key', function () {
     $name = 'group_test_' . uniqid();
     $send = function (array $data, string $ua) use ($name) {
         http('POST', '/?event', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}\r\nAccept-Language: sv",
             'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/', 'event_data' => $data]),
         ]);
     };
@@ -931,7 +971,7 @@ test('api event group flags values not seen in the previous period', function ()
     $name = 'newval_test_' . uniqid();
     $send = function (string $query, string $ua) use ($name) {
         http('POST', '/?event', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}\r\nAccept-Language: sv",
             'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/', 'event_data' => ['query' => $query]]),
         ]);
     };
@@ -953,7 +993,7 @@ test('api event group flags values not seen in the previous period', function ()
 test('api event detail exports CSV with data keys as columns', function () {
     $name = 'csv_test_' . uniqid();
     http('POST', '/?event', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/guides', 'event_data' => ['query' => 'kale, "curly"', 'zone' => 4]]),
     ]);
 
@@ -973,7 +1013,7 @@ test('api event detail exports CSV with data keys as columns', function () {
 test('api event CSV defuses spreadsheet formulas sent by visitors', function () {
     $name = 'csv_formula_' . uniqid();
     http('POST', '/?event', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/guides', 'event_data' => ['link' => '=HYPERLINK("https://example.com","x")', '@key' => 'v', 'delta' => -3]]),
     ]);
 
@@ -995,7 +1035,7 @@ test('api counts conversions for event goals from the events table', function ()
     $name = 'goal_event_' . uniqid();
     foreach (['Mozilla/5.0 Chrome/120.0', 'Mozilla/5.0 Firefox/130.0'] as $ua) {
         http('POST', '/?event', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}\r\nAccept-Language: sv",
             'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
         ]);
     }
@@ -1137,7 +1177,7 @@ test('api event funnel counts visitors who did the second event after the first'
     $b = 'funnel_sent_' . uniqid();
     $send = function (string $name, string $ua) {
         http('POST', '/?event', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+            'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}\r\nAccept-Language: sv",
             'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
         ]);
     };
@@ -1167,7 +1207,7 @@ test('api event funnel does not count the second event when it came first', func
     $a = 'funnel_a_' . uniqid();
     $b = 'funnel_b_' . uniqid();
     $opts = fn (string $name) => [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/']),
     ];
     http('POST', '/?event', $opts($b));
@@ -1187,7 +1227,7 @@ test('api event drill-down lists other event names for the funnel picker', funct
     $b = 'picker_b';
     foreach ([$a, $b] as $name) {
         http('POST', '/?event', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
             'content' => json_encode(['event_name' => $name, 'site' => $site, 'page_path' => '/']),
         ]);
     }
@@ -1202,11 +1242,11 @@ test('collect and event store a sanitized app version', function () {
     $tag = uniqid();
     $ua = "Mozilla/5.0 VersionTest/{$tag}";
     http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+        'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}\r\nAccept-Language: sv",
         'content' => json_encode(['u' => '/v-' . $tag, 'r' => '', 'w' => 1200, 'site' => 'test', 'v' => "2.6.0<script>"]),
     ]);
     http('POST', '/?event', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}",
+        'header' => "Content-Type: application/json\r\nUser-Agent: {$ua}\r\nAccept-Language: sv",
         'content' => json_encode(['event_name' => 'v_' . $tag, 'site' => 'test', 'page_path' => '/', 'app_version' => 'v2.6.0-beta+1']),
     ]);
 
@@ -1222,7 +1262,7 @@ test('collect and event store a sanitized app version', function () {
 test('api lists app versions first seen in the period for release markers', function () {
     $version = 'rel-' . uniqid();
     http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode(['u' => '/', 'r' => '', 'w' => 1200, 'site' => 'test', 'v' => $version]),
     ]);
     $token = createTestShareToken('test');
@@ -1235,7 +1275,7 @@ test('api event drill-down groups by app version', function () {
     $name = 'vgroup_' . uniqid();
     foreach ([['1.0.0', 'Chrome/120.0'], ['1.0.0', 'Firefox/130.0'], ['1.1.0', 'Safari/605.1']] as [$v, $ua]) {
         http('POST', '/?event', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 {$ua}",
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 {$ua}\r\nAccept-Language: sv",
             'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/', 'app_version' => $v]),
         ]);
     }
@@ -1288,7 +1328,7 @@ test('api returns saved breakdowns grouped like the drill-down', function () {
     $name = 'saved_bd_' . uniqid();
     foreach ([['kale', 'Chrome/120.0'], ['kale', 'Firefox/130.0'], ['rhubarb', 'Safari/605.1']] as [$q, $ua]) {
         http('POST', '/?event', [
-            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 {$ua}",
+            'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 {$ua}\r\nAccept-Language: sv",
             'content' => json_encode(['event_name' => $name, 'site' => 'test', 'page_path' => '/', 'event_data' => ['query' => $q]]),
         ]);
     }
@@ -1529,7 +1569,7 @@ test('share API with path filter does not crash on events table', function () {
 test('share API search returns results', function () {
     // Ensure we have a pageview to search for
     http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode([
             'u' => '/searchable-test-page',
             'r' => '',
@@ -1698,7 +1738,7 @@ test('collect and event drop hits from an excluded IP on that site only', functi
     $db->exec("INSERT INTO excluded_ips (site, ip, created_at) VALUES ('excluded-site', '127.0.0.1', datetime('now')), ('excluded-site', '::1', datetime('now'))");
 
     $post = fn (string $endpoint, array $body) => http('POST', $endpoint, [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode($body),
     ]);
     foreach (['excluded-site', 'other-site'] as $site) {
@@ -1718,7 +1758,7 @@ test('an excluded range for all sites drops hits on every site', function () {
     $db->exec("INSERT INTO excluded_ips (site, ip, created_at) VALUES ('*', '127.0.0.0/8', datetime('now')), ('*', '::1/128', datetime('now'))");
 
     http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
         'content' => json_encode(['u' => '/x', 'r' => '', 'w' => 1920, 'site' => 'any-site-excluded']),
     ]);
     $db->exec("DELETE FROM excluded_ips WHERE site = '*'");
@@ -1817,7 +1857,7 @@ function distinctVisitors(string $site): int
 function collectVia(string $site, string $forwardedFor, int $port = 8089): void
 {
     http('POST', '/?collect', [
-        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nX-Forwarded-For: {$forwardedFor}",
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv\r\nX-Forwarded-For: {$forwardedFor}",
         'content' => json_encode(['u' => '/', 'r' => '', 'w' => 1920, 'site' => $site]),
     ], $port);
 }

@@ -673,7 +673,7 @@ function handle_collect(array $config): void
     if (!$input || empty($input['u'])) return;
 
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-    $bot = detect_bot($ua);
+    $bot = detect_script_bot($ua, $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
     if ($bot) {
         if (is_ignored_bot($ua, $config['ignored_bots'] ?? [])) return;
         $db = get_db($config['db_path']);
@@ -1170,7 +1170,7 @@ function handle_event(array $config): void
     if (!$input || empty($input['event_name'])) return;
 
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-    if (detect_bot($ua)) return;
+    if (detect_script_bot($ua, $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '')) return;
 
     $db = get_db($config['db_path']);
 
@@ -3390,6 +3390,17 @@ function detect_bot(string $ua): ?array
         }
     }
     return null;
+}
+
+/**
+ * A bot among the requests the tracking script sends. A program that drives a real browser runs
+ * the script and shows a browser's user agent, so detect_bot() cannot see it, but a browser people
+ * use sends Accept-Language with every request. Only for ?collect and ?event: a crawler reading a
+ * page or the pixel often sends no language and is told apart by its user agent.
+ */
+function detect_script_bot(string $ua, string $acceptLanguage): ?array
+{
+    return detect_bot($ua) ?? ($acceptLanguage === '' ? ['name' => 'Automated browser', 'category' => 'Other'] : null);
 }
 
 /**

@@ -122,3 +122,17 @@ test('returns null for regular browsers', function () {
     expect(detect_bot('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0'))
         ->toBeNull();
 });
+
+test('a browser that sends no language is an automated browser', function () {
+    $chrome = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+    expect(detect_script_bot($chrome, ''))->toBe(['name' => 'Automated browser', 'category' => 'Other'])
+        ->and(detect_script_bot($chrome, 'sv-SE,sv;q=0.9'))->toBeNull();
+});
+
+test('a named bot keeps its name whether or not it sends a language', function () {
+    $ua = 'Mozilla/5.0 (compatible; GPTBot/1.0)';
+
+    expect(detect_script_bot($ua, '')['name'])->toBe('GPTBot')
+        ->and(detect_script_bot($ua, 'en-US')['name'])->toBe('GPTBot');
+});
