@@ -425,6 +425,14 @@ The image is a transparent GIF, so it needs no inline style to hide it, and a st
 
 For server-rendered frameworks (Astro, Laravel, Statamic), you can inject the current path dynamically — see the framework examples above.
 
+## Automated Browsers
+
+A program that drives a real browser runs the tracking script and shows an ordinary browser's user agent, so its name says nothing. Browsers people use send an `Accept-Language` header with every request, so a pageview without one goes to Bots as "Automated browser" instead of counting as a visitor, and an event without one is dropped.
+
+- A request you send to `?collect` or `?event` yourself, from a server or a test, needs the header to count.
+- A proxy in front of Puls has to pass the header on. If every visit lands under "Automated browser", check that first.
+- A program that sets the header counts as a visitor. Puls looks at no more than this per visit: a mistake here would remove real people from your numbers.
+
 ## Behind a Reverse Proxy (Docker, Cloudflare, load balancers)
 
 This is about what sits in front of **Puls**, not the tracked site. The tracking script sends pageviews and events from the visitor's browser straight to Puls, so a proxy in front of your site does not matter.

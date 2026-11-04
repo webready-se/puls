@@ -64,7 +64,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (386 tests, unit + feature)
+tests/                  — Pest test suite (391 tests, unit + feature)
 docs/integrations.md    - Tracking setup: script attributes, events, keeping personal data out of URLs, excluding own visits, reverse proxies
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading
@@ -103,6 +103,7 @@ docker-compose.yml      — One-command setup with volume for /app/data
 - **Sender owns the data** - Puls gives sites the controls (`data-query`, `data-path`, no PII in `puls.track`) and documents the risks, but does not inspect, mask or audit what they send. Masking was considered and declined: pattern matching would silently damage legitimate paths and give false confidence
 - **Share tokens in plain text** - hashing them (as Hamstra does) was considered and declined: a token only reads one site's statistics, which live in the same database, so anyone with the database already has what the token protects. Plain text lets `share:list` show a link again, and needs no migration that the CLI (which opens the database without running migrations) would have to handle
 - **Times without an offset** - a stored time is the wall clock of the install's time zone (`TIMEZONE`, else php.ini) with no offset, so days and hours group in SQL as they are. Use PHP's clock, never SQLite's `date('now')`, which is UTC. The dashboard reads a stored time as UTC and formats it as UTC, which keeps that wall clock whatever the viewer's zone, and counts "x min ago" from the API's `now`
+- **A browser that sends no language is a bot** - a program driving a real browser runs the script under a browser's user agent, so `detect_bot()` cannot see it. Browsers people use send `Accept-Language`, so `detect_script_bot()` sends a `?collect` without it to Bots and drops a `?event`. Only for those two: a crawler reading a page or the pixel is told apart by its user agent. Stored rows are not moved, since `language` is empty on every row older than the column. No more per-visit rules than this one without measuring what they cost: English, desktop, one page and no referrer also describes real people
 - **Data quality** — normalize_path strips tracking params (fbclid, gclid, utm_*) and, for Meta ad traffic only, Meta's per-click brid (media_type is kept: it records the ad format); normalize_referrer groups social domains, IDN decode
 
 ## Design
