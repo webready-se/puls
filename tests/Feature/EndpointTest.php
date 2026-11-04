@@ -266,6 +266,25 @@ test('log endpoint deduplicates within 10 seconds', function () {
     expect($r2['status'])->toBe(204);
 });
 
+test('log endpoint counts a GET or HEAD, not what a rendered page posts', function () {
+    $db = getTestDb();
+    $send = fn (string $method, string $path) => http($method, "/?log&s=log-method&p={$path}", [
+        'header' => 'User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)',
+    ]);
+    $visits = fn (string $path) => (int) $db->query("SELECT COUNT(*) FROM bot_visits WHERE site = 'log-method' AND path = '{$path}'")->fetchColumn();
+    try {
+        expect($send('POST', '/beacon')['status'])->toBe(204)
+            ->and($visits('/beacon'))->toBe(0);
+
+        $send('GET', '/read');
+        $send('HEAD', '/checked');
+        expect($visits('/read'))->toBe(1)
+            ->and($visits('/checked'))->toBe(1);
+    } finally {
+        $db->exec("DELETE FROM bot_visits WHERE site = 'log-method'");
+    }
+});
+
 test('collect endpoint rejects empty payload', function () {
     $r = http('POST', '/?collect', [
         'header' => 'Content-Type: application/json',
