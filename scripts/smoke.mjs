@@ -671,7 +671,7 @@ async function main() {
     if (!await waitFor(() => q('.site-overview-row'), 'site overview on All sites')) return fails;
     // The site picker: a button with the sites in a list under it, opened on the site on screen,
     // without a filter for three sites; Escape closes it back to the button
-    expect(q('#agents-link')?.href.includes('docs/api.md') && !q('#agents-link').hidden, 'the menu has a line about the read API and AI assistants, next to Export');
+    expect(q('#agents-link')?.href.includes('docs/api.md') && !q('#agents-link').hidden, 'the menu has a line about the read API and AI assistants, above Log out');
     const siteBtn = q('#site-btn');
     const pickerKey = (k) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
     siteBtn?.click();

@@ -849,7 +849,7 @@ body {
 .menu-fold-toggle .fold-summary { flex-basis: 100%; margin-left: 0; text-align: left; font-size: 12px; }
 .menu-fold-body { display: flex; flex-direction: column; gap: 8px; }
 .menu-fold-body[hidden] { display: none; }
-.menu-link { font-size: 12px; color: var(--text-2); }
+.menu-link { font-size: 12px; color: var(--text-3); text-align: center; }
 .menu-link:hover { color: var(--accent); }
 .menu-label { font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 
