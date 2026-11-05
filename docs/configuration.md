@@ -134,6 +134,7 @@ php puls share:create --groups=a,b --label="Client Q1" --expires=2026-06-30   # 
 php puls share:list                      # List tokens: what they read, last day, last use
 php puls share:edit <token> --expires=2027-12-31   # New last day, --label (none removes it) or --groups; the token stays the same
 php puls share:revoke <token>            # Revoke a share token
+php puls bots:unknown [<site>] --days=30 # The user agents behind visits Puls has no name for
 php puls exclude:add <site> <ip>         # Stop counting an IP or range (e.g. 81.2.3.0/24, site * = all)
 php puls exclude:list                    # List excluded IPs
 php puls exclude:remove <site> <ip>      # Count an excluded IP again

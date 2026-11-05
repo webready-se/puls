@@ -28,6 +28,8 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `GET /?api&sites` | Yes | List tracked sites |
 | `GET /?api&groups` | Yes | The site groups and their sites (`{group: [sites]}`, limited to the user's sites) |
 | `GET /?api&format=md` | Yes | The same as `?api` as a Markdown report for an AI assistant; also with a share token |
+| `GET /?api&botDays` | Yes | Bot visits per day, site and bot, from the counts; also with a share token |
+| `GET /?api&botAgents` | Yes | The user agents behind unknown bots, or one with `&bot=`; also with a share token |
 | `GET /?api&botDetail` | Yes | Only the most crawled pages and the latest bot activity, which read the rows (the dashboard asks when Bots is open; `&bots=summary` leaves them out of `?api`); also with a share token |
 | `GET /?api&hours=YYYY-MM-DD` | Yes | One day's pageviews and visitors per hour, with the dashboard's filters (the hourly card); also with a share token |
 | `GET /` | Yes | Dashboard |

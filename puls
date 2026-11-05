@@ -23,6 +23,7 @@
  *   php puls exclude:remove [<site> <ip>]          Count an excluded IP again
  *   php puls nginx:config                          Generate Nginx config for a site
  *   php puls stats:build                           Sum every finished day for the dashboard at once
+ *   php puls bots:unknown [<site>] [--days=30]     The user agents behind visits Puls has no name for
  */
 
 $config = require __DIR__ . '/config.php';
@@ -50,6 +51,7 @@ match ($command) {
     'exclude:remove' => excludeRemove($config, $argv[2] ?? null, $argv[3] ?? null),
     'nginx:config'  => nginxConfig(),
     'stats:build'   => statsBuild($config['db_path']),
+    'bots:unknown'  => botsUnknown($config['db_path'], $argv),
     default         => printHelp(),
 };
 
@@ -653,6 +655,40 @@ function sitesCleanPaths(array $config, array $argv): void
     $db->commit();
 
     echo "\nCleaned paths for '{$siteName}'.\n";
+}
+
+// =====================================================================
+// bots:unknown
+// =====================================================================
+
+// The user agents behind the visits named Unknown bot, crawler, spider or client, to stop them
+// on the site or to paste into an issue so Puls can learn their names
+function botsUnknown(string $dbPath, array $argv): void
+{
+    if (!file_exists($dbPath)) {
+        echo "No database found. Start tracking to create it.\n";
+        exit(1);
+    }
+    $site = null;
+    $days = 30;
+    foreach (array_slice($argv, 2) as $arg) {
+        if (str_starts_with($arg, '--days=')) $days = max(1, (int) substr($arg, 7));
+        elseif (!str_starts_with($arg, '--')) $site = $arg;
+    }
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $where = "bot_name LIKE 'Unknown %' AND created_at >= ?" . ($site ? ' AND site = ?' : '');
+    $stmt = $db->prepare("SELECT user_agent, bot_name, COUNT(*) as visits FROM bot_visits WHERE {$where} GROUP BY user_agent, bot_name ORDER BY visits DESC, user_agent LIMIT 50");
+    $stmt->execute(array_merge([date('Y-m-d', strtotime("-{$days} days"))], $site ? [$site] : []));
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) {
+        echo "No unknown bots in the last {$days} days" . ($site ? " on '{$site}'" : '') . ".\n";
+        return;
+    }
+    foreach ($rows as $r) {
+        echo sprintf("%7d  %-16s %s\n", $r['visits'], $r['bot_name'], $r['user_agent']);
+    }
+    echo "\nThe top " . count($rows) . " user agents, the last {$days} days" . ($site ? " on '{$site}'" : ', all sites') . ".\n";
 }
 
 // =====================================================================
@@ -1697,6 +1733,7 @@ function printHelp(): void
       php puls exclude:remove [<site> <ip>]    Count an excluded IP again
       php puls nginx:config                    Generate Nginx config for a site
       php puls stats:build                     Sum every finished day for the dashboard at once
+      php puls bots:unknown [<site>]           The user agents behind visits Puls has no name for
 
     Options:
       --sites    Comma-separated list of sites the user can access.
