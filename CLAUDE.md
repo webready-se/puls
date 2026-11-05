@@ -27,6 +27,7 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `GET /?api&days=7[&site=x]` | Yes | JSON API |
 | `GET /?api&sites` | Yes | List tracked sites |
 | `GET /?api&groups` | Yes | The site groups and their sites (`{group: [sites]}`, limited to the user's sites) |
+| `GET /?api&format=md` | Yes | The same as `?api` as a Markdown report for an AI assistant; also with a share token |
 | `GET /?api&botDetail` | Yes | Only the most crawled pages and the latest bot activity, which read the rows (the dashboard asks when Bots is open; `&bots=summary` leaves them out of `?api`); also with a share token |
 | `GET /?api&hours=YYYY-MM-DD` | Yes | One day's pageviews and visitors per hour, with the dashboard's filters (the hourly card); also with a share token |
 | `GET /` | Yes | Dashboard |
@@ -65,7 +66,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (421 tests, unit + feature)
+tests/                  — Pest test suite (429 tests, unit + feature)
 docs/integrations.md    - Tracking setup: script attributes, events, keeping personal data out of URLs, excluding own visits, reverse proxies
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading
@@ -103,6 +104,7 @@ docker-compose.yml      — One-command setup with volume for /app/data
 - **Privacy-first** - visitor hash of IP + UA + a random salt per day (`salts` table, deleted at the first request of the next day), so old hashes can never be recomputed; no cookies, no PII stored
 - **Forge auto-detection** — `resolve_path()` in config.php detects `/releases/\d+/` pattern and resolves to site root
 - **Sender owns the data** - Puls gives sites the controls (`data-query`, `data-path`, no PII in `puls.track`) and documents the risks, but does not inspect, mask or audit what they send. Masking was considered and declined: pattern matching would silently damage legitimate paths and give false confidence
+- **A report an assistant can read safely** - `?api&format=md` (`report_markdown`, from the same data as the JSON). Its reader has write access to a site's code, and paths, referrers and event names are what any browser chose to send, so every such value goes through `md_code` (one line, a code span that cannot be closed early) and a name someone typed through `md_text`. A new section must keep to that, and it uses the bot totals only, so the report stays cheap on a site with many crawler visits
 - **A token reads one site or some groups** - as the kit says: one token per reader, and no list of sites, since a group follows its sites and a list has to be kept up. To the API it is a user limited to those sites (`share_token_sites`), and a group without sites must never reach that as an empty list, which means every site there. Tokens made before the group work keep what they had: no prefix, and no last day unless given one
 - **Share tokens in plain text** - hashing them (as Hamstra does) was considered and declined: a token only reads statistics, which live in the same database, so anyone with the database already has what the token protects. Plain text lets `share:list` show a link again, and needs no migration that the CLI (which opens the database without running migrations) would have to handle
 - **Times without an offset** - a stored time is the wall clock of the install's time zone (`TIMEZONE`, else php.ini) with no offset, so days and hours group in SQL as they are. Use PHP's clock, never SQLite's `date('now')`, which is UTC. The dashboard reads a stored time as UTC and formats it as UTC, which keeps that wall clock whatever the viewer's zone, and counts "x min ago" from the API's `now`

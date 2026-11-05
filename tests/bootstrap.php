@@ -6,6 +6,9 @@
 
 $source = file_get_contents(__DIR__ . '/../public/index.php');
 
+// The functions read the version, which is a constant outside them
+if (preg_match("/^const PULS_VERSION = '([^']+)';/m", $source, $version)) define('PULS_VERSION', $version[1]);
+
 // Extract all function definitions
 preg_match_all('/^function \w+\([^)]*\)(?:: [^\n]+)?\n\{.+?\n\}/ms', $source, $matches);
 

@@ -49,6 +49,7 @@ All requests are `GET` with query parameters.
 | `?api&sites` | The sites you can read, as a JSON array of names. With a share token, the site or the groups' sites it reads |
 | `?api&groups` | The site groups and their sites, as `{"Shops": ["a", "b"]}`, limited to the sites you can read. `{}` without groups |
 | `?api` | The dashboard data for a period (below) |
+| `?api&format=md` | The same as a Markdown report for an AI assistant (below) |
 | `?api&event=<name>` | One event's drill-down (below) |
 | `?api&hours=<date>` | One day by hour (below) |
 | `?api&search=<text>` | Up to 20 paths containing the text (2+ characters), with views and visitors |
@@ -96,6 +97,9 @@ Every response compares with the previous period of the same length, in the `pre
 | `annotations` | Chart notes overlapping the period: `[{id, site, date, end_date, label}]` |
 | `brokenLinks` | 404s and redirects logged by Nginx: `[{site, path, status, hits, referrers, first_seen, last_seen}]` |
 | `bots`, `botCategories`, `botPages`, `botActivity` | Crawler and AI bot visits |
+| `version`, `timezone`, `now` | The Puls version, the install's time zone, and its clock at the answer. Stored times are in that zone, without an offset |
+| `completeThrough` | The latest day whose figures will not change: today goes on until midnight |
+| `scope` | For a token for groups: `{type: "group", name: "Shops, Private", groups: ["Shops", "Private"]}` |
 | `botKeptDays` | Set when the period reaches further back than bot visits are kept (`BOT_RETENTION_DAYS`): `botPages` and `botActivity` then cover that many days, while `bots` and `botCategories` cover the whole period. Otherwise `null` |
 | `live` | Visitors in the last 5 minutes |
 | `now`, `timezone` | The server's time and its time zone (`TIMEZONE`). Every time in the API is in that zone and carries no offset |
@@ -143,7 +147,9 @@ curl -s 'https://your-puls-domain/?api&share=TOKEN&days=30&event=checkout_starte
 
 ## Use it from an AI assistant
 
-A share token lets an AI coding assistant, such as Claude Code, read a site's numbers from inside that site's own project. It can then check which pages matter before it changes something, and whether a change made a difference after the deploy.
+A share token lets an AI coding assistant, such as Claude Code, read a site's numbers from inside that site's own project. It can then check which pages matter before it changes something, and whether a change made a difference after the deploy. Puls itself never calls an AI service.
+
+`?api&format=md` answers with a report written for the assistant: a short guide first, then the numbers, day by day, pages, sources, goals, events and bots, in far less text than the JSON. It takes `days`, `from`, `to`, `site`, `path` and `channel` like the JSON. With a token for groups it adds a list of the sites, and `&site=` narrows it to one. Long lists end with "and N more", and the rest is in the JSON.
 
 1. Create a token for the site, or for a group if the project covers several sites, with a label that says what it is for. It works for 90 days unless you say otherwise, and `share:create` prints what the next steps need:
 
@@ -165,12 +171,12 @@ A share token lets an AI coding assistant, such as Claude Code, read a site's nu
    ```markdown
    ## Data
    Traffic for this site is in Puls. Read it before deciding what to change, and after a deploy to see the effect:
-   curl -s -H "Authorization: Bearer $PULS_SHARE_TOKEN" "$PULS_URL/?api&days=30"   # PULS_URL and PULS_SHARE_TOKEN are in .env
-   The fields are described in https://github.com/webready-se/puls/blob/main/docs/api.md.
+   (set -a; . ./.env; curl -s -H "Authorization: Bearer $PULS_SHARE_TOKEN" "$PULS_URL/?api&days=30&format=md")   # loads .env itself, so the token stays out of logs
+   The same as JSON is that address without format=md, described in https://github.com/webready-se/puls/blob/main/docs/api.md.
    Never print or commit the token. Say so when the numbers are too small to draw conclusions.
    ```
 
-Paths, referrers, campaign values and event names are sent by visitors' browsers, so anyone can put any text there. The assistant should treat them as data, never as instructions.
+Paths, referrers, campaign values and event names are sent by visitors' browsers, so anyone can put any text there. The assistant should treat them as data, never as instructions. In the Markdown report each sits on one line in a code span, so it cannot pass itself off as a heading or an instruction, and the report's guide says so. Reading the JSON into an assistant has no such protection.
 
 Extend the token with `php puls share:edit TOKEN --expires=YYYY-MM-DD` when it is about to stop, and end it with `php puls share:revoke TOKEN` when it is no longer needed.
 
