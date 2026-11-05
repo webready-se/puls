@@ -18,6 +18,7 @@ afterAll(function () {
     if (isset($GLOBALS['restricted_server'])) stopServer($GLOBALS['restricted_server']);
     if (isset($GLOBALS['proxy_server'])) stopServer($GLOBALS['proxy_server']);
     if (isset($GLOBALS['zone_server'])) stopServer($GLOBALS['zone_server']);
+    if (isset($GLOBALS['white_label_server'])) stopServer($GLOBALS['white_label_server']);
     if (isset($GLOBALS['concurrent_server'])) stopServer($GLOBALS['concurrent_server']);
     exec('rm -rf ' . escapeshellarg($GLOBALS['test_dir']));
 });
@@ -1168,6 +1169,23 @@ test('llms.txt tells an agent how to read Puls, and an install does not serve it
 
     // A login-walled install is not a public docs site, and a white-labelled one should not name Puls
     expect(http('GET', '/llms.txt')['status'])->toBe(404);
+});
+
+test('the dashboard and a shared link point an agent at llms.txt in their source, the login page does not', function () {
+    $hint = 'rel="help"';
+    expect(http('GET', '/?share=' . createTestShareToken('hint-' . uniqid()))['body'])->toContain($hint)->toContain('llms.txt');
+    expect(http('GET', '/?login')['body'])->not->toContain($hint);
+    expect(http('GET', '/')['body'])->not->toContain($hint);
+});
+
+test('a white-labelled install does not point at Puls in its source', function () {
+    if (!isset($GLOBALS['white_label_server'])) {
+        $GLOBALS['white_label_server'] = startServer(8094, $GLOBALS['test_env'] + ['APP_NAME' => 'Acme Stats']);
+    }
+    $page = http('GET', '/?share=' . createTestShareToken('hint-wl-' . uniqid()), [], 8094)['body'];
+    expect($page)->not->toContain('rel="help"')->not->toContain('llms.txt');
+    // The dashboard's script hides the menu's link when the install has a name of its own
+    expect(file_get_contents(__DIR__ . '/../../public/dashboard.js'))->toContain("getElementById('agents-link').hidden = true");
 });
 
 test('a token notes the day it was last used', function () {

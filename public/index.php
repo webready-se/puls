@@ -174,7 +174,7 @@ if ($shareToken !== null) {
             'site' => $share['site'],
             'groups' => share_token_groups($share),
             'sites' => $shareSites,
-        ]));
+        ]) . agent_hint($config));
         respond($html, 200, 'text/html', security_headers());
     }
     respond('Dashboard file not found.', 404, 'text/plain');
@@ -347,7 +347,7 @@ $dashboard = __DIR__ . '/dashboard.html';
 if (file_exists($dashboard)) {
     // The version in the stylesheet and script URLs, so a new release is fetched and not read from cache
     $html = str_replace('__PULS_VERSION__', PULS_VERSION, file_get_contents($dashboard));
-    $html = inject_after_title($html, config_block($config));
+    $html = inject_after_title($html, config_block($config) . agent_hint($config));
     respond($html, 200, 'text/html', security_headers());
 }
 respond('Dashboard file not found.', 404, 'text/plain');
@@ -2569,6 +2569,14 @@ function config_block(array $config, ?array $share = null): string
         'share' => $share,
     ];
     return '<script type="application/json" id="puls-config">' . json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';
+}
+
+// For an agent reading the page's source: where it says how to read this install. Nothing a person
+// sees, and only on pages past the login or a token, since an install is not a public docs site
+function agent_hint(array $config): string
+{
+    if ($config['app_name'] !== 'Puls') return '';
+    return '<link rel="help" type="text/plain" title="For AI agents: how to read this" href="https://raw.githubusercontent.com/webready-se/puls/main/llms.txt">';
 }
 
 function inject_after_title(string $html, string $markup): string

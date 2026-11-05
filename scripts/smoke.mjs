@@ -625,7 +625,8 @@ async function main() {
     const foot = q('#app .foot');
     expect(foot && /^Puls \d+\.\d+\.\d+ · from the tracking script, updated \d\d:\d\d$/.test(foot.firstElementChild.textContent), 'footer names Puls, its version and when it was updated (no zone: the viewer shares it)');
     expect(foot && foot.querySelector('a[href="https://webready.se"]') && foot.querySelectorAll('.foot-marks svg').length === 2 && foot.querySelector('.foot-marks a[href="https://github.com/webready-se/puls"]') && foot.querySelector('.foot-marks a[href="https://github.com/webready-se/vaka"]'), 'footer credit links Webready, with only the public tools\' marks (today Puls and Vaka), each linked');
-    expect(foot?.querySelector('a[href$="/blob/main/llms.txt"]')?.textContent === 'For AI agents', 'the footer points at llms.txt in the repository');
+    expect(!foot?.querySelector('a[href*="llms"]'), 'the footer keeps to its two halves, with no link for agents');
+    expect(q('head link[rel="help"][href$="/llms.txt"]'), 'the page source points an agent at llms.txt');
     // Figtree, self-hosted, actually loads (a CSP without font-src would block it silently)
     await document.fonts.ready;
     expect([...document.fonts].some((f) => f.family.replace(/"/g, '') === 'Figtree' && f.status === 'loaded'), 'Figtree is loaded');
@@ -670,6 +671,7 @@ async function main() {
     if (!await waitFor(() => q('.site-overview-row'), 'site overview on All sites')) return fails;
     // The site picker: a button with the sites in a list under it, opened on the site on screen,
     // without a filter for three sites; Escape closes it back to the button
+    expect(q('#agents-link')?.href.includes('docs/api.md') && !q('#agents-link').hidden, 'the menu has a line about the read API and AI assistants, above Log out');
     const siteBtn = q('#site-btn');
     const pickerKey = (k) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
     siteBtn?.click();
