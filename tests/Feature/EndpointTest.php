@@ -2385,6 +2385,8 @@ test('a request does not wait for another from the same browser while that one r
         'content' => http_build_query(['_login' => 1, '_token' => json_decode($r['body'], true)['token'], 'username' => 'admin', 'password' => 'admin-pass']),
     ], 8093);
     if (preg_match('/^Set-Cookie:\s*(PHPSESSID=[^;]+)/mi', implode("\n", $r['headers']), $m)) $cookie = $m[1];
+    // This test has failed in CI now and then with a 401 below: say whether the login was the step
+    expect($r['headers'][0] ?? 'no answer')->toContain('302');
 
     // The dashboard's request first, then a small one from the same browser while it runs
     $base = 'http://localhost:' . $GLOBALS['test_ports'][8093];
