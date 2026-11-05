@@ -225,3 +225,18 @@ test('a busy database means the rows are read and the day summed later, not an e
     sum_closed_day($db);
     expect(file_get_contents(dirname($file) . '/.summed'))->toBe($day);
 });
+
+test('migration v32 names the AI assistants in stored visits, and has the summary counted anew', function () {
+    $dir = sys_get_temp_dir() . '/puls-v32-' . uniqid();
+    register_shutdown_function(fn () => exec('rm -rf ' . escapeshellarg($dir)));
+    $db = get_db($dir . '/puls.sqlite');
+    $insert = $db->prepare("INSERT INTO pageviews (site, path, referrer, visitor_hash, created_at) VALUES ('s', '/', ?, ?, '2026-01-01 10:00:00')");
+    foreach (['chatgpt.com', 'chat.openai.com', 'www.perplexity.ai', 'claude.ai', 'example.org'] as $i => $referrer) $insert->execute([$referrer, "v{$i}"]);
+    $db->exec("INSERT INTO daily (site, date, kind, key, views) VALUES ('s', '2026-01-01', 'day', '', 5)");
+    $db->exec('PRAGMA user_version = 31');
+
+    run_migrations($db);
+
+    expect($db->query('SELECT referrer FROM pageviews ORDER BY id')->fetchAll(PDO::FETCH_COLUMN))->toBe(['ChatGPT', 'ChatGPT', 'Perplexity', 'Claude', 'example.org'])
+        ->and((int) $db->query('SELECT COUNT(*) FROM daily')->fetchColumn())->toBe(0);
+});

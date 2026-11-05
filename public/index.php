@@ -878,6 +878,7 @@ function channel_sql(): string
 {
     return "CASE
         WHEN MAX(utm_medium) IN ('paid', 'cpc', 'cpm', 'ppc', 'retargeting', 'paid_social') THEN 'Paid'
+        WHEN MAX(referrer) IN ('ChatGPT', 'Perplexity', 'Claude', 'Copilot', 'Gemini') OR MAX(utm_source) IN ('chatgpt.com', 'perplexity', 'perplexity.ai', 'claude.ai', 'copilot.com', 'copilot.microsoft.com', 'gemini.google.com') THEN 'AI'
         WHEN MAX(utm_source) IS NOT NULL THEN 'Campaign'
         WHEN MAX(referrer) IN ('Google', 'Bing') THEN 'Organic search'
         WHEN MAX(referrer) IN ('Facebook', 'Instagram', 'Twitter/X', 'LinkedIn') THEN 'Social'
@@ -1540,18 +1541,11 @@ function get_api_data(array $config, array $user): string
     $channelFilter = '';
     $channelParams = [];
     if ($channel) {
-        $channelConditions = [
-            'paid'           => "MAX(utm_medium) IN ('paid','cpc','cpm','ppc','retargeting','paid_social')",
-            'campaign'       => "MAX(utm_source) IS NOT NULL AND MAX(utm_medium) NOT IN ('paid','cpc','cpm','ppc','retargeting','paid_social')",
-            'organic-search' => "MAX(utm_source) IS NULL AND MAX(referrer) IN ('Google','Bing')",
-            'social'         => "MAX(utm_source) IS NULL AND MAX(referrer) IN ('Facebook','Instagram','Twitter/X','LinkedIn')",
-            'referral'       => "MAX(utm_source) IS NULL AND MAX(referrer) IS NOT NULL AND MAX(referrer) NOT IN ('Google','Bing','Facebook','Instagram','Twitter/X','LinkedIn')",
-            'direct'         => "MAX(utm_source) IS NULL AND MAX(referrer) IS NULL",
-        ];
-        if (isset($channelConditions[$channel])) {
-            $cond = $channelConditions[$channel];
-            $channelFilter = "AND visitor_hash IN (SELECT visitor_hash FROM pageviews WHERE {$dateFilter} {$siteFilter} GROUP BY visitor_hash HAVING {$cond})";
-            $channelParams = array_merge($dateParams, $siteParams);
+        // The same words as channel_sql(), which says who belongs to which
+        $channelNames = ['paid' => 'Paid', 'ai' => 'AI', 'campaign' => 'Campaign', 'organic-search' => 'Organic search', 'social' => 'Social', 'referral' => 'Referral', 'direct' => 'Direct'];
+        if (isset($channelNames[$channel])) {
+            $channelFilter = "AND visitor_hash IN (SELECT visitor_hash FROM pageviews WHERE {$dateFilter} {$siteFilter} GROUP BY visitor_hash HAVING " . channel_sql() . " = ?)";
+            $channelParams = array_merge($dateParams, $siteParams, [$channelNames[$channel]]);
         }
     }
 
@@ -2844,6 +2838,13 @@ function normalize_referrer(string $host): string
         'www.bing.com'     => 'Bing',
         'search.yahoo.com' => 'Yahoo',
         'duckduckgo.com'   => 'DuckDuckGo',
+        'chatgpt.com'      => 'ChatGPT',
+        'chat.openai.com'  => 'ChatGPT',
+        'perplexity.ai'    => 'Perplexity',
+        'www.perplexity.ai'=> 'Perplexity',
+        'claude.ai'        => 'Claude',
+        'copilot.microsoft.com' => 'Copilot',
+        'gemini.google.com'=> 'Gemini',
     ];
 
     $name = $map[strtolower($host)] ?? $host;
@@ -2966,7 +2967,7 @@ function site_groups(PDO $db): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 31; // Bump this when adding new migrations
+    $currentVersion = 32; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -3474,6 +3475,17 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
         $columns = array_column($db->query('PRAGMA table_info(share_tokens)')->fetchAll(PDO::FETCH_ASSOC), 'name');
         if (!in_array('group_names', $columns, true)) $db->exec('ALTER TABLE share_tokens ADD COLUMN group_names TEXT');
         if (!in_array('last_used_at', $columns, true)) $db->exec('ALTER TABLE share_tokens ADD COLUMN last_used_at TEXT');
+    }
+
+    // v32: AI assistants are a channel of their own (channel_sql), so stored visits get their names,
+    // and the summary, a cache, is counted anew as needed: it holds them under Referral and Campaign
+    if ($version < 32) {
+        $db->exec("UPDATE pageviews SET referrer = CASE referrer
+            WHEN 'chatgpt.com' THEN 'ChatGPT' WHEN 'chat.openai.com' THEN 'ChatGPT'
+            WHEN 'perplexity.ai' THEN 'Perplexity' WHEN 'www.perplexity.ai' THEN 'Perplexity'
+            WHEN 'claude.ai' THEN 'Claude' WHEN 'copilot.microsoft.com' THEN 'Copilot' WHEN 'gemini.google.com' THEN 'Gemini'
+            END WHERE referrer IN ('chatgpt.com', 'chat.openai.com', 'perplexity.ai', 'www.perplexity.ai', 'claude.ai', 'copilot.microsoft.com', 'gemini.google.com')");
+        $db->exec('DELETE FROM daily');
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);

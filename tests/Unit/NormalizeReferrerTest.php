@@ -42,3 +42,15 @@ test('decodes punycode domains', function () {
     }
     expect(normalize_referrer('xn--bcher-kva.example'))->toBe('bücher.example');
 });
+
+test('names the AI assistants', function (string $host, string $name) {
+    expect(normalize_referrer($host))->toBe($name);
+})->with([
+    ['chatgpt.com', 'ChatGPT'],
+    ['chat.openai.com', 'ChatGPT'],
+    ['perplexity.ai', 'Perplexity'],
+    ['www.perplexity.ai', 'Perplexity'],
+    ['claude.ai', 'Claude'],
+    ['copilot.microsoft.com', 'Copilot'],
+    ['gemini.google.com', 'Gemini'],
+]);

@@ -1993,11 +1993,11 @@
   }
 
   var channelSlugs = {
-    'Paid': 'paid', 'Campaign': 'campaign', 'Organic search': 'organic-search',
+    'Paid': 'paid', 'AI': 'ai', 'Campaign': 'campaign', 'Organic search': 'organic-search',
     'Social': 'social', 'Referral': 'referral', 'Direct': 'direct'
   };
   var channelColors = {
-    'Paid': '#ef4444', 'Campaign': '#f59e0b', 'Organic search': '#22c55e',
+    'Paid': '#ef4444', 'AI': '#6366f1', 'Campaign': '#f59e0b', 'Organic search': '#22c55e',
     'Social': '#8b5cf6', 'Referral': '#06b6d4', 'Direct': '#6b7280'
   };
 
