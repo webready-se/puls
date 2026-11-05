@@ -6,7 +6,7 @@ Everything the dashboard shows is available as JSON from the same URL, so other 
 
 There are two ways in:
 
-- **Share token (for other applications).** Create one with `php puls share:create` (below) and send it as a header, `Authorization: Bearer TOKEN`, which keeps it out of URLs, server logs and shell history, or add `&share=TOKEN` to every request (the header works for `?api`, not for the shared dashboard page). Some Apache hosts drop the header before PHP sees it, which gives a `404`: add the two lines in [Apache](install.md#apache) to `public/.htaccess`, or use `&share=`. A token needs no login. An expired token gets `401` with the day it expired and how to extend it, and an unknown or revoked one `404`.
+- **Share token (for other applications).** Create one with `php puls share:create` (below) and send it as a header, `Authorization: Bearer TOKEN`, which keeps it out of URLs, server logs and shell history, or add `&share=TOKEN` to every request (the header works for `?api`, not for the shared dashboard page). Some Apache hosts drop the header before PHP sees it, which gives a `404`: add the two lines in [Apache](install.md#apache) to `public/.htaccess`, or use `&share=`. A token needs no login. An expired token gets `401` with the day it expired and how to extend it, and an unknown or revoked one `404` with a short message.
 - **Session (the dashboard itself).** A logged-in browser session. Without one, `?api` returns `401 {"error": "Unauthorized"}`. Users restricted to some sites only see those; asking for another site returns `{"error": "Access denied"}`.
 
 Treat a share token like a password: anyone with it can read the statistics of what it covers, and the same URL without `api` opens the read-only dashboard.
@@ -60,7 +60,7 @@ All requests are `GET` with query parameters.
 |-----------|---------|
 | `days=30` | Period of 1 to 365 days ending today. Default 7 |
 | `from=2026-09-01&to=2026-09-30` | A fixed date range instead of `days` (both required, `YYYY-MM-DD`) |
-| `site=name` | One site. Implied with a share token or a user with a single site |
+| `site=name` | One site. Implied with a token for one site or a user with a single site. A token for groups or a user with several sites picks one of theirs, by the name `?api&sites` lists |
 | `path=/pricing` | Only pageviews of this exact path (the page drill-down) |
 | `channel=paid` | Only visitors from one channel: `paid`, `campaign`, `organic-search`, `social`, `referral`, `direct`. Goals are left out when `channel` or `path` is set |
 | `expand=pages` | Return up to 1,000 rows for one list instead of the top 10 (50 for `events`): `pages`, `referrers`, `entryPages`, `exitPages`, `utm`, `events`, `outbound`, `bots`, `botPages`, `botActivity` |
@@ -149,7 +149,7 @@ curl -s 'https://your-puls-domain/?api&share=TOKEN&days=30&event=checkout_starte
 
 A share token lets an AI coding assistant, such as Claude Code, read a site's numbers from inside that site's own project. It can then check which pages matter before it changes something, and whether a change made a difference after the deploy. Puls itself never calls an AI service.
 
-[`llms.txt`](../llms.txt) in this repository is the short version for an agent. `?api&format=md` answers with a report written for the assistant: a short guide first, then the numbers, day by day, pages, sources, goals, events and bots, in far less text than the JSON. It takes `days`, `from`, `to`, `site`, `path` and `channel` like the JSON. With a token for groups it adds a list of the sites, and `&site=` narrows it to one. Long lists end with "and N more", and the rest is in the JSON.
+[`llms.txt`](../llms.txt) in this repository is the short version for an agent. `?api&format=md` answers with a report written for the assistant: a short guide first, then the numbers, day by day, pages, sources, goals, events and bots, in far less text than the JSON. It takes `days`, `from`, `to`, `site`, `path` and `channel` like the JSON. With a token for groups it adds a list of the sites, and `&site=` narrows it to one. Long lists end with "and N more", and the rest is in the JSON. The guide also says how to look closer: `&site=`, `&path=`, `&event=<name>&group=<key>` and `&hours=<date>`.
 
 1. Create a token for the site, or for a group if the project covers several sites, with a label that says what it is for. It works for 90 days unless you say otherwise, and `share:create` prints what the next steps need:
 
