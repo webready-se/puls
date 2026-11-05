@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Vaka's mark in the footer.** The credit shows the marks of the tools that are released and public, each linked, and Vaka now is.
 - **Campaigns name the platform.** The UTM list says Instagram, Facebook, Messenger and Audience Network where Meta's ads send `ig`, `fb`, `msg` and `an`, and Google Ads for `google` with `cpc`, `ppc` or `paid`. Only the label changes: hovering a row shows what was sent, and the API and the exports keep it.
 - **Ties in the dashboard's lists come in a fixed order.** Pages, sources, campaigns, countries, browsers, channels and entry and exit pages with the same count are listed by name, and the best day and peak hour take the earliest; before, the order of a tie was up to the database and could change between two loads.
 - **The chart names the month.** The dates under the bars said only the day and the weekday ("3 Tue"), so a long period or a custom range, scrolled back, did not say which month a day was in. Each month now starts on a line under the dates, at a small tick between the 31st and the 1st, and the month in view stays at the chart's left edge while it scrolls, until the next month's label reaches it. The bars are 12 px lower to make room, so the chart keeps its height. The dates read "Tue 3"; tooltips, notes and a release's "First seen" read "Tue, Nov 3", with the year when it is not this one; a drill-down chart over more than 31 days labels its dates "Nov 3".
