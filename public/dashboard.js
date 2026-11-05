@@ -8,6 +8,9 @@
   const isShared = !!pulsConfig.share;
   const shareToken = isShared ? pulsConfig.share.token : null;
   const shareSite = isShared ? pulsConfig.share.site : null;
+  // A token for groups reads several sites, and its dashboard picks among them as a login does
+  const shareSites = isShared ? (pulsConfig.share.sites || []) : [];
+  const shareMany = shareSites.length > 1;
 
   // --- Branding ---
   const branding = pulsConfig.branding || {};
@@ -27,7 +30,7 @@
 
   // --- State ---
   let currentDays = isShared ? 7 : (+(localStorage.getItem('puls-days')) || 7);
-  let currentSite = isShared ? shareSite : (localStorage.getItem('puls-site') || '');
+  let currentSite = isShared ? (shareSites.length === 1 ? shareSites[0] : '') : (localStorage.getItem('puls-site') || '');
   let currentFrom = isShared ? '' : (localStorage.getItem('puls-from') || '');
   let currentTo = isShared ? '' : (localStorage.getItem('puls-to') || '');
   let currentPath = '';
@@ -482,17 +485,20 @@
   // Shared mode: hide admin UI
   if (isShared) {
     document.getElementById('menu-btn').style.display = 'none';
-    document.title = shareSite + ' — Puls';
+    document.title = (shareSite || (pulsConfig.share.groups || []).join(', ')) + ' — Puls';
   }
 
   // Load sites, then data
-  if (isShared) {
-    sites = [shareSite];
+  if (isShared && !shareMany) {
+    sites = shareSites;
     load(7);
   } else {
     Promise.all([fetch(apiUrl('?api&sites')), fetch(apiUrl('?api&groups'))])
       .then(function(rs) {
-        if (rs[0].status === 401) { location.href = '/?login'; return; }
+        if (rs[0].status === 401) {
+          if (isShared) load(7); else location.href = '/?login';
+          return;
+        }
         return Promise.all([rs[0].json(), rs[1].ok ? rs[1].json() : {}]);
       })
       .then(function(res) {
@@ -505,7 +511,7 @@
         // Restore saved site selection
         if (!currentSite || s.indexOf(currentSite) < 0) {
           currentSite = '';
-          localStorage.removeItem('puls-site');
+          if (!isShared) localStorage.removeItem('puls-site');
         }
         siteLabel();
         // Restore saved period or custom range
@@ -3606,7 +3612,7 @@
   // while pages are searched on the server. Paths start with /, so a query that does searches
   // pages only. One palette and no second shortcut; a user with one site sees pages as before
   function cmdSites(q) {
-    if (isShared || sites.length <= 1 || q.charAt(0) === '/') return [];
+    if (sites.length <= 1 || q.charAt(0) === '/') return [];
     return matchSites(q);
   }
 

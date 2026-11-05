@@ -1085,6 +1085,41 @@ async function main() {
   // would send is checked without a row in the database. puls.page() counts the current URL or a
   // path through the same rules as a pageview (data-query, data-collapse-ids), once per URL, never
   // another site's; calls queued before the script loaded are sent in order
+  // A token for a group: its dashboard picks among the group's sites, and shows no others
+  const groupToken = execFileSync('php', [join(root, 'puls'), 'share:create', '--groups=Shops', '--label=Smoke', '--expires=never'], { env, encoding: 'utf8', input: '' }).match(/PULS_SHARE_TOKEN=(\S+)/)?.[1];
+  const wait8 = loaded();
+  await send('Page.navigate', { url: `${base}/?share=${groupToken}` });
+  await wait8;
+  const groupSteps = async (token) => {
+    const fails = [];
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const q = (s) => document.querySelector(s);
+    const waitFor = async (fn, what) => {
+      for (let t = 0; t < 5000; t += 100) { if (fn()) return true; await sleep(100); }
+      fails.push(`timed out waiting for ${what}`);
+      return false;
+    };
+    const saved = localStorage.getItem('puls-site');
+    if (!await waitFor(() => q('#chart-card'), 'the dashboard of a token for a group')) return fails;
+    const read = await (await fetch('/?api&sites&share=' + token)).json();
+    if (read.slice().sort().join() !== 'demo.example.com,shop.example.com') fails.push(`a token for a group reads its sites and no others (reads ${read})`);
+    if (q('#site-picker').hidden) fails.push('the dashboard of a token for a group has the site picker');
+    if (q('#site-btn-label').textContent !== 'All sites') fails.push('the dashboard of a token for a group opens on its sites together');
+    if (q('#menu-btn').offsetParent) fails.push('the dashboard of a token for a group hides the menu');
+    q('#site-btn').click();
+    const option = await waitFor(() => q('#site-menu [data-site="shop.example.com"]'), 'a site of the group in the picker') && q('#site-menu [data-site="shop.example.com"]');
+    if (option) {
+      if ([...document.querySelectorAll('#site-menu [data-site]')].filter((o) => o.dataset.site).length !== 2) fails.push('the picker of a token for a group lists only its sites');
+      option.click();
+      await waitFor(() => q('#chart-card .card-subtitle')?.textContent.startsWith('shop.example.com'), 'a site picked on a token for a group');
+    }
+    if (localStorage.getItem('puls-site') !== saved) fails.push('a shared dashboard leaves the viewer\'s own saved site alone');
+    return fails;
+  };
+  const result7 = await send('Runtime.evaluate', { expression: `(${groupSteps.toString()})(${JSON.stringify(groupToken)})`, awaitPromise: true, returnByValue: true });
+  if (result7.exceptionDetails) errors.push(`Group token steps threw: ${result7.exceptionDetails.exception?.description}`);
+  failures.push(...(Array.isArray(result7.result?.value) ? result7.result.value : []));
+
   const trackerSteps = async () => {
     const fails = [];
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

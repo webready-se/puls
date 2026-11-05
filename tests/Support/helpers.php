@@ -142,9 +142,8 @@ function runCli(string $tmpDir, string $command, array $args = [], ?string $stdi
     );
 
     $cmd = "php " . escapeshellarg($wrapper) . " 2>&1";
-    if ($stdin !== null) {
-        $cmd = "echo " . escapeshellarg($stdin) . " | " . $cmd;
-    }
+    // Without input a prompt gets end of file, so a question never leaves a test run waiting
+    $cmd = $stdin !== null ? "echo " . escapeshellarg($stdin) . " | " . $cmd : $cmd . " < /dev/null";
     exec($cmd, $output, $exitCode);
     @unlink($wrapper);
 
