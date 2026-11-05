@@ -218,3 +218,24 @@ it('bots:unknown lists the user agents behind unknown bots, most visits first', 
     $one = runCli($this->tmpDir, 'bots:unknown', ['shop'])['output'];
     expect($one)->toContain('Oddbot/1.0')->not->toContain('Elsewhere/1.0');
 });
+
+it('share:create asked with nothing takes a range, 0 for all groups, or a name', function () {
+    groupSites($this->dbPath, ['One' => ['a.example'], 'Two' => ['b.example'], 'Three' => ['c.example']]);
+    $reads = fn (string $answer) => runCli($this->tmpDir, 'share:create', ['--label=Reader', '--expires=never'], $answer)['output'];
+
+    $reads('1-2');
+    expect(json_decode(shareRow($this->dbPath)['group_names'], true))->toBe(['One', 'Three']);
+
+    $reads('0');
+    expect(json_decode(shareRow($this->dbPath)['group_names'], true))->toBe(['One', 'Three', 'Two']);
+
+    $reads('Two');
+    expect(json_decode(shareRow($this->dbPath)['group_names'], true))->toBe(['Two']);
+
+    $reads('a.example');
+    $row = shareRow($this->dbPath);
+    expect($row['site'])->toBe('a.example')->and($row['group_names'])->toBeNull();
+
+    $bad = runCli($this->tmpDir, 'share:create', ['--label=Reader', '--expires=never'], 'nothing.example');
+    expect($bad['exit'])->not->toBe(0)->and($bad['output'])->toContain('nothing.example');
+});
