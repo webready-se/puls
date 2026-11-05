@@ -2623,10 +2623,7 @@
     document.body.style.overflow = 'hidden';
     dialogOpened(overlay.querySelector('.overlay-panel'));
 
-    var url = API + '?api&days=' + currentDays + '&expand=' + type;
-    if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
-    if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
-    if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
+    var url = viewUrl() + '&expand=' + type;
     if (type === 'botPages' || type === 'botActivity') url += '&botDetail';
     fetch(url)
       .then(function(r) { return r.json(); })

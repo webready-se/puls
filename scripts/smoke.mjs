@@ -318,6 +318,9 @@ async function main() {
       await waitFor(() => q('#overlay.open') && q('.overlay-panel').contains(document.activeElement), 'focus moves into Show all dialog');
       const panel = q('.overlay-panel');
       expect(panel.getAttribute('role') === 'dialog' && panel.getAttribute('aria-modal') === 'true', 'Show all is a modal dialog');
+      // On a shared link too: it asks with the share token, for the period on screen
+      await waitFor(() => !/Loading/.test(q('#overlay-content')?.textContent || ''), 'Show all has its rows on a shared link');
+      expect(!/No data yet/.test(q('#overlay-content')?.textContent || '') && q('#overlay-content')?.textContent.trim(), `Show all shows rows on a shared link (shows "${q('#overlay-content')?.textContent.trim().slice(0, 40)}")`);
       const close = q('.overlay-close');
       close.focus();
       close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
