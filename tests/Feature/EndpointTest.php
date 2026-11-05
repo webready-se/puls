@@ -1076,6 +1076,21 @@ test('format=md says how to look closer, and offers one site only when there are
     }
 })->after(fn () => clearGroupSeeds());
 
+test('the report, llms.txt and the docs name the same ways to look closer', function () {
+    // docs/api.md is where they are described; the other two repeat them where a reader starts
+    $site = 'report-closer-' . uniqid() . '.example';
+    seedReportSite($site);
+    getTestDb()->prepare('INSERT INTO site_groups (site, group_name) VALUES (?, ?)')->execute([$site, "closer-{$site}"]);
+    $report = http('GET', '/?api&days=7&format=md&share=' . createTestGroupToken(["closer-{$site}"]))['body'];
+    getTestDb()->prepare('DELETE FROM site_groups WHERE site = ?')->execute([$site]);
+
+    foreach (['&site=<name>', '&path=<path>', '&event=<name>&group=<key>', '&hours=<date>'] as $way) {
+        expect($report)->toContain($way);
+        expect(file_get_contents(__DIR__ . '/../../llms.txt'))->toContain($way);
+        expect(file_get_contents(__DIR__ . '/../../docs/api.md'))->toContain(explode('<', $way)[0]);
+    }
+});
+
 test('format=md is for the view: other questions keep their answers', function () {
     $site = 'report-json-' . uniqid() . '.example';
     seedReportSite($site);
