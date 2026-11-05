@@ -444,6 +444,16 @@ body {
 .card-subtitle { font-size: 12px; color: var(--text-3); }
 .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-top: 30px; padding-bottom: 12px; }
 .chart-scroll.compare { padding-top: 80px; }
+/* A day's tooltip is two lines over the tallest bar, four with Compare, and the scroll box clips
+   what rises above it. The space under the tabs, and the legend's, moves into the box: the
+   tooltip gets the room and the card keeps its height */
+#chart-card > .card-header { margin-bottom: 0; }
+#chart-card > .note-form { margin-top: 16px; padding-bottom: 0; }
+#chart-card > .chart-legend-top { margin-top: 16px; }
+#chart-card .chart-scroll { padding-top: 46px; }
+#chart-card .chart-scroll.stacked-marks { padding-top: 64px; }
+#chart-card .chart-scroll.compare { margin-top: -24px; padding-top: 104px; }
+#chart-card .chart-scroll.compare.stacked-marks { padding-top: 122px; }
 /* At least as wide as its days, so a period that scrolls keeps the padding at its end too: the
    picked day's ring on the last day was cut off there */
 .chart { display: flex; align-items: flex-end; gap: 6px; height: 158px; padding: 0 4px; min-width: max-content; }
@@ -462,7 +472,7 @@ body {
 .chart-bar .tip {
   display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
   transform: translateX(-50%); background: var(--text); color: var(--bg);
-  padding: 6px 12px; border-radius: 8px; font-size: 11px; white-space: nowrap;
+  padding: 6px 12px; border-radius: 8px; font-size: 11px; line-height: 1.4; white-space: nowrap;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 .chart-bar .tip::after {
@@ -475,7 +485,7 @@ body {
 .chart-col-compare > .tip {
   display: none; position: absolute; bottom: calc(100% + 14px); left: 50%;
   transform: translateX(-50%); background: var(--text); color: var(--bg);
-  padding: 6px 12px; border-radius: 8px; font-size: 11px; white-space: nowrap;
+  padding: 6px 12px; border-radius: 8px; font-size: 11px; line-height: 1.4; white-space: nowrap;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 20;
 }
 .chart-col-compare > .tip::after {
