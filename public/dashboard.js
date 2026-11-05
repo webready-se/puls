@@ -425,7 +425,7 @@
     var seq = ++loadSeq;
     currentDays = days;
     lastLoad = Date.now();
-    var url = viewUrl();
+    var url = viewUrl() + '&bots=summary';
     if (!lastData) loading(true, true);
     else if (!auto && !quiet) loading(true);
     return fetch(url)
@@ -442,6 +442,7 @@
         if (data.now) serverSkew = wallClock(data.now) - Date.now();
         render(data);
         fetchHours();
+        fetchBotDetail();
       })
       .catch(function() {
         if (auto || seq !== loadSeq) return;
@@ -2053,11 +2054,69 @@
       renderUtmContent(rows) + '</div></div>';
   }
 
+  // The most crawled pages and the latest activity read the rows, which takes seconds on an
+  // install with many bot visits, so they are asked for while the section is open and at most
+  // every five minutes for the same view. The totals in the header come with the page
+  var botDetail = null, botDetailSeq = 0;
+
+  function botDetailHere() { return botDetail && botDetail.key === viewUrl() ? botDetail : null; }
+
+  function fetchBotDetail() {
+    if (localStorage.getItem('puls-bots-open') !== '1' || !app.querySelector('[data-island="bots"] .fold-body')) return;
+    var here = botDetailHere();
+    if (here && Date.now() - here.at < 300000) return;
+    var seq = ++botDetailSeq, key = viewUrl();
+    fetch(key + '&botDetail')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (seq !== botDetailSeq || !data || data.error) return;
+        data.key = key;
+        data.at = Date.now();
+        botDetail = data;
+        patchBotDetail();
+      })
+      .catch(function() {});
+  }
+
+  // Only the two cards, so the button that opened the section keeps its focus
+  function patchBotDetail() {
+    var cur = app.querySelector('[data-island="bots"]');
+    if (!cur || !lastData) return;
+    var tpl = document.createElement('template');
+    tpl.innerHTML = island('bots', renderBotSection(lastData));
+    var next = tpl.content.firstElementChild;
+    var html = next.outerHTML;
+    ['bot-pages', 'bot-activity'].forEach(function(id) {
+      var a = cur.querySelector('#' + id), b = next.querySelector('#' + id);
+      if (a && b) a.replaceWith(b);
+    });
+    islandHtml.bots = html;
+  }
+
+  var botLoading = '<p class="muted fs-13">Loading\u2026</p>';
+
+  function renderBotPages() {
+    var detail = botDetailHere();
+    return '<div class="card" id="bot-pages"><span class="card-title">Most crawled pages</span>' +
+      (detail && detail.botKeptDays ? ' <span class="card-subtitle">last ' + detail.botKeptDays + ' days</span>' : '') +
+      '<div class="mt-14">' + (detail ? renderTableContent(detail.botPages, 'path', 'visits', '#2563eb') : botLoading) + '</div>' +
+      (detail ? showAllBtn(detail.botPagesTotal, 'botPages', 'Most crawled pages') : '') +
+    '</div>';
+  }
+
+  function renderBotActivity() {
+    var detail = botDetailHere(), activity = detail ? detail.botActivity : [];
+    if (detail && !activity.length) return '<div id="bot-activity"></div>';
+    return '<div class="card mt-14" id="bot-activity"><span class="card-title">Latest bot activity</span>' +
+      '<div class="mt-12">' + (detail ? renderBotActivityContent(activity) : botLoading) + '</div>' +
+      (detail ? showAllBtn(activity.length >= 10 ? 11 : 0, 'botActivity', 'Bot activity') : '') +
+    '</div>';
+  }
+
   function renderBotSection(d) {
     var bots = d.bots || [];
     var cats = d.botCategories || [];
-    var pages = d.botPages || [];
-    var totalVisits = bots.reduce(function(s, b) { return s + (+b.visits); }, 0);
+    var totalVisits = cats.reduce(function(s, c) { return s + (+c.visits); }, 0);
 
     if (!totalVisits) return foldSection('bots', 'Bots &amp; crawlers', 'No bot activity yet', '');
 
@@ -2069,26 +2128,11 @@
     });
 
     var html = '<div class="bot-badges">' + badges + '</div>' +
-      '<div class="grid-2">';
-
-    html += renderBotTable(bots, d.botsTotal);
-    html += '<div class="card"><span class="card-title">Most crawled pages</span><div class="mt-14">' +
-      renderTableContent(pages, 'path', 'visits', '#2563eb') + '</div>' +
-      showAllBtn(d.botPagesTotal, 'botPages', 'Most crawled pages') +
-    '</div>';
-
-    html += '</div>';
-
-    // Bot activity timeline
-    var activity = d.botActivity || [];
-    if (activity.length) {
-      html += '<div class="card mt-14"><span class="card-title">Latest bot activity</span>' +
-        '<div class="mt-12">' +
-        renderBotActivityContent(activity) +
-        '</div>' +
-        showAllBtn(activity.length >= 10 ? 11 : 0, 'botActivity', 'Bot activity') +
-      '</div>';
-    }
+      '<div class="grid-2">' +
+        renderBotTable(bots, d.botsTotal) +
+        renderBotPages() +
+      '</div>' +
+      renderBotActivity();
 
     return foldSection('bots', 'Bots &amp; crawlers', num(totalVisits) + ' visits from ' + num(d.botsTotal) + ' bot' + (+d.botsTotal === 1 ? '' : 's'), html);
   }
@@ -2117,6 +2161,7 @@
     // The dashboard's sections remember the choice; the menu's fold again each time it opens
     var fold = btn.closest('[data-fold]');
     if (fold) localStorage.setItem('puls-' + fold.getAttribute('data-fold') + '-open', body.hidden ? '0' : '1');
+    if (fold && fold.getAttribute('data-fold') === 'bots' && !body.hidden) fetchBotDetail();
   });
 
   var botCatColors = { 'AI': '#dc2626', 'Search engine': '#2563eb', 'Social': '#7c3aed', 'SEO': '#d97706', 'Monitor': '#059669', 'Other': '#94a3b8' };
@@ -2582,6 +2627,7 @@
     if (currentSite) url += '&site=' + encodeURIComponent(currentSite);
     if (currentPath) url += '&path=' + encodeURIComponent(currentPath);
     if (currentChannel) url += '&channel=' + encodeURIComponent(currentChannel);
+    if (type === 'botPages' || type === 'botActivity') url += '&botDetail';
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(d) { overlayContent.innerHTML = renderFn(d); });

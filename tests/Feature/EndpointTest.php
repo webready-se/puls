@@ -266,6 +266,77 @@ test('log endpoint deduplicates within 10 seconds', function () {
     expect($r2['status'])->toBe(204);
 });
 
+// Seven visits of two bots on a site of its own, one of them outside the 7 days asked for
+function seedBotVisits(string $site): void
+{
+    $insert = getTestDb()->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    $today = date('Y-m-d H:i:s');
+    foreach ([['/a', 'Googlebot', 'Search engine'], ['/a', 'Googlebot', 'Search engine'], ['/b', 'Googlebot', 'Search engine'], ['/a', 'GPTBot', 'AI'], ['/c', 'GPTBot', 'AI'], ['/c', 'GPTBot', 'AI']] as [$path, $name, $category]) {
+        $insert->execute([$site, $path, $name, $category, 'test', $today]);
+    }
+    $insert->execute([$site, '/old', 'Bingbot', 'Search engine', 'test', date('Y-m-d H:i:s', strtotime('-20 days'))]);
+}
+
+test('api reads the bots from the counts per day, the same as from the rows', function () {
+    $site = 'bot-counts-' . uniqid();
+    seedBotVisits($site);
+    $token = createTestShareToken($site);
+
+    $d = json_decode(http('GET', '/?api&days=7&share=' . $token)['body'], true);
+
+    $byName = array_column($d['bots'], 'visits', 'name');
+    expect($byName)->toEqual(['GPTBot' => 3, 'Googlebot' => 3])
+        ->and($d['botsTotal'])->toBe(2)
+        ->and(array_column($d['botCategories'], 'visits', 'category'))->toEqual(['AI' => 3, 'Search engine' => 3]);
+
+    $wide = json_decode(http('GET', '/?api&days=30&share=' . $token)['body'], true);
+    expect(array_column($wide['bots'], 'visits', 'name'))->toEqual(['GPTBot' => 3, 'Googlebot' => 3, 'Bingbot' => 1])
+        ->and($wide['botsTotal'])->toBe(3);
+
+    $range = date('Y-m-d', strtotime('-20 days'));
+    $one = json_decode(http('GET', "/?api&from={$range}&to={$range}&share=" . $token)['body'], true);
+    expect(array_column($one['bots'], 'visits', 'name'))->toEqual(['Bingbot' => 1]);
+});
+
+test('api without bots=summary still answers with the crawled pages and the activity', function () {
+    $site = 'bot-full-' . uniqid();
+    seedBotVisits($site);
+    $d = json_decode(http('GET', '/?api&days=7&share=' . createTestShareToken($site))['body'], true);
+
+    expect(array_column($d['botPages'], 'visits', 'path'))->toEqual(['/a' => 3, '/c' => 2, '/b' => 1])
+        ->and($d['botPagesTotal'])->toBe(3)
+        ->and($d['botActivity'])->toHaveCount(6)
+        ->and($d['botActivity'][0])->toHaveKeys(['name', 'category', 'site', 'path', 'created_at']);
+});
+
+test('api with bots=summary leaves out what reads the rows, and botDetail answers with only that', function () {
+    $site = 'bot-lazy-' . uniqid();
+    seedBotVisits($site);
+    $token = createTestShareToken($site);
+
+    $summary = json_decode(http('GET', '/?api&days=7&bots=summary&share=' . $token)['body'], true);
+    expect($summary['botsTotal'])->toBe(2)
+        ->and($summary)->toHaveKey('totals')
+        ->and($summary)->not->toHaveKeys(['botPages', 'botPagesTotal', 'botActivity']);
+
+    $detail = json_decode(http('GET', '/?api&days=7&botDetail&share=' . $token)['body'], true);
+    expect(array_keys($detail))->toEqualCanonicalizing(['botPages', 'botPagesTotal', 'botActivity', 'botKeptDays'])
+        ->and($detail['botPagesTotal'])->toBe(3)
+        ->and($detail['botActivity'])->toHaveCount(6);
+});
+
+test('botDetail says how far back the rows go when the period reaches past them', function () {
+    $site = 'bot-kept-' . uniqid();
+    seedBotVisits($site);
+    $token = createTestShareToken($site);
+
+    $inside = json_decode(http('GET', '/?api&days=30&botDetail&share=' . $token)['body'], true);
+    $past = json_decode(http('GET', '/?api&days=200&botDetail&share=' . $token)['body'], true);
+
+    expect($inside['botKeptDays'])->toBeNull()
+        ->and($past['botKeptDays'])->toBe(90);
+});
+
 test('log endpoint counts a GET or HEAD, not what a rendered page posts', function () {
     $db = getTestDb();
     $send = fn (string $method, string $path) => http($method, "/?log&s=log-method&p={$path}", [

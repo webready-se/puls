@@ -39,6 +39,8 @@ All requests are `GET` with query parameters.
 | `path=/pricing` | Only pageviews of this exact path (the page drill-down) |
 | `channel=paid` | Only visitors from one channel: `paid`, `campaign`, `organic-search`, `social`, `referral`, `direct`. Goals are left out when `channel` or `path` is set |
 | `expand=pages` | Return up to 1,000 rows for one list instead of the top 10 (50 for `events`): `pages`, `referrers`, `entryPages`, `exitPages`, `utm`, `events`, `outbound`, `bots`, `botPages`, `botActivity` |
+| `bots=summary` | Leave out `botPages`, `botPagesTotal`, `botActivity` and `botKeptDays`, which read every bot visit of the period. The bot totals stay. Faster on a site with many crawler visits |
+| `botDetail` | Answer with only `botPages`, `botPagesTotal`, `botActivity` and `botKeptDays`, for the same period and site. `expand=botPages` and `expand=botActivity` work here too |
 
 Every response compares with the previous period of the same length, in the `previous*` fields.
 
@@ -70,6 +72,7 @@ Every response compares with the previous period of the same length, in the `pre
 | `annotations` | Chart notes overlapping the period: `[{id, site, date, end_date, label}]` |
 | `brokenLinks` | 404s and redirects logged by Nginx: `[{site, path, status, hits, referrers, first_seen, last_seen}]` |
 | `bots`, `botCategories`, `botPages`, `botActivity` | Crawler and AI bot visits |
+| `botKeptDays` | Set when the period reaches further back than bot visits are kept (`BOT_RETENTION_DAYS`): `botPages` and `botActivity` then cover that many days, while `bots` and `botCategories` cover the whole period. Otherwise `null` |
 | `live` | Visitors in the last 5 minutes |
 | `now`, `timezone` | The server's time and its time zone (`TIMEZONE`). Every time in the API is in that zone and carries no offset |
 

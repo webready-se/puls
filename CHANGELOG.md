@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Bots no longer slow the dashboard.** A site with many pages gets far more crawler visits than visitors, and every load of the dashboard read them all: on an install with 570,000 bot visits, 11 s over 30 days of all sites. The totals in the Bots header now come from a count per day that is kept as each visit is stored, and the most crawled pages and the latest activity are fetched when the section is open. The header also says all the visits, where it used to add up only the ten biggest bots. `BOT_RETENTION_DAYS` (default 90, as before) sets how long each visit is kept, and the counts stay after that. The read API answers as before; `bots=summary` leaves out the two lists, and `botDetail` asks for only them.
 - **Vaka's mark in the footer.** The credit shows the marks of the tools that are released and public, each linked, and Vaka now is.
 - **Campaigns name the platform.** The UTM list says Instagram, Facebook, Messenger and Audience Network where Meta's ads send `ig`, `fb`, `msg` and `an`, and Google Ads for `google` with `cpc`, `ppc` or `paid`. Only the label changes: hovering a row shows what was sent, and the API and the exports keep it.
 - **Ties in the dashboard's lists come in a fixed order.** Pages, sources, campaigns, countries, browsers, channels and entry and exit pages with the same count are listed by name, and the best day and peak hour take the earliest; before, the order of a tie was up to the database and could change between two loads.

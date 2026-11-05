@@ -69,6 +69,9 @@ return [
     // Days to keep custom events; 0 keeps them forever
     'events_retention_days' => max(0, (int) ($_ENV['EVENTS_RETENTION_DAYS'] ?? 400)),
 
+    // Days to keep each bot visit; 0 keeps them forever. The counts per day stay either way
+    'bot_retention_days' => max(0, (int) ($_ENV['BOT_RETENTION_DAYS'] ?? 90)),
+
     'ignored_bots' => array_filter(array_map('trim', explode(',', $_ENV['IGNORED_BOTS'] ?? ''))),
 
     // Reverse proxies (IPs or CIDR ranges) whose X-Forwarded-For / X-Real-IP is trusted

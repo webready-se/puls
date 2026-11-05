@@ -502,6 +502,8 @@ Puls deduplicates: the same bot on the same site and path counts once per 10 sec
 
 Puls counts GET and HEAD only. A crawler that renders a page also runs its script, and the mirror copies what that script posts with its method, but an endpoint a page calls is not a page being read.
 
+A site with many pages gets far more crawler visits than visitors, some hundreds per visitor. Puls only shows them, so stopping one is the site's choice: in `robots.txt` or Nginx, which also spares the site, or by leaving it out of the `map` above, which only keeps it out of Puls. `IGNORED_BOTS` drops a bot for the whole install, and `BOT_RETENTION_DAYS` sets how long each visit is kept.
+
 ### Checking that the mirror fires
 
 A mirror leaves no trace by default. To see every copy and the status Puls answered, log the subrequests inside the location while you set it up:

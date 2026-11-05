@@ -116,7 +116,7 @@ A goal is a page or an event. Its tile shows the visitors who converted, their s
 - **No IP addresses stored:** the visitor id is a hash of IP and user agent with a random salt that is deleted after the day
 - **No fingerprinting:** no canvas, font or WebGL tricks
 - **Collected:** page path, referrer domain, browser, device type, UTM parameters, language and country (from the `Accept-Language` header)
-- **Kept:** pageviews until you delete them, custom events for 400 days (`EVENTS_RETENTION_DAYS`), bot visits for 90 days and broken links for 30 days after the last hit
+- **Kept:** pageviews until you delete them, custom events for 400 days (`EVENTS_RETENTION_DAYS`), bot visits for 90 days (`BOT_RETENTION_DAYS`, the count per day stays) and broken links for 30 days after the last hit
 
 You decide what your sites send. [Keeping personal data out of URLs](docs/integrations.md#keeping-personal-data-out-of-urls) shows how to drop search terms, ids and personal links before they reach Puls.
 

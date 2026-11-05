@@ -185,6 +185,8 @@ async function main() {
     await sleep(300);
     await shoot('events.png', await box('[data-island="traffic"]', '[data-island="traffic"]', 12));
     await shoot('cards.png', await box('[data-island="breakdowns"]', '[data-island="breakdowns"]', 12));
+    // The section's lists are asked for when it is open, so they arrive after the page
+    await until(`document.querySelector('.bot-row-time')`);
     await shoot('bots.png', await box('[data-island="bots"]', '[data-island="broken"]', 12));
 
     // 4. GIF: open an event, group it on a key. A drawn pointer shows where each click lands.
