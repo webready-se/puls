@@ -6,7 +6,7 @@ Everything the dashboard shows is available as JSON from the same URL, so other 
 
 There are two ways in:
 
-- **Share token (for other applications).** Create one with `php puls share:create` (below) and send it as a header, `Authorization: Bearer TOKEN`, which keeps it out of URLs, server logs and shell history, or add `&share=TOKEN` to every request (the header works for `?api`, not for the shared dashboard page). Some Apache hosts drop the header before PHP sees it, which gives a `404`: add the two lines in [Apache](install.md#apache) to `public/.htaccess`, or use `&share=`. A token needs no login. An expired token gets `401` with the day it expired and how to extend it, and an unknown or revoked one `404`.
+- **Share token (for other applications).** Create one with `php puls share:create` (below) and send it as a header, `Authorization: Bearer TOKEN`, which keeps it out of URLs, server logs and shell history, or add `&share=TOKEN` to every request (the header works for `?api`, not for the shared dashboard page). Some Apache hosts drop the header before PHP sees it, which gives a `404`: add the two lines in [Apache](install.md#apache) to `public/.htaccess`, or use `&share=`. A token needs no login. An expired token gets `401` with the day it expired and how to extend it, and an unknown or revoked one `404` with a short message.
 - **Session (the dashboard itself).** A logged-in browser session. Without one, `?api` returns `401 {"error": "Unauthorized"}`. Users restricted to some sites only see those; asking for another site returns `{"error": "Access denied"}`.
 
 Treat a share token like a password: anyone with it can read the statistics of what it covers, and the same URL without `api` opens the read-only dashboard.

@@ -609,6 +609,21 @@ test('share endpoint returns 404 for invalid token', function () {
     expect($r['status'])->toBe(404);
 });
 
+test('an unknown token says so, and a second question mark in the address gets a hint', function () {
+    $page = http('GET', '/?share=' . bin2hex(random_bytes(32)));
+    expect($page['status'])->toBe(404)
+        ->and($page['body'])->toContain('not valid');
+
+    $api = http('GET', '/?api&days=7&share=' . bin2hex(random_bytes(32)));
+    expect($api['status'])->toBe(404)
+        ->and(json_decode($api['body'], true)['error'])->toContain('not valid');
+
+    // ?share=TOKEN?api&days=30 reads ?api as part of the token, and the address looks right
+    $typo = http('GET', '/?share=' . bin2hex(random_bytes(32)) . '?api&days=30&format=md');
+    expect($typo['status'])->toBe(404)
+        ->and($typo['body'])->toContain('second ?')->toContain('&api');
+});
+
 test('share endpoint returns 404 for short token', function () {
     $r = http('GET', '/?share=abc');
     expect($r['status'])->toBe(404);
@@ -2370,6 +2385,8 @@ test('a request does not wait for another from the same browser while that one r
         'content' => http_build_query(['_login' => 1, '_token' => json_decode($r['body'], true)['token'], 'username' => 'admin', 'password' => 'admin-pass']),
     ], 8093);
     if (preg_match('/^Set-Cookie:\s*(PHPSESSID=[^;]+)/mi', implode("\n", $r['headers']), $m)) $cookie = $m[1];
+    // This test has failed in CI now and then with a 401 below: say whether the login was the step
+    expect($r['headers'][0] ?? 'no answer')->toContain('302');
 
     // The dashboard's request first, then a small one from the same browser while it runs
     $base = 'http://localhost:' . $GLOBALS['test_ports'][8093];
