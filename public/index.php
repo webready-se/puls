@@ -140,8 +140,12 @@ $shareToken = $_GET['share'] ?? (isset($_GET['api']) ? bearer_token($_SERVER) : 
 if ($shareToken !== null) {
     $share = find_share_token($config, $shareToken);
     if (!$share) {
-        http_response_code(404);
-        exit;
+        // ?share=TOKEN?api&days=30 reads ?api as part of the token, and the address looks right
+        $why = str_contains($shareToken, '?')
+            ? 'This token is not valid: the address has a second ? where it needs &, as in ?share=TOKEN&api&days=30.'
+            : 'This token is not valid. Check the address, or ask whoever shared it for a new one.';
+        if (isset($_GET['api'])) respond(json_encode(['error' => $why]), 404, 'application/json');
+        respond($why, 404, 'text/plain', security_headers());
     }
     // PHP's clock: expires_at is in the configured time zone, SQLite's datetime('now') is UTC
     if ($share['expires_at'] && $share['expires_at'] <= date('Y-m-d H:i:s')) {

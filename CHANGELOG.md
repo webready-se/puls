@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **An unknown token says so.** A share link or read token that is not valid got an empty page. It now says what is wrong, also when the address has a second `?` where it needs `&`, which looks right at a glance. The status is still `404`.
 - **`share:list` no longer waits in a script.** It ended by asking whether to show a link, so over ssh without a terminal it stayed running for good and its output never reached a pipe. It now asks only at a terminal.
 - **Show all works on a shared link and on a custom date range.** On a shared link it said "No data yet", since it asked without the share token, and on a custom range it listed the last days instead of the range. It now asks for what is on screen.
 - **What a page posts is no longer listed as a crawled page.** A crawler that renders a page also runs its script, and the Nginx mirror copied what that script posted, so an endpoint the page calls could top the most crawled pages. The mirror's endpoint now counts GET and HEAD only. Visits already logged go with the 90 days bot visits are kept.
