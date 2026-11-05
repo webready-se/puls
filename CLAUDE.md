@@ -58,6 +58,7 @@ public/dashboard.js     - The dashboard's script: fetches the API, renders islan
 public/theme.js         - Runs in <head> on the dashboard and the login page: theme before the first paint, the install's accent from the config block
 public/login.css, login.js - The login page's styles and its CSRF refresh
 public/fonts/           - Figtree (variable woff2) and its SIL Open Font License, copied from the design kit
+llms.txt                - For an AI agent: how to read an install. In the repository, not served by one; linked from the dashboard's footer unless white-labelled
 config.php              — Configuration (loads .env, auto-detects Forge paths)
 .env.example            — Environment template (checked in)
 .env                    - Optional environment config (gitignored, copy of .env.example)

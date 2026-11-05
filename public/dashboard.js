@@ -2314,7 +2314,8 @@
       right = '<span>Powered by <a href="https://github.com/webready-se/puls" target="_blank" rel="noopener">Puls</a></span>';
     } else if (branding.credit !== false) {
       var publicMarks = familyMarks.filter(function(m) { return m.url; });
-      right = '<span>Made by <a href="https://webready.se" target="_blank" rel="noopener">Webready</a> in Sweden</span>' +
+      right = '<span><a href="https://github.com/webready-se/puls/blob/main/llms.txt" target="_blank" rel="noopener">For AI agents</a></span>' +
+        '<span>Made by <a href="https://webready.se" target="_blank" rel="noopener">Webready</a> in Sweden</span>' +
         (publicMarks.length ? '<span class="foot-marks">' + publicMarks.map(function(m) {
           return '<a href="' + m.url + '" target="_blank" rel="noopener" title="' + m.name + '" aria-label="' + m.name + ' on GitHub">' + m.svg + '</a>';
         }).join('') + '</span>' : '');
