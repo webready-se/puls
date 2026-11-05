@@ -2474,6 +2474,10 @@ function get_db(string $path): PDO
 
 function handle_log(array $config): void
 {
+    // A crawler reads a page with GET or HEAD. Nginx's mirror also copies, with its method, what
+    // a page's script posts when a crawler renders the page, and that is not a page being read
+    if (!in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)) return;
+
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
 
     if (is_ignored_bot($ua, $config['ignored_bots'] ?? [])) return;

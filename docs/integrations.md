@@ -500,6 +500,8 @@ Three lines are easy to leave out, and each failure is silent. `resolver`: a `pr
 
 Puls deduplicates: the same bot on the same site and path counts once per 10 seconds, so a page that mirrors more than once is one visit.
 
+Puls counts GET and HEAD only. A crawler that renders a page also runs its script, and the mirror copies what that script posts with its method, but an endpoint a page calls is not a page being read.
+
 ### Checking that the mirror fires
 
 A mirror leaves no trace by default. To see every copy and the status Puls answered, log the subrequests inside the location while you set it up:
