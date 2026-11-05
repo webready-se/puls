@@ -14,8 +14,9 @@
  *   php puls sites:group [<group> <site>...]       Put sites in a group
  *   php puls sites:ungroup [<site>...]             Take sites out of their group
  *   php puls sites:clean-paths [<site>] [--query|--keep=a,b] [--ids] [--tokens] [--dry-run]  Clean stored paths
- *   php puls share:create <site> [--label=...] [--expires=YYYY-MM-DD]  Create shareable link
+ *   php puls share:create [<site or group>] [--groups=a,b] [--label=...] [--expires=YYYY-MM-DD|never]  Create a read token
  *   php puls share:list [<site>]                  List share tokens
+ *   php puls share:edit [<token>] [--label=...|none] [--expires=YYYY-MM-DD|never] [--groups=a,b]  Change a token, which stays the same
  *   php puls share:revoke [<token>]                Revoke a share token
  *   php puls exclude:add [<site> <ip>] [--label=...]  Stop counting an IP or range (site * = all sites)
  *   php puls exclude:list [<site>]                 List excluded IPs
@@ -40,6 +41,7 @@ match ($command) {
     'sites:clean-paths' => sitesCleanPaths($config, $argv),
     'share:create'  => shareCreate($config, $argv[2] ?? null, $argv),
     'share:list'    => shareList($config, $argv[2] ?? null),
+    'share:edit'    => shareEdit($config, $argv),
     'share:revoke'  => shareRevoke($config, $argv[2] ?? null),
     'exclude:add'   => excludeAdd($config, $argv),
     'exclude:list'  => excludeList($config, $argv[2] ?? null),
@@ -830,6 +832,20 @@ function sitesGroup(array $config, array $argv): void
     $db->commit();
     $total = count(array_keys(siteGroupMap($db), $group, true));
     echo "\n{$total} site" . ($total === 1 ? '' : 's') . " in '{$group}'.\n";
+    $left = array_values(array_unique(array_diff(array_map(fn ($s) => $groups[$s] ?? '', array_unique($siteArgs)), ['', $group])));
+    sayWhoReads($db, [$group], $left);
+}
+
+// A token for a group follows its sites, so moving one changes what a token's holder can read
+function sayWhoReads(PDO $db, array $movedInto, array $movedOutOf): void
+{
+    $db = shareTokensDb($db->query('PRAGMA database_list')->fetch(PDO::FETCH_ASSOC)['file']);
+    foreach ($db->query('SELECT * FROM share_tokens')->fetchAll(PDO::FETCH_ASSOC) as $t) {
+        $groups = shareTokenGroups($t);
+        $name = $t['label'] ?: shareTokenStart($t) . '…';
+        if (array_intersect($movedInto, $groups)) echo "The token '{$name}' reads these sites now.\n";
+        elseif (array_intersect($movedOutOf, $groups)) echo "The token '{$name}' no longer reads these sites.\n";
+    }
 }
 
 function sitesUngroup(array $config, array $argv): void
@@ -866,6 +882,7 @@ function sitesUngroup(array $config, array $argv): void
         echo "  {$s}: no longer in '{$groups[$s]}'\n";
     }
     $db->commit();
+    sayWhoReads($db, [], array_values(array_unique(array_filter(array_map(fn ($s) => $groups[$s] ?? '', array_unique($siteArgs))))));
 }
 
 // =====================================================================
@@ -969,91 +986,146 @@ function sitesRemove(array $config, ?string $siteName): void
 // share:create
 // =====================================================================
 
-function shareCreate(array $config, ?string $site, array $argv): void
+// The database with what tokens need. Same columns as migration v31: the CLI does not run migrations
+function shareTokensDb(string $dbPath): PDO
+{
+    $db = siteGroupsDb($dbPath);
+    $db->exec('CREATE TABLE IF NOT EXISTS share_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        site TEXT NOT NULL,
+        label TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL
+    )');
+    $columns = array_column($db->query('PRAGMA table_info(share_tokens)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+    if (!in_array('group_names', $columns, true)) $db->exec('ALTER TABLE share_tokens ADD COLUMN group_names TEXT');
+    if (!in_array('last_used_at', $columns, true)) $db->exec('ALTER TABLE share_tokens ADD COLUMN last_used_at TEXT');
+    return $db;
+}
+
+function shareTokenGroups(array $token): array
+{
+    return json_decode($token['group_names'] ?? '', true) ?: [];
+}
+
+// What a token reads, in words: its site, or its groups with how many sites they hold now
+function shareReads(array $token, array $groupMap): string
+{
+    $groups = shareTokenGroups($token);
+    if (!$groups) return $token['site'];
+    $count = count(array_intersect($groupMap, $groups));
+    $sites = $count === 0 ? 'no sites, reads nothing' : ($count === 1 ? '1 site' : "{$count} sites");
+    return implode(', ', $groups) . " ({$sites})";
+}
+
+function shareTokenStart(array $token): string
+{
+    return substr($token['token'], 0, str_starts_with($token['token'], 'puls_') ? 13 : 8);
+}
+
+// A last day as stored, or null for never. Stops on anything else
+function shareExpiry(string $value): ?string
+{
+    if ($value === 'never') return null;
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $m) || !checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+        echo "Invalid date. Use YYYY-MM-DD, or never.\n";
+        exit(1);
+    }
+    return $value . ' 23:59:59';
+}
+
+function shareExpiryWords(?string $expiresAt): string
+{
+    return $expiresAt ? 'Works until ' . date('j M Y', strtotime($expiresAt)) . '.' : 'Works until it is revoked.';
+}
+
+// Numbers from a list: one, several (1,4) or a range (1-3)
+function parseNumberList(string $answer, int $max): array
+{
+    $picked = [];
+    foreach (preg_split('/[\s,]+/', trim($answer), -1, PREG_SPLIT_NO_EMPTY) as $part) {
+        if (!preg_match('/^(\d+)(?:-(\d+))?$/', $part, $m)) {
+            echo "Invalid selection: {$part}.\n";
+            exit(1);
+        }
+        foreach (range((int) $m[1], (int) ($m[2] ?? $m[1])) as $n) {
+            if ($n < 1 || $n > $max) {
+                echo "Invalid selection: {$n}.\n";
+                exit(1);
+            }
+            $picked[$n] = true;
+        }
+    }
+    return array_keys($picked);
+}
+
+// Group names from a flag's value, stopping on one that holds no sites
+function shareGroupsFrom(string $value, array $groupMap): array
+{
+    $groups = array_values(array_unique(array_filter(array_map('trim', explode(',', $value)), fn ($g) => $g !== '')));
+    $unknown = array_values(array_diff($groups, array_values($groupMap)));
+    if (!$groups || $unknown) {
+        echo $unknown ? 'No such group: ' . implode(', ', $unknown) . ".\n" : "Name at least one group.\n";
+        echo "Run `php puls sites:list` to see the groups.\n";
+        exit(1);
+    }
+    return $groups;
+}
+
+function shareCreate(array $config, ?string $name, array $argv): void
 {
     $dbPath = $config['db_path'];
     if (!file_exists($dbPath)) {
         echo "No database found. Start tracking to create it.\n";
         exit(1);
     }
+    $db = shareTokensDb($dbPath);
+    $tracked = getTrackedSites($dbPath);
+    $groupMap = siteGroupMap($db);
 
-    // Interactive site selection if no site argument
-    if (!$site || str_starts_with($site, '--')) {
-        $availableSites = getTrackedSites($dbPath);
-        if (empty($availableSites)) {
-            echo "No sites in database yet.\n";
+    $flags = shareFlags($argv);
+    if ($name !== null && str_starts_with($name, '--')) $name = null;
+
+    $site = '';
+    $groups = [];
+    if (isset($flags['groups'])) {
+        $groups = shareGroupsFrom($flags['groups'], $groupMap);
+    } elseif ($name !== null) {
+        // A site first when a group has the same name: it reads less, and --groups= means the group
+        if (in_array($name, $tracked, true)) $site = $name;
+        elseif (in_array($name, $groupMap, true)) $groups = [$name];
+        else {
+            echo "'{$name}' is neither a tracked site nor a group.\n";
             exit(1);
         }
-        if (count($availableSites) === 1) {
-            $site = $availableSites[0];
-        } else {
-            echo "Select site for share link:\n";
-            foreach ($availableSites as $i => $s) {
-                echo sprintf("  %d) %s\n", $i + 1, $s);
-            }
-            $idx = (int) prompt("\nSelect (number): ") - 1;
-            if ($idx < 0 || $idx >= count($availableSites)) {
-                echo "Invalid selection.\n";
-                exit(1);
-            }
-            $site = $availableSites[$idx];
-        }
+    } else {
+        [$site, $groups] = pickShareTarget($tracked, $groupMap);
     }
 
-    // Verify site exists
-    $db = new PDO('sqlite:' . $dbPath);
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $stmt = $db->prepare('SELECT COUNT(*) FROM pageviews WHERE site = ?');
-    $stmt->execute([$site]);
-    if ($stmt->fetchColumn() === 0) {
-        echo "Site '{$site}' not found in database.\n";
-        exit(1);
-    }
-
-    // Parse flags (allow both --flag and interactive)
-    $label = null;
-    $expiresAt = null;
-    foreach ($argv as $arg) {
-        if (str_starts_with($arg, '--label=')) {
-            $label = substr($arg, 8);
-        }
-        if (str_starts_with($arg, '--expires=')) {
-            $date = substr($arg, 10);
-            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
-                echo "Invalid date format. Use YYYY-MM-DD.\n";
-                exit(1);
-            }
-            $expiresAt = $date . ' 23:59:59';
-        }
-    }
-
-    // Interactive prompts for missing options
+    $label = $flags['label'] ?? null;
     if ($label === null) {
-        $input = prompt("Label (optional, enter to skip): ");
+        $input = prompt("Label (who reads it, optional, enter to skip): ");
         if ($input !== '') $label = $input;
     }
-    if ($expiresAt === null) {
-        $input = prompt("Expires (YYYY-MM-DD, enter to skip): ");
-        if ($input !== '') {
-            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $input)) {
-                echo "Invalid date format. Skipping expiry.\n";
-            } else {
-                $expiresAt = $input . ' 23:59:59';
-            }
-        }
+
+    // 90 days unless told otherwise: a forgotten token stops by itself. Never has to be chosen
+    if (isset($flags['expires'])) {
+        $expiresAt = shareExpiry($flags['expires']);
+    } else {
+        $default = date('Y-m-d', strtotime('+90 days'));
+        $input = prompt("Last day (YYYY-MM-DD, or never) [{$default}]: ");
+        $expiresAt = shareExpiry($input !== '' ? $input : $default);
     }
 
-    $token = bin2hex(random_bytes(32));
-    $stmt = $db->prepare('INSERT INTO share_tokens (token, site, label, expires_at, created_at) VALUES (?, ?, ?, ?, ?)');
-    $stmt->execute([$token, $site, $label, $expiresAt, date('Y-m-d H:i:s')]);
-
-    echo "Share link created for '{$site}'.\n";
-    if ($label) echo "  Label: {$label}\n";
-    if ($expiresAt) echo "  Expires: {$expiresAt}\n";
+    $token = 'puls_' . bin2hex(random_bytes(20));
+    $stmt = $db->prepare('INSERT INTO share_tokens (token, site, group_names, label, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$token, $site, $groups ? json_encode($groups, JSON_UNESCAPED_UNICODE) : null, $label, $expiresAt, date('Y-m-d H:i:s')]);
+    $row = ['token' => $token, 'site' => $site, 'group_names' => $groups ? json_encode($groups) : null];
 
     $baseUrl = $_ENV['APP_URL'] ?? '';
     if (!$baseUrl) {
-        echo "\nAPP_URL not set. Enter your Puls URL to get shareable links\n";
+        echo "\nAPP_URL not set. Enter your Puls URL to get the lines below filled in\n";
         $url = prompt("(e.g. https://puls.example.com, enter to skip): ");
         if ($url !== '') {
             $baseUrl = rtrim($url, '/');
@@ -1066,8 +1138,163 @@ function shareCreate(array $config, ?string $site, array $argv): void
             $_ENV['APP_URL'] = $baseUrl;
         }
     }
-    echo "\n  {$baseUrl}/?share={$token}\n\n";
-    echo "Share this URL — anyone with the link can view stats for '{$site}'.\n";
+    $shownUrl = $baseUrl ?: 'https://your-puls-domain';
+    $start = shareTokenStart($row);
+
+    echo "\nToken created. It reads " . shareReads($row, $groupMap) . ".\n";
+    if ($label) echo "  Label: {$label}\n";
+    echo '  ' . shareExpiryWords($expiresAt) . "\n";
+    echo "\nPut these lines in the .env of the project that reads it:\n\n";
+    echo "  PULS_URL={$shownUrl}\n  PULS_SHARE_TOKEN={$token}\n";
+    echo "\nCheck that git ignores that file (this prints .env when it does):\n\n  git check-ignore .env\n";
+    echo "\nNever give them a PUBLIC_, VITE_ or NEXT_PUBLIC_ prefix: frameworks send those to the browser.\n";
+    echo "\nRead the data with a command that loads .env itself, so the token never shows in a command, a log or an AI assistant's session:\n\n";
+    echo "  (set -a; . ./.env; curl -s -H \"Authorization: Bearer \$PULS_SHARE_TOKEN\" \"\$PULS_URL/?api&days=30\")\n";
+    echo "\nExtend it or end it:\n\n  php puls share:edit {$start} --expires=YYYY-MM-DD\n  php puls share:revoke {$start}\n";
+    echo "\nThe token also opens a read-only dashboard, to send to a person:\n\n  {$shownUrl}/?share={$token}\n";
+}
+
+function shareFlags(array $argv): array
+{
+    $flags = [];
+    foreach ($argv as $arg) {
+        foreach (['label', 'expires', 'groups'] as $flag) {
+            if (str_starts_with($arg, "--{$flag}=")) $flags[$flag] = substr($arg, strlen($flag) + 3);
+        }
+    }
+    return $flags;
+}
+
+// Asked with nothing: groups first, since one token per reader usually means a group. [site, groups]
+function pickShareTarget(array $tracked, array $groupMap): array
+{
+    $names = array_values(array_unique(array_values($groupMap)));
+    sort($names, SORT_NATURAL | SORT_FLAG_CASE);
+    if (empty($tracked) && empty($names)) {
+        echo "No sites in database yet.\n";
+        exit(1);
+    }
+    if (!$names && count($tracked) === 1) return [$tracked[0], []];
+
+    echo "What should the token read? One site, or one or more groups:\n";
+    $n = 0;
+    foreach ($names as $g) {
+        $count = count(array_keys($groupMap, $g, true));
+        echo sprintf("  %d) %s (%d site%s)\n", ++$n, $g, $count, $count === 1 ? '' : 's');
+    }
+    foreach ($tracked as $s) echo sprintf("  %d) %s\n", ++$n, $s);
+
+    $picked = parseNumberList(prompt($names ? "\nSelect (a number, or groups as 1,2 or 1-2): " : "\nSelect (number): "), $n);
+    $pickedGroups = array_values(array_filter($picked, fn ($i) => $i <= count($names)));
+    $pickedSites = array_values(array_filter($picked, fn ($i) => $i > count($names)));
+    if (!$picked || ($pickedSites && ($pickedGroups || count($pickedSites) > 1))) {
+        echo "A token reads one site or some groups: put several sites in a group, and the token follows them.\n";
+        exit(1);
+    }
+    if ($pickedSites) return [$tracked[$pickedSites[0] - count($names) - 1], []];
+    return ['', array_map(fn ($i) => $names[$i - 1], $pickedGroups)];
+}
+
+// A token by the start of it, or from a list when asked with nothing
+function pickShareToken(PDO $db, ?string $start, string $verb): array
+{
+    if ($start === null || str_starts_with($start, '--')) {
+        $all = $db->query('SELECT * FROM share_tokens ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
+        if (empty($all)) {
+            echo "No share tokens found.\n";
+            exit(1);
+        }
+        echo "Select token to {$verb}:\n\n";
+        printShareTokens($all, siteGroupMap($db));
+        $idx = (int) prompt("\nSelect (number): ") - 1;
+        if ($idx < 0 || $idx >= count($all)) {
+            echo "Invalid selection.\n";
+            exit(1);
+        }
+        return $all[$idx];
+    }
+
+    $stmt = $db->prepare("SELECT * FROM share_tokens WHERE token LIKE ? ESCAPE '\\'");
+    $stmt->execute([addcslashes($start, '%_\\') . '%']);
+    $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (empty($matches)) {
+        echo "No token matching '{$start}'.\n";
+        exit(1);
+    }
+    if (count($matches) > 1) {
+        echo "Multiple tokens match '{$start}':\n";
+        foreach ($matches as $t) {
+            echo "  " . substr($t['token'], 0, 16) . "…  (" . ($t['site'] ?: implode(', ', shareTokenGroups($t))) . ($t['label'] ? ", {$t['label']}" : '') . ")\n";
+        }
+        echo "Provide a longer prefix to uniquely identify the token.\n";
+        exit(1);
+    }
+    return $matches[0];
+}
+
+function printShareTokens(array $tokens, array $groupMap): void
+{
+    $col = max(array_merge([5], array_map(fn ($t) => mb_strlen(shareReads($t, $groupMap)), $tokens))) + 2;
+    echo "  #  " . mbPad('READS', $col) . mbPad('LABEL', 21) . mbPad('TOKEN', 16) . mbPad('EXPIRES', 13) . "LAST USED\n";
+    echo str_repeat('─', $col + 70) . "\n";
+    foreach ($tokens as $i => $t) {
+        $expired = $t['expires_at'] && $t['expires_at'] < date('Y-m-d H:i:s');
+        $expires = $t['expires_at'] ? substr($t['expires_at'], 0, 10) : 'never';
+        if ($expired) $expires .= ' ✗';
+        $label = $t['label'] ?: '—';
+        if (mb_strlen($label) > 18) $label = mb_substr($label, 0, 17) . '…';
+        echo sprintf("  %d) ", $i + 1) . mbPad(shareReads($t, $groupMap), $col) . mbPad($label, 21) . mbPad(shareTokenStart($t) . '…', 16) . mbPad($expires, 13)
+            . (!empty($t['last_used_at']) ? substr($t['last_used_at'], 0, 10) : '—') . "\n";
+    }
+}
+
+// =====================================================================
+// share:edit
+// =====================================================================
+
+function shareEdit(array $config, array $argv): void
+{
+    $dbPath = $config['db_path'];
+    if (!file_exists($dbPath)) {
+        echo "No database found.\n";
+        exit(1);
+    }
+    $db = shareTokensDb($dbPath);
+    $groupMap = siteGroupMap($db);
+    $flags = shareFlags($argv);
+    $token = pickShareToken($db, $argv[2] ?? null, 'edit');
+    $isGroups = (bool) shareTokenGroups($token);
+
+    // Asked with no change: offer each, and enter keeps it
+    if (!$flags) {
+        $keep = $token['label'] ?: 'none';
+        $input = prompt("Label [{$keep}] (none removes it): ");
+        if ($input !== '') $flags['label'] = $input;
+        $keep = $token['expires_at'] ? substr($token['expires_at'], 0, 10) : 'never';
+        $input = prompt("Last day (YYYY-MM-DD, or never) [{$keep}]: ");
+        if ($input !== '') $flags['expires'] = $input;
+        if ($isGroups) {
+            $keep = implode(',', shareTokenGroups($token));
+            $input = prompt("Groups, the whole new list [{$keep}]: ");
+            if ($input !== '') $flags['groups'] = $input;
+        }
+    }
+
+    if (isset($flags['groups']) && !$isGroups) {
+        echo "A token for one site stays one: reading groups is another reader, so another token (`php puls share:create --groups=...`).\n";
+        exit(1);
+    }
+    if (isset($flags['label'])) $token['label'] = $flags['label'] === 'none' ? null : $flags['label'];
+    if (isset($flags['expires'])) $token['expires_at'] = shareExpiry($flags['expires']);
+    if (isset($flags['groups'])) $token['group_names'] = json_encode(shareGroupsFrom($flags['groups'], $groupMap), JSON_UNESCAPED_UNICODE);
+
+    $db->prepare('UPDATE share_tokens SET label = ?, expires_at = ?, group_names = ? WHERE id = ?')
+        ->execute([$token['label'], $token['expires_at'], $token['group_names'], $token['id']]);
+
+    echo "Token " . shareTokenStart($token) . "… reads " . shareReads($token, $groupMap) . ".\n";
+    if ($token['label']) echo "  Label: {$token['label']}\n";
+    echo '  ' . shareExpiryWords($token['expires_at']) . "\n";
+    echo "The token itself is the same, so whoever holds it changes nothing.\n";
 }
 
 // =====================================================================
@@ -1082,48 +1309,19 @@ function shareList(array $config, ?string $site): void
         exit(1);
     }
 
-    $db = new PDO('sqlite:' . $dbPath);
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // Ensure table exists
-    $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='share_tokens'")->fetchAll();
-    if (empty($tables)) {
-        echo "No share tokens found.\n";
-        return;
-    }
-
-    $sql = 'SELECT * FROM share_tokens';
-    $params = [];
+    $db = shareTokensDb($dbPath);
+    $groupMap = siteGroupMap($db);
+    $tokens = $db->query('SELECT * FROM share_tokens ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
     if ($site) {
-        $sql .= ' WHERE site = ?';
-        $params[] = $site;
+        $tokens = array_values(array_filter($tokens, fn ($t) => $t['site'] === $site || in_array($groupMap[$site] ?? null, shareTokenGroups($t), true)));
     }
-    $sql .= ' ORDER BY created_at DESC';
-
-    $stmt = $db->prepare($sql);
-    $stmt->execute($params);
-    $tokens = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (empty($tokens)) {
         echo $site ? "No share tokens for '{$site}'.\n" : "No share tokens found.\n";
         return;
     }
 
-    $col = 22;
-    echo "  #  " . mbPad('SITE', $col) . sprintf("%-20s %-10s %-12s %s\n", 'LABEL', 'TOKEN', 'EXPIRES', 'CREATED');
-    echo str_repeat('─', 90) . "\n";
-
-    foreach ($tokens as $i => $t) {
-        $expired = $t['expires_at'] && $t['expires_at'] < date('Y-m-d H:i:s');
-        $prefix = substr($t['token'], 0, 8) . '…';
-        $expires = $t['expires_at'] ? substr($t['expires_at'], 0, 10) : 'never';
-        if ($expired) $expires .= ' ✗';
-        $label = $t['label'] ?: '—';
-        if (mb_strlen($label) > 18) $label = mb_substr($label, 0, 17) . '…';
-
-        echo sprintf("  %d) ", $i + 1) . mbPad($t['site'], $col) . sprintf("%-20s %-10s %-12s %s\n",
-            $label, $prefix, $expires, substr($t['created_at'], 0, 10));
-    }
+    printShareTokens($tokens, $groupMap);
 
     echo "\n" . count($tokens) . " token(s).\n";
 
@@ -1151,72 +1349,10 @@ function shareRevoke(array $config, ?string $tokenPrefix): void
         exit(1);
     }
 
-    $db = new PDO('sqlite:' . $dbPath);
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db = shareTokensDb($dbPath);
+    $token = pickShareToken($db, $tokenPrefix, 'revoke');
 
-    // Ensure table exists
-    $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='share_tokens'")->fetchAll();
-    if (empty($tables)) {
-        echo "No share tokens found.\n";
-        exit(1);
-    }
-
-    // Interactive picker if no argument
-    if (!$tokenPrefix) {
-        $all = $db->query('SELECT * FROM share_tokens ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
-        if (empty($all)) {
-            echo "No share tokens found.\n";
-            exit(1);
-        }
-
-        $col = 22;
-        echo "Select token to revoke:\n\n";
-        echo "  #  " . mbPad('SITE', $col) . sprintf("%-20s %-10s %s\n", 'LABEL', 'TOKEN', 'EXPIRES');
-        echo str_repeat('─', 75) . "\n";
-
-        foreach ($all as $i => $t) {
-            $expired = $t['expires_at'] && $t['expires_at'] < date('Y-m-d H:i:s');
-            $prefix = substr($t['token'], 0, 8) . '…';
-            $expires = $t['expires_at'] ? substr($t['expires_at'], 0, 10) : 'never';
-            if ($expired) $expires .= ' ✗';
-            $label = $t['label'] ?: '—';
-            if (mb_strlen($label) > 18) $label = mb_substr($label, 0, 17) . '…';
-
-            echo sprintf("  %d) ", $i + 1) . mbPad($t['site'], $col) . sprintf("%-20s %-10s %s\n",
-                $label, $prefix, $expires);
-        }
-
-        $idx = (int) prompt("\nSelect (number): ") - 1;
-        if ($idx < 0 || $idx >= count($all)) {
-            echo "Invalid selection.\n";
-            exit(1);
-        }
-
-        $token = $all[$idx];
-    } else {
-        // Token prefix lookup (backwards compatible)
-        $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token LIKE ?');
-        $stmt->execute([$tokenPrefix . '%']);
-        $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if (empty($matches)) {
-            echo "No token matching '{$tokenPrefix}'.\n";
-            exit(1);
-        }
-
-        if (count($matches) > 1) {
-            echo "Multiple tokens match '{$tokenPrefix}':\n";
-            foreach ($matches as $t) {
-                echo "  " . substr($t['token'], 0, 12) . "…  ({$t['site']}" . ($t['label'] ? ", {$t['label']}" : '') . ")\n";
-            }
-            echo "Provide a longer prefix to uniquely identify the token.\n";
-            exit(1);
-        }
-
-        $token = $matches[0];
-    }
-
-    echo "Revoke share token for '{$token['site']}'";
+    echo "Revoke the token that reads " . shareReads($token, siteGroupMap($db));
     if ($token['label']) echo " ({$token['label']})";
     $confirm = strtolower(prompt("? (y/N): "));
 
@@ -1544,8 +1680,11 @@ function printHelp(): void
       php puls sites:group [<group> <site>...] Put sites in a group (one group per site)
       php puls sites:ungroup [<site>...]       Take sites out of their group
       php puls sites:clean-paths [<site>]      Strip query strings, collapse ids/tokens in stored paths
-      php puls share:create <site> [options]   Create a shareable dashboard link
+      php puls share:create [<site or group>]  Create a read token, also a read-only dashboard link
+                [--groups=a,b] [--label=...] [--expires=YYYY-MM-DD|never]
       php puls share:list [<site>]             List share tokens
+      php puls share:edit [<token>]            Change a token's label, last day or groups
+                [--label=...|none] [--expires=YYYY-MM-DD|never] [--groups=a,b]
       php puls share:revoke [<token>]           Revoke a share token
       php puls exclude:add [<site> <ip>]       Stop counting an IP or range (site * = all sites)
       php puls exclude:list [<site>]           List excluded IPs

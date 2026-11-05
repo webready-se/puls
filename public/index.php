@@ -138,20 +138,36 @@ if (isset($_GET['csrf'])) {
 
 $shareToken = $_GET['share'] ?? (isset($_GET['api']) ? bearer_token($_SERVER) : null);
 if ($shareToken !== null) {
-    $share = validate_share_token($config, $shareToken);
+    $share = find_share_token($config, $shareToken);
     if (!$share) {
         http_response_code(404);
         exit;
     }
+    // PHP's clock: expires_at is in the configured time zone, SQLite's datetime('now') is UTC
+    if ($share['expires_at'] && $share['expires_at'] <= date('Y-m-d H:i:s')) {
+        $lastDay = date('j M Y', strtotime($share['expires_at']));
+        if (isset($_GET['api'])) {
+            respond(json_encode(['error' => "This token expired on {$lastDay}. Extend it with `php puls share:edit`."]), 401, 'application/json');
+        }
+        respond("This link expired on {$lastDay}. Ask whoever shared it for a new one.", 401, 'text/plain', security_headers());
+    }
+    note_share_token_use($config, $share);
+    $shareSites = share_token_sites(get_db($config['db_path']), $share);
     if (isset($_GET['api'])) {
-        $user = ['sites' => [$share['site']]];
+        // No sites means every site to the API, so a group left without sites gets one that cannot exist
+        $user = ['sites' => $shareSites ?: ['']];
         respond(get_api_data($config, $user), 200, 'application/json');
     }
     // Serve dashboard in shared mode
     $dashboard = __DIR__ . '/dashboard.html';
     if (file_exists($dashboard)) {
         $html = str_replace('__PULS_VERSION__', PULS_VERSION, file_get_contents($dashboard));
-        $html = inject_after_title($html, config_block($config, ['token' => $share['token'], 'site' => $share['site']]));
+        $html = inject_after_title($html, config_block($config, [
+            'token' => $share['token'],
+            'site' => $share['site'],
+            'groups' => share_token_groups($share),
+            'sites' => $shareSites,
+        ]));
         respond($html, 200, 'text/html', security_headers());
     }
     respond('Dashboard file not found.', 404, 'text/plain');
@@ -341,14 +357,36 @@ function bearer_token(array $server): ?string
     return preg_match('/^Bearer\s+(\S+)$/i', $header, $m) ? $m[1] : null;
 }
 
-function validate_share_token(array $config, string $token): ?array
+function find_share_token(array $config, string $token): ?array
 {
     if (strlen($token) < 32) return null;
-    $db = get_db($config['db_path']);
-    // PHP's clock: expires_at is in the configured time zone, SQLite's datetime('now') is UTC
-    $stmt = $db->prepare('SELECT * FROM share_tokens WHERE token = ? AND (expires_at IS NULL OR expires_at > ?)');
-    $stmt->execute([$token, date('Y-m-d H:i:s')]);
+    $stmt = get_db($config['db_path'])->prepare('SELECT * FROM share_tokens WHERE token = ?');
+    $stmt->execute([$token]);
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function share_token_groups(array $share): array
+{
+    return json_decode($share['group_names'] ?? '', true) ?: [];
+}
+
+// What a token reads: its one site, or what is in its groups now, also sites added later
+function share_token_sites(PDO $db, array $share): array
+{
+    $groups = share_token_groups($share);
+    if (!$groups) return $share['site'] !== '' ? [$share['site']] : [];
+    $stmt = $db->prepare('SELECT site FROM site_groups WHERE group_name IN (' . implode(',', array_fill(0, count($groups), '?')) . ') ORDER BY site');
+    $stmt->execute($groups);
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+// share:list says when a token was last used, so a forgotten one can be found. The day is enough,
+// so it is one write a day and not one per request
+function note_share_token_use(array $config, array $share): void
+{
+    $now = date('Y-m-d H:i:s');
+    if (substr($share['last_used_at'] ?? '', 0, 10) === substr($now, 0, 10)) return;
+    get_db($config['db_path'])->prepare('UPDATE share_tokens SET last_used_at = ? WHERE id = ?')->execute([$now, $share['id']]);
 }
 
 // =====================================================================
@@ -2723,7 +2761,7 @@ function site_groups(PDO $db): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 30; // Bump this when adding new migrations
+    $currentVersion = 31; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -3223,6 +3261,14 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
     if ($version < 30) {
         create_bot_days($db);
         sum_bot_days($db);
+    }
+
+    // v31: a token can read groups (group_names, a JSON list, with site empty) and says when it was
+    // last used. The CLI adds the same to a database that has not run this yet (shareTokensDb)
+    if ($version < 31) {
+        $columns = array_column($db->query('PRAGMA table_info(share_tokens)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        if (!in_array('group_names', $columns, true)) $db->exec('ALTER TABLE share_tokens ADD COLUMN group_names TEXT');
+        if (!in_array('last_used_at', $columns, true)) $db->exec('ALTER TABLE share_tokens ADD COLUMN last_used_at TEXT');
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);

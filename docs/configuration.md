@@ -68,11 +68,14 @@ Without arguments, `sites:group` offers the groups and the sites by number. A si
 
 ## Share links
 
-A share link shows one site's dashboard read-only, without a login, and also opens the [read API](api.md) for that site:
+A share link shows a dashboard read-only, without a login, and also opens the [read API](api.md) for the same data. It covers one site, or the sites in one or more groups, with a site picker in the dashboard:
 
 ```bash
 php puls share:create example.com --label="Client Q1" --expires=2026-06-30
+php puls share:create --groups=Shops,Private --label="Reporting tool"
 ```
+
+A link works for 90 days unless you give another last day, or `--expires=never`. See [share tokens](api.md#share-tokens) for how they work.
 
 ## Excluding your own visits
 
@@ -126,9 +129,10 @@ php puls sites:remove <name>             # Delete all data for a site
 php puls sites:group <group> <site>...   # Put sites in a group (one group per site)
 php puls sites:ungroup <site>...         # Take sites out of their group
 php puls sites:clean-paths <site> --query --ids  # Clean stored paths (--keep=a,b, --tokens, --dry-run)
-php puls share:create <site>             # Create a shareable dashboard link
-php puls share:create <site> --label="Client Q1" --expires=2026-06-30
-php puls share:list                      # List all share tokens
+php puls share:create <site or group>    # Create a read token and dashboard link, for 90 days
+php puls share:create --groups=a,b --label="Client Q1" --expires=2026-06-30   # Several groups, a label, a last day (or never)
+php puls share:list                      # List tokens: what they read, last day, last use
+php puls share:edit <token> --expires=2027-12-31   # New last day, --label (none removes it) or --groups; the token stays the same
 php puls share:revoke <token>            # Revoke a share token
 php puls exclude:add <site> <ip>         # Stop counting an IP or range (e.g. 81.2.3.0/24, site * = all)
 php puls exclude:list                    # List excluded IPs

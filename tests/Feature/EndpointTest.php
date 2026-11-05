@@ -852,10 +852,134 @@ test('api hours returns one day per hour with the chart filters', function () {
         ->and(http('GET', "/?api&days=7&hours=2026-02-30&share={$token}")['body'])->toContain('Invalid date');
 });
 
-test('share API returns 404 for expired token', function () {
-    $token = createTestShareToken('test', '2020-01-01 00:00:00');
+test('an expired token gets 401 with its day and how to extend it, an unknown one 404', function () {
+    $token = createTestShareToken('test', '2020-01-01 23:59:59');
+
     $r = http('GET', '/?api&days=7&share=' . $token);
-    expect($r['status'])->toBe(404);
+    expect($r['status'])->toBe(401)
+        ->and(json_decode($r['body'], true)['error'])->toContain('1 Jan 2020')->toContain('share:edit');
+
+    $page = http('GET', '/?share=' . $token);
+    expect($page['status'])->toBe(401)
+        ->and($page['body'])->toContain('1 Jan 2020');
+
+    expect(http('GET', '/?api&days=7&share=' . bin2hex(random_bytes(32)))['status'])->toBe(404);
+});
+
+function createTestGroupToken(array $groups): string
+{
+    $token = 'puls_' . bin2hex(random_bytes(20));
+    getTestDb()->prepare("INSERT INTO share_tokens (token, site, group_names, created_at) VALUES (?, '', ?, ?)")
+        ->execute([$token, json_encode($groups), date('Y-m-d H:i:s')]);
+    return $token;
+}
+
+function clearGroupSeeds(): void
+{
+    $db = getTestDb();
+    $db->exec("DELETE FROM site_groups WHERE site LIKE '%-seed%'");
+    $db->exec("DELETE FROM pageviews WHERE site LIKE '%-seed%'");
+}
+
+function seedGroupedSite(string $site, ?string $group): void
+{
+    $db = getTestDb();
+    $db->prepare("INSERT INTO pageviews (site, path, visitor_hash, created_at) VALUES (?, '/', ?, ?)")->execute([$site, uniqid(), date('Y-m-d H:i:s')]);
+    if ($group !== null) $db->prepare('INSERT OR REPLACE INTO site_groups (site, group_name) VALUES (?, ?)')->execute([$site, $group]);
+}
+
+test('a token for groups reads what is in them and nothing else', function () {
+    $id = uniqid('seed');
+    [$a, $b, $c, $other] = ["a-{$id}", "b-{$id}", "c-{$id}", "other-{$id}"];
+    seedGroupedSite($a, "one-{$id}");
+    seedGroupedSite($b, "one-{$id}");
+    seedGroupedSite($c, "two-{$id}");
+    seedGroupedSite($other, "three-{$id}");
+    $token = createTestGroupToken(["one-{$id}", "two-{$id}"]);
+
+    $sites = json_decode(http('GET', '/?api&sites&share=' . $token)['body'], true);
+    expect($sites)->toEqualCanonicalizing([$a, $b, $c]);
+
+    expect(array_keys(json_decode(http('GET', '/?api&groups&share=' . $token)['body'], true)))->toEqualCanonicalizing(["one-{$id}", "two-{$id}"]);
+
+    $all = json_decode(http('GET', '/?api&days=7&share=' . $token)['body'], true);
+    expect($all['totals']['views'])->toBe(3);
+
+    $one = json_decode(http('GET', "/?api&days=7&site={$a}&share=" . $token)['body'], true);
+    expect($one['totals']['views'])->toBe(1)->and($one['site'])->toBe($a);
+
+    $denied = json_decode(http('GET', "/?api&days=7&site={$other}&share=" . $token)['body'], true);
+    expect($denied)->toHaveKey('error')->not->toHaveKey('totals');
+
+    // The same with the token in a header, which is how a script sends it
+    $viaHeader = http('GET', '/?api&sites', ['header' => "Authorization: Bearer {$token}"]);
+    expect(json_decode($viaHeader['body'], true))->toEqualCanonicalizing([$a, $b, $c]);
+})->after(fn () => clearGroupSeeds());
+
+test('a token for a group follows its sites, in and out', function () {
+    $id = uniqid('seed');
+    seedGroupedSite("stays-{$id}", "group-{$id}");
+    seedGroupedSite("joins-{$id}", null);
+    $token = createTestGroupToken(["group-{$id}"]);
+    $read = fn () => json_decode(http('GET', '/?api&sites&share=' . $token)['body'], true);
+
+    expect($read())->toBe(["stays-{$id}"]);
+
+    getTestDb()->prepare('INSERT INTO site_groups (site, group_name) VALUES (?, ?)')->execute(["joins-{$id}", "group-{$id}"]);
+    expect($read())->toEqualCanonicalizing(["stays-{$id}", "joins-{$id}"]);
+
+    getTestDb()->prepare('DELETE FROM site_groups WHERE site = ?')->execute(["stays-{$id}"]);
+    expect($read())->toBe(["joins-{$id}"]);
+})->after(fn () => clearGroupSeeds());
+
+test('a token for a group without sites reads nothing, never every site', function () {
+    $id = uniqid('seed');
+    seedGroupedSite("somebody-elses-{$id}", null);
+    $token = createTestGroupToken(["empty-{$id}"]);
+
+    expect(json_decode(http('GET', '/?api&sites&share=' . $token)['body'], true))->toBe([]);
+
+    $d = json_decode(http('GET', '/?api&days=7&share=' . $token)['body'], true);
+    expect($d['totals']['views'])->toBe(0)
+        ->and(json_encode($d))->not->toContain("somebody-elses-{$id}");
+
+    $denied = json_decode(http('GET', "/?api&days=7&site=somebody-elses-{$id}&share=" . $token)['body'], true);
+    expect($denied)->toHaveKey('error');
+})->after(fn () => clearGroupSeeds());
+
+test('the shared page of a token for groups gets its sites, and of a token for a site that site', function () {
+    $id = uniqid('seed');
+    seedGroupedSite("x-{$id}", "page-{$id}");
+    seedGroupedSite("y-{$id}", "page-{$id}");
+    $config = function (string $token) {
+        preg_match('/<script type="application\/json" id="puls-config">(.*?)<\/script>/s', http('GET', '/?share=' . $token)['body'], $m);
+        return json_decode($m[1], true)['share'];
+    };
+
+    $groups = $config(createTestGroupToken(["page-{$id}"]));
+    expect($groups['site'])->toBe('')
+        ->and($groups['groups'])->toBe(["page-{$id}"])
+        ->and($groups['sites'])->toEqualCanonicalizing(["x-{$id}", "y-{$id}"]);
+
+    $site = $config(createTestShareToken("x-{$id}"));
+    expect($site['site'])->toBe("x-{$id}")
+        ->and($site['groups'])->toBe([])
+        ->and($site['sites'])->toBe(["x-{$id}"]);
+})->after(fn () => clearGroupSeeds());
+
+test('a token notes the day it was last used', function () {
+    $token = createTestShareToken('used-' . uniqid());
+    $last = fn () => getTestDb()->query("SELECT last_used_at FROM share_tokens WHERE token = '{$token}'")->fetchColumn();
+    expect($last())->toBeNull();
+
+    http('GET', '/?api&sites&share=' . $token);
+    $first = $last();
+    expect(substr((string) $first, 0, 10))->toBe(date('Y-m-d'));
+
+    // Not a write per request: the day is what matters
+    getTestDb()->exec("UPDATE share_tokens SET last_used_at = '" . date('Y-m-d') . " 00:00:00' WHERE token = '{$token}'");
+    http('GET', '/?api&sites&share=' . $token);
+    expect($last())->toBe(date('Y-m-d') . ' 00:00:00');
 });
 
 test('share sites endpoint returns only scoped site', function () {
@@ -2023,7 +2147,7 @@ test('a share link expires on the configured clock, not SQLite UTC', function ()
     $expired = (new DateTimeImmutable('-1 hour', new DateTimeZone($zone)))->format('Y-m-d H:i:s');
     $token = createTestShareToken('zone-expiry', $expired);
 
-    expect(http('GET', '/?api&days=7&share=' . $token, [], 8092)['status'])->toBe(404);
+    expect(http('GET', '/?api&days=7&share=' . $token, [], 8092)['status'])->toBe(401);
 });
 
 /**
