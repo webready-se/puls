@@ -1289,6 +1289,39 @@ test('language= narrows the view to one language, also in the report', function 
     expect(http('GET', '/?api&days=7&format=md&language=sv&share=' . $token)['body'])->toContain('Only visitors with the language `sv`');
 });
 
+test('AI assistants are a channel of their own, by referrer or by the utm_source they add', function () {
+    $site = 'ai-channel-' . uniqid();
+    $db = getTestDb();
+    $pv = $db->prepare('INSERT INTO pageviews (site, path, referrer, utm_source, utm_medium, visitor_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $now = date('Y-m-d H:i:s');
+    $old = date('Y-m-d H:i:s', strtotime('-3 days'));
+    foreach ([$now, $old] as $at) {
+        foreach ([
+            ['/a', 'ChatGPT', null, null, 'referrer'],
+            ['/b', null, 'chatgpt.com', null, 'utm'],
+            ['/c', 'Perplexity', null, null, 'perplexity'],
+            // Paid stays paid, whoever sent it, and a campaign stays a campaign
+            ['/d', 'ChatGPT', 'chatgpt.com', 'cpc', 'paid'],
+            ['/e', null, 'newsletter', 'email', 'campaign'],
+            ['/f', 'example.org', null, null, 'referral'],
+            ['/g', null, null, null, 'direct'],
+        ] as [$path, $referrer, $source, $medium, $visitor]) {
+            $pv->execute([$site, $path, $referrer, $source, $medium, $visitor . $at, $at]);
+        }
+    }
+    $token = createTestShareToken($site);
+
+    // Today from the rows and the days before from the summary: the same channels
+    $channels = array_column(json_decode(http('GET', '/?api&days=7&share=' . $token)['body'], true)['channels'], 'visitors', 'channel');
+    expect($channels)->toEqual(['AI' => 6, 'Paid' => 2, 'Campaign' => 2, 'Referral' => 2, 'Direct' => 2]);
+
+    // The filter says the same as the list
+    foreach (['ai' => 6, 'paid' => 2, 'campaign' => 2, 'referral' => 2, 'direct' => 2] as $slug => $visitors) {
+        $d = json_decode(http('GET', "/?api&days=7&channel={$slug}&share=" . $token)['body'], true);
+        expect($d['totals']['visitors'])->toBe($visitors);
+    }
+});
+
 test('a token notes the day it was last used', function () {
     $token = createTestShareToken('used-' . uniqid());
     $last = fn () => getTestDb()->query("SELECT last_used_at FROM share_tokens WHERE token = '{$token}'")->fetchColumn();
