@@ -27,6 +27,7 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `GET /?api&days=7[&site=x]` | Yes | JSON API |
 | `GET /?api&sites` | Yes | List tracked sites |
 | `GET /?api&groups` | Yes | The site groups and their sites (`{group: [sites]}`, limited to the user's sites) |
+| `GET /?api&botDetail` | Yes | Only the most crawled pages and the latest bot activity, which read the rows (the dashboard asks when Bots is open; `&bots=summary` leaves them out of `?api`); also with a share token |
 | `GET /?api&hours=YYYY-MM-DD` | Yes | One day's pageviews and visitors per hour, with the dashboard's filters (the hourly card); also with a share token |
 | `GET /` | Yes | Dashboard |
 | `POST /?login` | No | Login form submission |
@@ -64,7 +65,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (391 tests, unit + feature)
+tests/                  — Pest test suite (404 tests, unit + feature)
 docs/integrations.md    - Tracking setup: script attributes, events, keeping personal data out of URLs, excluding own visits, reverse proxies
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading
@@ -93,6 +94,7 @@ docker-compose.yml      — One-command setup with volume for /app/data
 - **No framework** — pure PHP 8.3+, only requires `pdo_sqlite`
 - **SQLite with WAL mode** — good concurrent read performance, single-file database
 - **A daily summary for the dashboard** - `daily` holds per site and day what the dashboard counts (views, visitors, bounces, hours, paths with entries and exits, referrers, UTM, channels, countries, browsers, devices, languages, visit lengths), and a view without a path or channel filter reads it instead of the rows: exact, since the visitor hash changes every day. A cache: what rewrites pageviews deletes it (`sites:clean-paths`, `sites:rename`, `sites:remove`), and it is summed again as needed; today is always read from the rows. A new figure counted from pageviews goes in `range_rows()` and `summary_figures()` too, and the test comparing every field with the rows (`DailySummaryTest`) must pass
+- **Bots counted per day, by a trigger** - `bot_days` holds visits per site, day and bot, kept by a trigger on `bot_visits`, so nothing that stores a visit can forget it. The dashboard's Bots header reads it, and the most crawled pages and latest activity (which read the rows) are fetched when the section is open (`bots=summary`, `botDetail`). Its own table, not a kind in `daily`: that is a cache that can be deleted and summed again, and the rows go after `BOT_RETENTION_DAYS` while the counts stay. Puls shows what bots do; stopping them is the site's (`robots.txt`, Nginx, the mirror's `map`)
 - **One covering index on pageviews** - `(site, created_at, visitor_hash)`: the dashboard's visitor counts, bounces and sessions read it, not the rows. No index on the hash alone: nothing looks a visitor up, and the planner used it to scan the whole table for All sites. A sampled `ANALYZE` once a day (`refresh_statistics`) lets the planner walk the index site by site. Measure a query or index change with `scripts/seed-benchmark.php` and `scripts/benchmark.php` before and after
 - **Session-based auth** — CSRF-protected, brute-force lockout per IP (failed logins counted in `audit_log`), bcrypt passwords; a new session id every hour, the old one leading to it for a minute so requests in flight stay logged in; session files in `data/sessions` deleted once a day (PHP's own clean-up does not reach them on Forge)
 - **Per-user site access** — users can be restricted to specific sites

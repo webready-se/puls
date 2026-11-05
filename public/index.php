@@ -681,6 +681,7 @@ function handle_collect(array $config): void
         $path = normalize_path(urldecode(substr($input['u'], 0, 500)));
         $stmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
         $stmt->execute([$site, $path, $bot['name'], $bot['category'], substr($ua, 0, 500), date('Y-m-d H:i:s')]);
+        cleanup_bot_visits($db, $config['bot_retention_days'] ?? 90);
         return;
     }
 
@@ -1415,6 +1416,42 @@ function get_api_data(array $config, array $user): string
         $siteParams = $allowedSites;
     }
 
+    // What only the rows can answer: the most crawled pages and the latest activity. Seconds on
+    // an install with many bot visits, so the dashboard asks for it when Bots is open (botDetail)
+    // and leaves it out of the page's own request (bots=summary)
+    $readBotDetail = function (string $expand) use ($db, $config, $since, $dateFilter, $dateParams, $siteFilter, $siteParams): array {
+        $pagesLimit = $expand === 'botPages' ? 1000 : 10;
+        $stmt = $db->prepare("SELECT path, COUNT(*) as visits, COUNT(*) OVER () as total FROM bot_visits WHERE {$dateFilter} {$siteFilter} GROUP BY path ORDER BY visits DESC, path LIMIT {$pagesLimit}");
+        $stmt->execute(array_merge($dateParams, $siteParams));
+        $pages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $pagesTotal = $pages ? (int) $pages[0]['total'] : 0;
+        $pages = array_map(fn ($p) => ['path' => $p['path'], 'visits' => $p['visits']], $pages);
+
+        $activityLimit = $expand === 'botActivity' ? 1000 : 10;
+        $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, site, path, created_at FROM bot_visits WHERE {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT {$activityLimit}");
+        $stmt->execute(array_merge($dateParams, $siteParams));
+        $activity = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (function_exists('idn_to_utf8')) {
+            foreach ($activity as &$a) {
+                $decoded = idn_to_utf8($a['site'], 0, INTL_IDNA_VARIANT_UTS46);
+                if ($decoded !== false) $a['site'] = $decoded;
+            }
+            unset($a);
+        }
+
+        // The totals reach further back than the rows, so a period past them says how far the lists go
+        $kept = $config['bot_retention_days'] ?? 90;
+        return [
+            'botPages' => $pages,
+            'botPagesTotal' => $pagesTotal,
+            'botActivity' => $activity,
+            'botKeptDays' => $kept > 0 && $since < date('Y-m-d', strtotime("-{$kept} days")) ? $kept : null,
+        ];
+    };
+    if (isset($_GET['botDetail'])) {
+        return json_encode($readBotDetail($_GET['expand'] ?? ''), JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
     // Search endpoint (early return)
     if (isset($_GET['search'])) {
         $search = mb_substr(trim($_GET['search']), 0, 100);
@@ -1893,38 +1930,21 @@ function get_api_data(array $config, array $user): string
         $channels = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Bot data
+    // Bot data: the totals from the counts per day, the lists from the rows unless left out
     $botsLimit = $expand === 'bots' ? 1000 : 10;
-    $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, COUNT(*) as visits FROM bot_visits WHERE {$dateFilter} {$siteFilter} GROUP BY bot_name, bot_category ORDER BY visits DESC LIMIT {$botsLimit}");
+    $botDates = 'date >= ?' . ($until ? ' AND date < ?' : '');
+    $stmt = $db->prepare("SELECT name, category, SUM(visits) as visits FROM bot_days WHERE {$botDates} {$siteFilter} GROUP BY name, category ORDER BY visits DESC, name LIMIT {$botsLimit}");
     $stmt->execute(array_merge($dateParams, $siteParams));
     $bots = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $stmt = $db->prepare("SELECT COUNT(*) FROM (SELECT 1 FROM bot_visits WHERE {$dateFilter} {$siteFilter} GROUP BY bot_name, bot_category)");
+    $stmt = $db->prepare("SELECT COUNT(*) FROM (SELECT 1 FROM bot_days WHERE {$botDates} {$siteFilter} GROUP BY name, category)");
     $stmt->execute(array_merge($dateParams, $siteParams));
     $botsTotal = (int) $stmt->fetchColumn();
 
-    $stmt = $db->prepare("SELECT bot_category as category, COUNT(*) as visits FROM bot_visits WHERE {$dateFilter} {$siteFilter} GROUP BY bot_category ORDER BY visits DESC");
+    $stmt = $db->prepare("SELECT category, SUM(visits) as visits FROM bot_days WHERE {$botDates} {$siteFilter} GROUP BY category ORDER BY visits DESC, category");
     $stmt->execute(array_merge($dateParams, $siteParams));
     $botCategories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $botPagesLimit = $expand === 'botPages' ? 1000 : 10;
-    $stmt = $db->prepare("SELECT path, COUNT(*) as visits FROM bot_visits WHERE {$dateFilter} {$siteFilter} GROUP BY path ORDER BY visits DESC LIMIT {$botPagesLimit}");
-    $stmt->execute(array_merge($dateParams, $siteParams));
-    $botPages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $stmt = $db->prepare("SELECT COUNT(DISTINCT path) FROM bot_visits WHERE {$dateFilter} {$siteFilter}");
-    $stmt->execute(array_merge($dateParams, $siteParams));
-    $botPagesTotal = (int) $stmt->fetchColumn();
-
-    $activityLimit = $expand === 'botActivity' ? 1000 : 10;
-    $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, site, path, created_at FROM bot_visits WHERE {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT {$activityLimit}");
-    $stmt->execute(array_merge($dateParams, $siteParams));
-    $botActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    if (function_exists('idn_to_utf8')) {
-        foreach ($botActivity as &$a) {
-            $decoded = idn_to_utf8($a['site'], 0, INTL_IDNA_VARIANT_UTS46);
-            if ($decoded !== false) $a['site'] = $decoded;
-        }
-        unset($a);
-    }
+    $botDetail = ($_GET['bots'] ?? '') === 'summary' ? [] : $readBotDetail($expand);
 
     // Broken links (last 30 days, regardless of $days filter). PHP's clock, not SQLite's
     // date('now'), which is UTC while stored times are in the configured time zone
@@ -2210,9 +2230,7 @@ function get_api_data(array $config, array $user): string
         'bots'      => $bots,
         'botsTotal' => $botsTotal,
         'botCategories' => $botCategories,
-        'botPages'  => $botPages,
-        'botPagesTotal' => $botPagesTotal,
-        'botActivity' => $botActivity,
+        ...$botDetail,
         'summary'   => $summary,
         'goals'     => $goals,
         'breakdowns' => $breakdowns,
@@ -2504,8 +2522,8 @@ function handle_log(array $config): void
     $stmt->execute([$site, $path, $bot['name'], $bot['category'], substr($ua, 0, 500), $now,
                      $bot['name'], $site, $path, date('Y-m-d H:i:s', strtotime('-10 seconds'))]);
 
-    // Lazy retention: clean up entries older than 90 days (once per day)
-    cleanup_bot_visits($db);
+    // Lazy retention, once per day
+    cleanup_bot_visits($db, $config['bot_retention_days'] ?? 90);
 }
 
 function handle_pixel(array $config): void
@@ -2528,6 +2546,7 @@ function handle_pixel(array $config): void
         substr($ua, 0, 500),
         date('Y-m-d H:i:s'),
     ]);
+    cleanup_bot_visits($db, $config['bot_retention_days'] ?? 90);
 }
 
 function is_origin_allowed(string $origin, array $allowedOrigins): bool
@@ -2704,7 +2723,7 @@ function site_groups(PDO $db): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 29; // Bump this when adding new migrations
+    $currentVersion = 30; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -3200,6 +3219,12 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
         create_daily_table($db);
     }
 
+    // v30: bot visits counted per day (create_bot_days), from the rows already stored
+    if ($version < 30) {
+        create_bot_days($db);
+        sum_bot_days($db);
+    }
+
     $db->exec('PRAGMA user_version = ' . $currentVersion);
 }
 
@@ -3267,14 +3292,55 @@ function cleanup_broken_links(PDO $db): void
     file_put_contents($marker, date('Y-m-d'));
 }
 
-function cleanup_bot_visits(PDO $db): void
+function cleanup_bot_visits(PDO $db, int $days): void
 {
+    if ($days <= 0) return;
     $marker = dirname($db->query("PRAGMA database_list")->fetch()['file'] ?? __DIR__) . '/.bot_cleanup';
     if (file_exists($marker) && file_get_contents($marker) === date('Y-m-d')) return;
 
-    $stmt = $db->prepare('DELETE FROM bot_visits WHERE created_at < ?');
-    $stmt->execute([date('Y-m-d H:i:s', strtotime('-90 days'))]);
+    // Rowids follow time, so what goes is a range at the start of the table. Deleted in batches:
+    // on a busy install that is a whole day's visits, and tracking waits for each write
+    $stmt = $db->prepare('SELECT id FROM bot_visits WHERE created_at >= ? ORDER BY id LIMIT 1');
+    $stmt->execute([date('Y-m-d H:i:s', strtotime("-{$days} days"))]);
+    $keepFrom = $stmt->fetchColumn() ?: PHP_INT_MAX;
+    $stmt->closeCursor();
+    $delete = $db->prepare('DELETE FROM bot_visits WHERE id < ? AND id < (SELECT MIN(id) FROM bot_visits) + 5000');
+    do {
+        $delete->execute([$keepFrom]);
+    } while ($delete->rowCount() > 0);
     file_put_contents($marker, date('Y-m-d'));
+}
+
+/**
+ * Bot visits counted per site, day and bot, which the dashboard reads instead of the rows: on a
+ * site with many pages, crawlers make hundreds of visits per visitor. A trigger keeps the count,
+ * so nothing that stores a visit can forget it and no request has to read the rows. Not in
+ * `daily`, which is a cache that can be deleted and summed again: the rows go after
+ * BOT_RETENTION_DAYS, and the counts stay.
+ */
+function create_bot_days(PDO $db): void
+{
+    $db->exec('CREATE TABLE IF NOT EXISTS bot_days (
+        site TEXT NOT NULL,
+        date TEXT NOT NULL,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        visits INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (site, date, name, category)
+    ) WITHOUT ROWID');
+    $db->exec('CREATE TRIGGER IF NOT EXISTS bot_days_count AFTER INSERT ON bot_visits BEGIN
+        INSERT INTO bot_days (site, date, name, category, visits)
+        VALUES (NEW.site, substr(NEW.created_at, 1, 10), NEW.bot_name, NEW.bot_category, 1)
+        ON CONFLICT (site, date, name, category) DO UPDATE SET visits = visits + 1;
+    END');
+}
+
+// Counts the stored visits of the days after $after into bot_days
+function sum_bot_days(PDO $db, string $after = ''): void
+{
+    $db->prepare('INSERT OR REPLACE INTO bot_days (site, date, name, category, visits)
+        SELECT site, substr(created_at, 1, 10), bot_name, bot_category, COUNT(*) FROM bot_visits
+        WHERE substr(created_at, 1, 10) > ? GROUP BY 1, 2, 3, 4')->execute([$after]);
 }
 
 function is_ignored_bot(string $ua, array $patterns): bool
@@ -3422,6 +3488,14 @@ function rename_unknown_bots(PDO $db): void
             $update->execute([$bot['name'], $bot['category'], $row['id']]);
         }
     }
+
+    // The counts follow, once there are any. The oldest day may be cut off by retention, so it
+    // keeps its count rather than getting a smaller one from the rows that are left
+    if (!$db->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'bot_days'")->fetchColumn()) return;
+    $oldest = $db->query('SELECT substr(MIN(created_at), 1, 10) FROM bot_visits')->fetchColumn();
+    if (!$oldest) return;
+    $db->prepare('DELETE FROM bot_days WHERE date > ?')->execute([$oldest]);
+    sum_bot_days($db, $oldest);
 }
 
 function detect_browser(string $ua): string

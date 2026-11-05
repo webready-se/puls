@@ -233,9 +233,6 @@ async function main() {
     const wall = (t) => Date.parse(t.replace(' ', 'T') + 'Z');
     const ago = (s) => s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : Math.floor(s / 3600) + ' hr ago';
     const age = (wall(api.now) - wall(api.botActivity[0].created_at)) / 1000;
-    const shownAgo = q('.bot-row-time')?.textContent;
-    // The dashboard rendered a little before this request, so it may show up to two minutes less
-    expect([ago(age), ago(age - 120)].includes(shownAgo), `latest bot visit counts from the server's now (shows ${shownAgo}, expected ${ago(age)})`);
 
     // Bots and Pages to fix start folded, with a header that says what is inside; a click opens
     // one and remembers it (the refresh below keeps it open)
@@ -245,8 +242,21 @@ async function main() {
     expect(folded('bots') && folded('broken'), 'bots and pages to fix start folded');
     expect(/^[\d,]+ visits from \d+ bots$/.test(foldSummary('bots') || ''), `folded bots say what is inside (say ${foldSummary('bots')})`);
     expect(foldSummary('broken') === '2 not found, 3 redirects in the last 30 days', `folded pages to fix say what is inside (say ${foldSummary('broken')})`);
-    fold('bots')?.querySelector('.fold-toggle').click();
-    expect(!folded('bots') && q('.bot-row-time')?.offsetParent && localStorage.getItem('puls-bots-open') === '1', 'a click opens the bots and remembers it');
+    // Their crawled pages and activity read the rows, so they are not asked for until opened
+    const asked = [], fetched = window.fetch;
+    window.fetch = (url, ...rest) => { asked.push(String(url)); return fetched(url, ...rest); };
+    const toggle = fold('bots')?.querySelector('.fold-toggle');
+    expect(!q('.bot-row-time'), 'the bots\' lists are not there while folded');
+    toggle?.focus();
+    toggle?.click();
+    expect(!folded('bots') && localStorage.getItem('puls-bots-open') === '1' && asked.some((u) => /[?&]botDetail/.test(u)), 'a click opens the bots, remembers it and asks for their lists');
+    expect(/Loading/.test(q('#bot-pages')?.textContent || ''), 'the crawled pages say they are loading until they arrive');
+    await waitFor(() => q('.bot-row-time')?.offsetParent, 'the bots\' latest activity');
+    expect(!/Loading/.test(q('#bot-pages')?.textContent || '') && document.activeElement?.classList.contains('fold-toggle'), 'the lists arrive and the button keeps its focus');
+    window.fetch = fetched;
+    const shownAgo = q('.bot-row-time')?.textContent;
+    // The dashboard rendered a little before this request, so it may show up to two minutes less
+    expect([ago(age), ago(age - 120)].includes(shownAgo), `latest bot visit counts from the server's now (shows ${shownAgo}, expected ${ago(age)})`);
 
     // Order: the chart right after the numbers, saved cards after pages and sources
     const isle = (k) => q(`#app [data-island="${k}"]`);
