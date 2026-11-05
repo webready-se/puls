@@ -1327,6 +1327,9 @@ function shareList(array $config, ?string $site): void
 
     echo "\n" . count($tokens) . " token(s).\n";
 
+    // Only with someone there to answer: a script's input stays open, and it would wait for good
+    if (!stream_isatty(STDIN)) return;
+
     $input = prompt("\nGet share URL? (number, enter to skip): ");
     if ($input !== '') {
         $idx = (int) $input - 1;

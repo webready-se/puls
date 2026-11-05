@@ -170,3 +170,26 @@ it('sites:group says which tokens read the sites now', function () {
     $out = runCli($this->tmpDir, 'sites:group', ['One', 'shop'])['output'];
     expect($out)->toContain('Report bot');
 });
+
+it('share:list finishes without a terminal, with its input left open', function () {
+    // Over ssh without a terminal, or in a script: input stays open and nobody answers
+    runCli($this->tmpDir, 'share:create', ['shop', '--label=Reader', '--expires=never']);
+    $wrapper = $this->tmpDir . '/list.php';
+    file_put_contents($wrapper, "<?php\n"
+        . "\$_ENV['DB_PATH'] = " . var_export($this->dbPath, true) . ";\n"
+        . "\$_ENV['USERS_FILE'] = " . var_export($this->tmpDir . '/users.json', true) . ";\n"
+        . "\$argv = ['puls', 'share:list'];\n\$argc = 2;\n"
+        . "require " . var_export(realpath(__DIR__ . '/../../puls'), true) . ";\n");
+
+    $process = proc_open(['php', $wrapper], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+    $deadline = microtime(true) + 5;
+    while (proc_get_status($process)['running'] && microtime(true) < $deadline) usleep(50_000);
+    $finished = !proc_get_status($process)['running'];
+    if (!$finished) proc_terminate($process);
+    $out = stream_get_contents($pipes[1]);
+    foreach ($pipes as $pipe) fclose($pipe);
+    proc_close($process);
+
+    expect($finished)->toBeTrue()
+        ->and($out)->toContain('1 token(s)')->not->toContain('Get share URL');
+});
