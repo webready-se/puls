@@ -109,6 +109,16 @@ cd /home/forge/puls.example.com/current
 php puls user:add admin
 ```
 
+**Run the CLI from `current`.** The file is in the release, and `current` points at the live one, so `php puls` in the site's root says "Could not open input file". A shell left in an old release runs old code against the live database, so Puls warns when it runs from one. To run it from anywhere in the site, add this to `~/.bashrc` on the server, and type `puls` instead of `php puls`:
+
+```bash
+puls() {
+    local dir=$PWD
+    while [ "$dir" != "/" ] && [ ! -L "$dir/current" ]; do dir=$(dirname "$dir"); done
+    if [ -L "$dir/current" ]; then (cd "$dir/current" && php puls "$@"); else php puls "$@"; fi
+}
+```
+
 **Deploy script (the default is fine):**
 
 ```bash
