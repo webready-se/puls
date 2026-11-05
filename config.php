@@ -38,6 +38,15 @@ function resolve_path(string $path): string
     return $dir . '/' . $path;
 }
 
+// What to say when the CLI runs from a release that is not the live one, or null. A zero-downtime
+// deploy keeps the last few, and a shell left in one runs old code against the live database
+function old_release_warning(string $dir): ?string
+{
+    if (!preg_match('#^(.*)/releases/[^/]+$#', $dir, $m) || !is_link($m[1] . '/current')) return null;
+    if (realpath($m[1] . '/current') === realpath($dir)) return null;
+    return "Old release: this is not the live code, but it uses the live database. Run it from {$m[1]}/current\n";
+}
+
 return [
     'app_name' => $_ENV['APP_NAME'] ?? 'Puls',
 

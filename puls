@@ -28,6 +28,8 @@
 $config = require __DIR__ . '/config.php';
 $command = $argv[1] ?? 'help';
 
+if ($warning = old_release_warning(__DIR__)) fwrite(STDERR, $warning);
+
 match ($command) {
     'user:add'      => userAdd($config, $argv[2] ?? null, $argv),
     'user:edit'     => userEdit($config, $argv[2] ?? null),
