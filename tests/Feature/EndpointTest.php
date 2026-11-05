@@ -1050,6 +1050,32 @@ test('format=md for a token for groups lists its sites and reads no others', fun
         ->not->toContain("other-{$id}");
 })->after(fn () => clearGroupSeeds());
 
+test('format=md says how to look closer, and offers one site only when there are several', function () {
+    $id = uniqid('seed');
+    seedGroupedSite("one-{$id}", "closer-{$id}");
+    seedGroupedSite("two-{$id}", "closer-{$id}");
+    seedGroupedSite("three-{$id}", "further-{$id}");
+
+    $one = http('GET', '/?api&days=7&format=md&share=' . createTestGroupToken(["closer-{$id}"]))['body'];
+    expect($one)->toStartWith("# Puls report: group closer-{$id},")
+        ->toContain('`&site=<name>`')
+        ->toContain('`&path=<path>`')
+        ->toContain('`&event=<name>&group=<key>`')
+        ->toContain('`&hours=<date>`');
+    // Next to the list of sites too, where a reader looking for one of them is
+    expect(substr($one, strpos($one, '## Sites'), 400))->toContain('&site=');
+
+    $two = http('GET', '/?api&days=7&format=md&share=' . createTestGroupToken(["closer-{$id}", "further-{$id}"]))['body'];
+    expect($two)->toStartWith("# Puls report: groups closer-{$id}, further-{$id},");
+
+    // Narrowed to a site, and for a token for one site, there is nothing to narrow to
+    $narrowed = http('GET', "/?api&days=7&format=md&site=one-{$id}&share=" . createTestGroupToken(["closer-{$id}"]))['body'];
+    $single = http('GET', '/?api&days=7&format=md&share=' . createTestShareToken("one-{$id}"))['body'];
+    foreach ([$narrowed, $single] as $report) {
+        expect($report)->not->toContain('&site=')->toContain('`&path=<path>`')->toContain('`&hours=<date>`');
+    }
+})->after(fn () => clearGroupSeeds());
+
 test('format=md is for the view: other questions keep their answers', function () {
     $site = 'report-json-' . uniqid() . '.example';
     seedReportSite($site);

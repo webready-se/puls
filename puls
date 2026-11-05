@@ -1152,6 +1152,7 @@ function shareCreate(array $config, ?string $name, array $argv): void
     echo "\nNever give them a PUBLIC_, VITE_ or NEXT_PUBLIC_ prefix: frameworks send those to the browser.\n";
     echo "\nRead the data with a command that loads .env itself, so the token never shows in a command, a log or an AI assistant's session:\n\n";
     echo "  (set -a; . ./.env; curl -s -H \"Authorization: Bearer \$PULS_SHARE_TOKEN\" \"\$PULS_URL/?api&days=30&format=md\")\n";
+    if ($groups) echo "\nThat covers its sites together, with a line per site. For one of them, add &site=<name> to the address, as /?api&sites lists the names.\n";
     echo "\nExtend it or end it:\n\n  php puls share:edit {$start} --expires=YYYY-MM-DD\n  php puls share:revoke {$start}\n";
     echo "\nThe token also opens a read-only dashboard, to send to a person:\n\n  {$shownUrl}/?share={$token}\n";
 }
