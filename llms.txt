@@ -10,7 +10,14 @@ On the install's own address, usually `PULS_URL` in the project's `.env`. Send t
 
 - `/?api&days=30&format=md`: the Markdown report. Start here. Written for an assistant, with a short guide first
 - `/?api&days=30`: the same data as JSON, and the rows the report cuts short
-- `/?api&sites`: what the token reads. Add `&site=<name>` to the report or the JSON for one of them
+- `/?api&sites`: what the token reads
+
+To look closer, add to any of them:
+
+- `&site=<name>`: one of the sites a token for groups reads. Without it, the answer covers them together, with a line per site
+- `&path=<path>`: one page
+- `&event=<name>&group=<key>`: one event, split by a key in its data (JSON)
+- `&hours=<date>`: one day by hour (JSON)
 
 ## Get a token
 

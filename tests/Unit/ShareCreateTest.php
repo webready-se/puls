@@ -193,3 +193,10 @@ it('share:list finishes without a terminal, with its input left open', function 
     expect($finished)->toBeTrue()
         ->and($out)->toContain('1 token(s)')->not->toContain('Get share URL');
 });
+
+it('share:create says how a token for groups reads one site, and only then', function () {
+    groupSites($this->dbPath, ['One' => ['a.example', 'b.example']]);
+
+    expect(runCli($this->tmpDir, 'share:create', ['One', '--label=Reader', '--expires=never'])['output'])->toContain('&site=');
+    expect(runCli($this->tmpDir, 'share:create', ['shop', '--label=Reader', '--expires=never'])['output'])->not->toContain('&site=');
+});
