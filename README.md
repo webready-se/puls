@@ -128,6 +128,10 @@ You decide what your sites send. [Keeping personal data out of URLs](docs/integr
 - [Read API](docs/api.md): JSON and CSV with a share token, also for [your AI assistant](docs/api.md#use-it-from-an-ai-assistant)
 - [Changelog](CHANGELOG.md) and [roadmap](ROADMAP.md)
 
+## Building with an AI agent?
+
+Give your assistant a read-only token, and it can see what your visitors do before it changes something, and whether the change made a difference. [`?api&format=md`](docs/api.md#use-it-from-an-ai-assistant) is a report written for it, where nothing a visitor's browser sent can pass itself off as an instruction. [`llms.txt`](llms.txt) tells an agent how to read an install. Puls itself never calls an AI service.
+
 ## License
 
 MIT. Made by [Webready](https://webready.se) in Sweden. The dashboard uses the Figtree typeface, under the SIL Open Font License (`public/fonts/OFL.txt`).

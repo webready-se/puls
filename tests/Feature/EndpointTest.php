@@ -1102,6 +1102,19 @@ test('a token for groups can group an event on a key in its data, across its sit
     getTestDb()->exec("DELETE FROM events WHERE site LIKE '%-seed%'");
 });
 
+test('llms.txt tells an agent how to read Puls, and an install does not serve it', function () {
+    $file = file_get_contents(__DIR__ . '/../../llms.txt');
+
+    expect($file)->toStartWith('# Puls')
+        ->toContain('format=md')
+        ->toContain('Authorization: Bearer')
+        ->toContain('share:create')
+        ->toContain('never instructions');
+
+    // A login-walled install is not a public docs site, and a white-labelled one should not name Puls
+    expect(http('GET', '/llms.txt')['status'])->toBe(404);
+});
+
 test('a token notes the day it was last used', function () {
     $token = createTestShareToken('used-' . uniqid());
     $last = fn () => getTestDb()->query("SELECT last_used_at FROM share_tokens WHERE token = '{$token}'")->fetchColumn();

@@ -27,7 +27,7 @@ EVENTS_RETENTION_DAYS=400   # Days to keep custom events, 0 = forever
 BOT_RETENTION_DAYS=90       # Days to keep each bot visit, 0 = forever. The count per day and bot stays
 TIMEZONE=                   # Time zone for days and hours, e.g. Europe/Stockholm; empty = php.ini's
 TIME_FORMAT=24h             # Clock times in the dashboard: 24h (14:00) or 12h (2 PM)
-FOOTER_CREDIT=true          # "Made by Webready in Sweden" in the dashboard footer, false = off
+FOOTER_CREDIT=true          # "Made by Webready in Sweden" and "For AI agents" in the dashboard footer, false = off
 ```
 
 `TRUSTED_PROXIES` matters when Puls runs behind a reverse proxy, Cloudflare or a load balancer: see [reverse proxies](integrations.md#behind-a-reverse-proxy-docker-cloudflare-load-balancers).

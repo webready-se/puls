@@ -149,7 +149,7 @@ curl -s 'https://your-puls-domain/?api&share=TOKEN&days=30&event=checkout_starte
 
 A share token lets an AI coding assistant, such as Claude Code, read a site's numbers from inside that site's own project. It can then check which pages matter before it changes something, and whether a change made a difference after the deploy. Puls itself never calls an AI service.
 
-`?api&format=md` answers with a report written for the assistant: a short guide first, then the numbers, day by day, pages, sources, goals, events and bots, in far less text than the JSON. It takes `days`, `from`, `to`, `site`, `path` and `channel` like the JSON. With a token for groups it adds a list of the sites, and `&site=` narrows it to one. Long lists end with "and N more", and the rest is in the JSON.
+[`llms.txt`](../llms.txt) in this repository is the short version for an agent. `?api&format=md` answers with a report written for the assistant: a short guide first, then the numbers, day by day, pages, sources, goals, events and bots, in far less text than the JSON. It takes `days`, `from`, `to`, `site`, `path` and `channel` like the JSON. With a token for groups it adds a list of the sites, and `&site=` narrows it to one. Long lists end with "and N more", and the rest is in the JSON.
 
 1. Create a token for the site, or for a group if the project covers several sites, with a label that says what it is for. It works for 90 days unless you say otherwise, and `share:create` prints what the next steps need:
 
