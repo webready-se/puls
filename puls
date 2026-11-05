@@ -1223,7 +1223,16 @@ function pickShareTarget(array $tracked, array $groupMap): array
     }
     foreach ($tracked as $s) echo sprintf("  %d) %s\n", ++$n, $s);
 
-    $picked = parseNumberList(prompt($names ? "\nSelect (a number, or groups as 1,2 or 1-2): " : "\nSelect (number): "), $n);
+    $answer = prompt($names ? "\nSelect (a number or a name, or groups as 1,2 or 1-2, 0 for all groups): " : "\nSelect (a number or a name): ");
+    // By what people call it, a site first, as when it is given as an argument
+    if (in_array($answer, $tracked, true)) return [$answer, []];
+    if (in_array($answer, $names, true)) return ['', [$answer]];
+    if ($answer === '0' && $names) return ['', $names];
+    if ($answer !== '' && !preg_match('/^[\d\s,-]+$/', $answer)) {
+        echo "'{$answer}' is neither a tracked site nor a group.\n";
+        exit(1);
+    }
+    $picked = parseNumberList($answer, $n);
     $pickedGroups = array_values(array_filter($picked, fn ($i) => $i <= count($names)));
     $pickedSites = array_values(array_filter($picked, fn ($i) => $i > count($names)));
     if (!$picked || ($pickedSites && ($pickedGroups || count($pickedSites) > 1))) {
