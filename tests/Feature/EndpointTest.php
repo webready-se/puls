@@ -1188,6 +1188,107 @@ test('a white-labelled install does not point at Puls in its source', function (
     expect(file_get_contents(__DIR__ . '/../../public/dashboard.js'))->toContain("getElementById('agents-link').hidden = true");
 });
 
+test('a token says when it stops working, in the JSON and the report', function () {
+    $site = 'expiry-' . uniqid();
+    seedGroupedSite($site, null);
+    $read = fn (string $token, string $extra = '') => http('GET', '/?api&days=7' . $extra . '&share=' . $token)['body'];
+
+    $far = createTestShareToken($site, '2099-01-31 23:59:59');
+    expect(json_decode($read($far), true)['tokenExpires'])->toBe('2099-01-31')
+        ->and($read($far, '&format=md'))->toContain('This token works until 31 Jan 2099');
+
+    $never = createTestShareToken($site);
+    $d = json_decode($read($never), true);
+    expect($d)->toHaveKey('tokenExpires')->and($d['tokenExpires'])->toBeNull()
+        ->and($read($never, '&format=md'))->not->toContain('This token');
+
+    // Close to its last day it says what to do, so a script that reads it can pass it on
+    $soon = createTestShareToken($site, date('Y-m-d', strtotime('+5 days')) . ' 23:59:59');
+    expect($read($soon, '&format=md'))->toContain('**This token stops working on')->toContain('share:edit');
+
+    // A login has no token to speak of
+    $cookie = restrictedSession('full');
+    expect(json_decode(http('GET', '/?api&days=7', ['header' => $cookie], 8090)['body'], true))->not->toHaveKey('tokenExpires');
+});
+
+test('botDays lists bot visits per day, site and bot, for what the token reads', function () {
+    $id = uniqid('seed');
+    seedGroupedSite("one-{$id}", "bots-{$id}");
+    seedGroupedSite("two-{$id}", "bots-{$id}");
+    seedGroupedSite("other-{$id}", "elsewhere-{$id}");
+    $insert = getTestDb()->prepare("INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, '/', ?, ?, 'test', ?)");
+    $now = date('Y-m-d H:i:s');
+    foreach ([["one-{$id}", 'Googlebot', 'Search engine'], ["one-{$id}", 'Googlebot', 'Search engine'], ["two-{$id}", 'GPTBot', 'AI'], ["other-{$id}", 'Bingbot', 'Search engine']] as [$site, $bot, $category]) {
+        $insert->execute([$site, $bot, $category, $now]);
+    }
+    $token = createTestGroupToken(["bots-{$id}"]);
+
+    $rows = json_decode(http('GET', '/?api&days=7&botDays&share=' . $token)['body'], true)['botDays'];
+    expect($rows)->toEqualCanonicalizing([
+        ['date' => date('Y-m-d'), 'site' => "one-{$id}", 'name' => 'Googlebot', 'category' => 'Search engine', 'visits' => 2],
+        ['date' => date('Y-m-d'), 'site' => "two-{$id}", 'name' => 'GPTBot', 'category' => 'AI', 'visits' => 1],
+    ]);
+
+    $one = json_decode(http('GET', "/?api&days=7&botDays&site=two-{$id}&share=" . $token)['body'], true)['botDays'];
+    expect(array_column($one, 'name'))->toBe(['GPTBot']);
+})->after(function () {
+    clearGroupSeeds();
+    $db = getTestDb();
+    $db->exec("DELETE FROM bot_visits WHERE site LIKE '%-seed%'");
+    $db->exec("DELETE FROM bot_days WHERE site LIKE '%-seed%'");
+});
+
+test('bot= narrows the crawled pages to one bot, and botAgents lists the user agents behind unknown bots', function () {
+    $site = 'agents-' . uniqid();
+    $insert = getTestDb()->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    $now = date('Y-m-d H:i:s');
+    foreach ([['/a', 'Googlebot', 'Search engine', 'Googlebot/2.1'], ['/b', 'GPTBot', 'AI', 'GPTBot/1.0'], ['/c', 'Unknown bot', 'Other', 'Oddbot/1.0'], ['/c', 'Unknown bot', 'Other', 'Oddbot/1.0'], ['/d', 'Unknown crawler', 'Other', 'odd-crawler/2']] as [$path, $bot, $category, $ua]) {
+        $insert->execute([$site, $path, $bot, $category, $ua, $now]);
+    }
+    $token = createTestShareToken($site);
+
+    $pages = json_decode(http('GET', '/?api&days=7&botDetail&bot=GPTBot&share=' . $token)['body'], true);
+    expect(array_column($pages['botPages'], 'path'))->toBe(['/b'])->and($pages['botPagesTotal'])->toBe(1);
+
+    $agents = json_decode(http('GET', '/?api&days=7&botAgents&share=' . $token)['body'], true)['botAgents'];
+    expect($agents)->toBe([
+        ['user_agent' => 'Oddbot/1.0', 'name' => 'Unknown bot', 'visits' => 2],
+        ['user_agent' => 'odd-crawler/2', 'name' => 'Unknown crawler', 'visits' => 1],
+    ]);
+
+    $named = json_decode(http('GET', '/?api&days=7&botAgents&bot=GPTBot&share=' . $token)['body'], true)['botAgents'];
+    expect(array_column($named, 'user_agent'))->toBe(['GPTBot/1.0']);
+
+    // Questions about something else keep their JSON when format=md is along
+    expect(json_decode(http('GET', '/?api&days=7&botAgents&format=md&share=' . $token)['body'], true))->toHaveKey('botAgents')
+        ->and(json_decode(http('GET', '/?api&days=7&botDays&format=md&share=' . $token)['body'], true))->toHaveKey('botDays');
+});
+
+test('language= narrows the view to one language, also in the report', function () {
+    $site = 'language-' . uniqid();
+    $pv = getTestDb()->prepare('INSERT INTO pageviews (site, path, language, visitor_hash, created_at) VALUES (?, ?, ?, ?, ?)');
+    $now = date('Y-m-d H:i:s');
+    foreach ([['/sv', 'sv', 'a'], ['/sv', 'sv', 'b'], ['/en', 'en', 'c']] as [$path, $language, $visitor]) {
+        $pv->execute([$site, $path, $language, $visitor . $site, $now]);
+    }
+    $token = createTestShareToken($site);
+
+    $all = json_decode(http('GET', '/?api&days=7&share=' . $token)['body'], true);
+    expect($all['totals']['views'])->toBe(3)->and($all['language'])->toBeNull();
+
+    $sv = json_decode(http('GET', '/?api&days=7&language=sv&share=' . $token)['body'], true);
+    expect($sv['totals']['views'])->toBe(2)
+        ->and($sv['totals']['visitors'])->toBe(2)
+        ->and($sv['language'])->toBe('sv')
+        ->and(array_column($sv['pages'], 'path'))->toBe(['/sv']);
+
+    // Anything but a language code is not a filter, and never reaches the query
+    $odd = json_decode(http('GET', "/?api&days=7&language=" . urlencode("sv' OR 1=1") . '&share=' . $token)['body'], true);
+    expect($odd['totals']['views'])->toBe(3);
+
+    expect(http('GET', '/?api&days=7&format=md&language=sv&share=' . $token)['body'])->toContain('Only visitors with the language `sv`');
+});
+
 test('a token notes the day it was last used', function () {
     $token = createTestShareToken('used-' . uniqid());
     $last = fn () => getTestDb()->query("SELECT last_used_at FROM share_tokens WHERE token = '{$token}'")->fetchColumn();

@@ -63,9 +63,12 @@ All requests are `GET` with query parameters.
 | `site=name` | One site. Implied with a token for one site or a user with a single site. A token for groups or a user with several sites picks one of theirs, by the name `?api&sites` lists |
 | `path=/pricing` | Only pageviews of this exact path (the page drill-down) |
 | `channel=paid` | Only visitors from one channel: `paid`, `campaign`, `organic-search`, `social`, `referral`, `direct`. Goals are left out when `channel` or `path` is set |
+| `language=sv` | Only pageviews in one language (two letters, as in `languages`). Reads the rows, as `channel` and `path` do, and goals are left out here too |
 | `expand=pages` | Return up to 1,000 rows for one list instead of the top 10 (50 for `events`): `pages`, `referrers`, `entryPages`, `exitPages`, `utm`, `events`, `outbound`, `bots`, `botPages`, `botActivity` |
 | `bots=summary` | Leave out `botPages`, `botPagesTotal`, `botActivity` and `botKeptDays`, which read every bot visit of the period. The bot totals stay. Faster on a site with many crawler visits |
-| `botDetail` | Answer with only `botPages`, `botPagesTotal`, `botActivity` and `botKeptDays`, for the same period and site. `expand=botPages` and `expand=botActivity` work here too |
+| `botDetail` | Answer with only `botPages`, `botPagesTotal`, `botActivity` and `botKeptDays`, for the same period and site. `expand=botPages` and `expand=botActivity` work here too, and `bot=Googlebot` narrows them to one bot |
+| `botDays` | Answer with only `botDays`: `[{date, site, name, category, visits}]`, one row per day, site and bot. Read from the counts, so a long period costs nothing |
+| `botAgents` | Answer with only `botAgents`: `[{user_agent, name, visits}]`, the top 100 user agents behind the visits Puls has no name for, or behind one bot with `bot=` |
 
 Every response compares with the previous period of the same length, in the `previous*` fields.
 
@@ -99,6 +102,7 @@ Every response compares with the previous period of the same length, in the `pre
 | `bots`, `botCategories`, `botPages`, `botActivity` | Crawler and AI bot visits |
 | `version`, `timezone`, `now` | The Puls version, the install's time zone, and its clock at the answer. Stored times are in that zone, without an offset |
 | `completeThrough` | The latest day whose figures will not change: today goes on until midnight |
+| `tokenExpires` | With a token: its last day, or `null` if it has none. The Markdown report says so too, and warns in the last 14 days. A script that reads every morning can pass that on, instead of stopping without warning |
 | `scope` | For a token for groups: `{type: "group", name: "Shops, Private", groups: ["Shops", "Private"]}` |
 | `botKeptDays` | Set when the period reaches further back than bot visits are kept (`BOT_RETENTION_DAYS`): `botPages` and `botActivity` then cover that many days, while `bots` and `botCategories` cover the whole period. Otherwise `null` |
 | `live` | Visitors in the last 5 minutes |

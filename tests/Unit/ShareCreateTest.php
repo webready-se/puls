@@ -200,3 +200,21 @@ it('share:create says how a token for groups reads one site, and only then', fun
     expect(runCli($this->tmpDir, 'share:create', ['One', '--label=Reader', '--expires=never'])['output'])->toContain('&site=');
     expect(runCli($this->tmpDir, 'share:create', ['shop', '--label=Reader', '--expires=never'])['output'])->not->toContain('&site=');
 });
+
+it('bots:unknown lists the user agents behind unknown bots, most visits first', function () {
+    $db = new PDO('sqlite:' . $this->dbPath);
+    $db->exec('DROP TABLE IF EXISTS bot_visits');
+    $db->exec('CREATE TABLE bot_visits (id INTEGER PRIMARY KEY, site TEXT, path TEXT, bot_name TEXT, bot_category TEXT, user_agent TEXT, created_at TEXT)');
+    $insert = $db->prepare("INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, '/', ?, 'Other', ?, ?)");
+    $now = date('Y-m-d H:i:s');
+    foreach ([['shop', 'Unknown bot', 'Oddbot/1.0'], ['shop', 'Unknown bot', 'Oddbot/1.0'], ['shop', 'Unknown crawler', 'odd-crawler/2'], ['shop', 'GPTBot', 'GPTBot/1.0'], ['other', 'Unknown bot', 'Elsewhere/1.0']] as [$site, $bot, $ua]) {
+        $insert->execute([$site, $bot, $ua, $now]);
+    }
+
+    $all = runCli($this->tmpDir, 'bots:unknown')['output'];
+    expect($all)->toContain('Oddbot/1.0')->toContain('odd-crawler/2')->toContain('Elsewhere/1.0')->not->toContain('GPTBot')
+        ->and(strpos($all, 'Oddbot/1.0'))->toBeLessThan(strpos($all, 'odd-crawler/2'));
+
+    $one = runCli($this->tmpDir, 'bots:unknown', ['shop'])['output'];
+    expect($one)->toContain('Oddbot/1.0')->not->toContain('Elsewhere/1.0');
+});

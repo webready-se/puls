@@ -159,7 +159,7 @@ if ($shareToken !== null) {
     $shareSites = share_token_sites(get_db($config['db_path']), $share);
     if (isset($_GET['api'])) {
         // No sites means every site to the API, so a group left without sites gets one that cannot exist
-        $user = ['sites' => $shareSites ?: ['']];
+        $user = ['sites' => $shareSites ?: [''], 'tokenExpires' => $share['expires_at'] ? substr($share['expires_at'], 0, 10) : null];
         if ($shareGroups = share_token_groups($share)) {
             $user['scope'] = ['type' => 'group', 'name' => implode(', ', $shareGroups), 'groups' => $shareGroups];
         }
@@ -1464,17 +1464,20 @@ function get_api_data(array $config, array $user): string
     // What only the rows can answer: the most crawled pages and the latest activity. Seconds on
     // an install with many bot visits, so the dashboard asks for it when Bots is open (botDetail)
     // and leaves it out of the page's own request (bots=summary)
-    $readBotDetail = function (string $expand) use ($db, $config, $since, $dateFilter, $dateParams, $siteFilter, $siteParams): array {
+    $botName = (string) ($_GET['bot'] ?? '');
+    $botFilter = $botName !== '' ? 'AND bot_name = ?' : '';
+    $botParams = $botName !== '' ? [$botName] : [];
+    $readBotDetail = function (string $expand) use ($db, $config, $since, $dateFilter, $dateParams, $siteFilter, $siteParams, $botFilter, $botParams): array {
         $pagesLimit = $expand === 'botPages' ? 1000 : 10;
-        $stmt = $db->prepare("SELECT path, COUNT(*) as visits, COUNT(*) OVER () as total FROM bot_visits WHERE {$dateFilter} {$siteFilter} GROUP BY path ORDER BY visits DESC, path LIMIT {$pagesLimit}");
-        $stmt->execute(array_merge($dateParams, $siteParams));
+        $stmt = $db->prepare("SELECT path, COUNT(*) as visits, COUNT(*) OVER () as total FROM bot_visits WHERE {$dateFilter} {$siteFilter} {$botFilter} GROUP BY path ORDER BY visits DESC, path LIMIT {$pagesLimit}");
+        $stmt->execute(array_merge($dateParams, $siteParams, $botParams));
         $pages = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $pagesTotal = $pages ? (int) $pages[0]['total'] : 0;
         $pages = array_map(fn ($p) => ['path' => $p['path'], 'visits' => $p['visits']], $pages);
 
         $activityLimit = $expand === 'botActivity' ? 1000 : 10;
-        $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, site, path, created_at FROM bot_visits WHERE {$dateFilter} {$siteFilter} ORDER BY created_at DESC LIMIT {$activityLimit}");
-        $stmt->execute(array_merge($dateParams, $siteParams));
+        $stmt = $db->prepare("SELECT bot_name as name, bot_category as category, site, path, created_at FROM bot_visits WHERE {$dateFilter} {$siteFilter} {$botFilter} ORDER BY created_at DESC LIMIT {$activityLimit}");
+        $stmt->execute(array_merge($dateParams, $siteParams, $botParams));
         $activity = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (function_exists('idn_to_utf8')) {
             foreach ($activity as &$a) {
@@ -1495,6 +1498,22 @@ function get_api_data(array $config, array $user): string
     };
     if (isset($_GET['botDetail'])) {
         return json_encode($readBotDetail($_GET['expand'] ?? ''), JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    // Bot visits per day, site and bot: from the counts, so a long period costs nothing
+    $botDates = 'date >= ?' . ($until ? ' AND date < ?' : '');
+    if (isset($_GET['botDays'])) {
+        $stmt = $db->prepare("SELECT date, site, name, category, visits FROM bot_days WHERE {$botDates} {$siteFilter} ORDER BY date, site, visits DESC, name");
+        $stmt->execute(array_merge($dateParams, $siteParams));
+        return json_encode(['botDays' => $stmt->fetchAll(PDO::FETCH_ASSOC)], JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    // The user agents behind one bot, or behind the visits Puls has no name for, to stop or name them
+    if (isset($_GET['botAgents'])) {
+        $which = $botFilter ?: "AND bot_name LIKE 'Unknown %'";
+        $stmt = $db->prepare("SELECT user_agent, bot_name as name, COUNT(*) as visits FROM bot_visits WHERE {$dateFilter} {$siteFilter} {$which} GROUP BY user_agent, bot_name ORDER BY visits DESC, user_agent LIMIT 100");
+        $stmt->execute(array_merge($dateParams, $siteParams, $botParams));
+        return json_encode(['botAgents' => $stmt->fetchAll(PDO::FETCH_ASSOC)], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     // Search endpoint (early return)
@@ -1536,6 +1555,13 @@ function get_api_data(array $config, array $user): string
         }
     }
 
+    // One language (?language=sv), in the same form as the channel filter: it reads the rows
+    $language = preg_match('/^[a-z]{2}$/', (string) ($_GET['language'] ?? '')) ? $_GET['language'] : '';
+    if ($language) {
+        $channelFilter .= ' AND language = ?';
+        $channelParams[] = $language;
+    }
+
     // One day by hour (?hours=<date>): pageviews and visitors per hour for the card under the
     // chart, with the chart's site, path and channel filters, before the dashboard's queries so
     // a picked day costs one small query. A visitor seen in two hours counts in both, so the
@@ -1561,7 +1587,7 @@ function get_api_data(array $config, array $user): string
     // Without a path or a channel filter, the pageview figures come from the daily summary
     // (summary_figures); with one, from the rows, as below
     $fig = null;
-    if (!$path && !$channel && ($config['daily_summary'] ?? true)) {
+    if (!$path && !$channel && !$language && ($config['daily_summary'] ?? true)) {
         $scope = $site ? [$site] : (!empty($allowedSites) ? $allowedSites : tracked_sites($db));
         $limits = [
             'pages' => $expand === 'pages' ? 1000 : 10,
@@ -1977,7 +2003,6 @@ function get_api_data(array $config, array $user): string
 
     // Bot data: the totals from the counts per day, the lists from the rows unless left out
     $botsLimit = $expand === 'bots' ? 1000 : 10;
-    $botDates = 'date >= ?' . ($until ? ' AND date < ?' : '');
     $stmt = $db->prepare("SELECT name, category, SUM(visits) as visits FROM bot_days WHERE {$botDates} {$siteFilter} GROUP BY name, category ORDER BY visits DESC, name LIMIT {$botsLimit}");
     $stmt->execute(array_merge($dateParams, $siteParams));
     $bots = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -2049,7 +2074,7 @@ function get_api_data(array $config, array $user): string
 
     // Site overview (only when viewing all sites)
     $siteOverview = [];
-    if (!$site && !$path && !$channel) {
+    if (!$site && !$path && !$channel && !$language) {
         // The join has two site columns, so a user's site restriction names p.site
         if ($fig) {
             $currentSites = [];
@@ -2110,7 +2135,7 @@ function get_api_data(array $config, array $user): string
 
     // Summary insights (skip when filtered to path/channel)
     $summary = null;
-    if (!$path && !$channel) {
+    if (!$path && !$channel && !$language) {
         if ($fig) {
             $bestDay = $fig['bestDay'];
             $peakHour = $fig['peakHour'];
@@ -2173,7 +2198,7 @@ function get_api_data(array $config, array $user): string
     // Goals with conversion rates
     $goals = [];
     $goalsTable = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='goals'")->fetch();
-    if ($goalsTable && $cardSite && !$path && !$channel) {
+    if ($goalsTable && $cardSite && !$path && !$channel && !$language) {
         $stmt = $db->prepare("SELECT path, label, type, target, target_period FROM goals WHERE site = ? ORDER BY created_at");
         $stmt->execute([$cardSite]);
         $goalRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -2212,7 +2237,7 @@ function get_api_data(array $config, array $user): string
 
     // Saved breakdowns of the site on screen (see $cardSite above)
     $breakdowns = [];
-    if ($cardSite && !$path && !$channel) {
+    if ($cardSite && !$path && !$channel && !$language) {
         // In the order set for the site; cards never moved keep the order they were saved in
         $stmt = $db->prepare("SELECT id, site, label, event_name, group_key FROM breakdowns WHERE site = ? ORDER BY position, created_at, id");
         $stmt->execute([$cardSite]);
@@ -2244,6 +2269,7 @@ function get_api_data(array $config, array $user): string
         'site'      => $site ?: 'All sites',
         'path'      => $path ?: null,
         'channel'   => $channel ?: null,
+        'language'  => $language ?: null,
         'days'      => $days,
         'from'      => $since,
         'to'        => $until ? date('Y-m-d', strtotime($until . ' -1 day')) : null,
@@ -2254,6 +2280,7 @@ function get_api_data(array $config, array $user): string
         // The latest day whose figures will not change: today goes on until midnight
         'completeThrough' => last_closed_day(),
         ...(isset($user['scope']) ? ['scope' => $user['scope']] : []),
+        ...(array_key_exists('tokenExpires', $user) ? ['tokenExpires' => $user['tokenExpires']] : []),
         'live'      => (int)$live,
         'totals'    => $totals,
         'previousTotals' => $previousTotals,
@@ -2310,7 +2337,7 @@ function get_api_data(array $config, array $user): string
 // (the sites, an event, the hours) keeps its own answer
 function respond_api(array $config, array $user): never
 {
-    $other = array_intersect(['sites', 'groups', 'search', 'event', 'hours', 'botDetail'], array_keys($_GET));
+    $other = array_intersect(['sites', 'groups', 'search', 'event', 'hours', 'botDetail', 'botDays', 'botAgents'], array_keys($_GET));
     if (($_GET['format'] ?? '') !== 'md' || $other) {
         respond(get_api_data($config, $user), 200, 'application/json');
     }
@@ -2396,6 +2423,14 @@ function report_markdown(array $d): string
     $md .= 'Puls ' . $d['version'] . '. Times are local to Puls, in ' . md_text($d['timezone']) . ". From " . md_day($d['from']) . ', complete through ' . md_day($d['completeThrough']) . ", and today goes on until midnight. The figures follow every new visit.\n\n";
     if ($d['path']) $md .= 'Only pageviews of ' . md_code($d['path']) . ".\n\n";
     if ($d['channel']) $md .= 'Only visitors from the channel ' . md_code($d['channel']) . ".\n\n";
+    if ($d['language']) $md .= 'Only visitors with the language ' . md_code($d['language']) . ".\n\n";
+    if (!empty($d['tokenExpires'])) {
+        // A script that reads this every morning stops without warning otherwise
+        $lastDay = md_day($d['tokenExpires']);
+        $md .= (strtotime($d['tokenExpires']) - strtotime('today')) / 86400 <= 14
+            ? "**This token stops working on {$lastDay}.** Tell the site owner: `php puls share:edit` extends it, and whoever holds it changes nothing.\n\n"
+            : "This token works until {$lastDay}.\n\n";
+    }
 
     if (!$d['totals']['views']) {
         $md .= "No visits in this period.\n\n";
