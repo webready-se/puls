@@ -51,6 +51,8 @@ function startServer(int $port = 8089, array $env = []): mixed
 function stopServer(mixed $process): void
 {
     if (is_resource($process)) {
+        // A server with workers leaves them running when only its main process is told to stop
+        exec('pkill -P ' . proc_get_status($process)['pid']);
         proc_terminate($process);
         proc_close($process);
     }
