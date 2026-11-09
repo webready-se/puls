@@ -26,6 +26,10 @@ const PULS_VERSION = '1.31.0';
 // starts the session before execution reaches anything defined further down
 const SESSION_REPLACED_GRACE_SECONDS = 60;
 
+// The most engaged time one pageview can count: a tab left open is not being read. The script
+// stops there too
+const ENGAGED_MAX_MS = 1_800_000;
+
 // =====================================================================
 // ROUTING
 // =====================================================================
@@ -647,6 +651,10 @@ function show_login(array $config, ?string $error = null): void
 // TRACKING SCRIPT
 // =====================================================================
 
+// Engaged time counts while the page is visible and at most two minutes after the last input
+// (mouse, key, scroll, touch, or a playing video or audio, whose timeupdate a capturing listener
+// hears): a page left open with nobody there, or a computer asleep without hiding it, adds two
+// minutes at most, not the 30 that ENGAGED_MAX_MS allows
 function get_tracking_script(): string
 {
     return <<<'JS'
@@ -670,16 +678,23 @@ function get_tracking_script(): string
       opt();addEventListener('hashchange',opt);
       function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});if(!o.source&&p.get('gad_source')){o.source='google';o.medium='cpc';var c=p.get('gad_campaignid');if(c)o.campaign=c}return Object.keys(o).length?o:null}
       function url(p){var s=location.search,x;if(typeof p=='string'){try{p=new URL(p,location.href)}catch(e){return}if(p.origin!==location.origin)return;x=p.pathname;s=p.search}if(qk!==undefined&&s){var k=qk==='none'?[]:qk.split(',').map(function(x){return x.trim()}),p=new URLSearchParams(s),o=new URLSearchParams();p.forEach(function(v,n){if(k.indexOf(n)>=0)o.append(n,v)});s=o.toString();s=s?'?'+s:''}return pth(x)+s}
-      var last;
+      var last,tt=0,ts=0,ss=0,la=0;
+      function ad(n){if(ts){var e=Math.min(n,la+12e4);if(e>ts)tt+=e-ts;ts=n}}
+      function ac(){var n=Date.now();ad(n);la=n}
+      function fl(){ad(Date.now());if(last&&tt>=1e3&&tt!=ss&&!off()){ss=tt;log('engaged',last,tt);navigator.sendBeacon&&navigator.sendBeacon(ep,JSON.stringify({u:last,site:site,e:Math.min(tt,18e5)}))}}
       function s(p){
         if(off()){log('ignored: this browser is excluded');return}
-        var u=url(p);if(!u){log('ignored: not this site',p);return}if(u===last){log('skipped: same URL as the last pageview');return}last=u;
-        var d=JSON.stringify({u:u,r:document.referrer,w:innerWidth,site:site,utm:utm(),v:ver});
+        var u=url(p);if(!u){log('ignored: not this site',p);return}if(u===last){log('skipped: same URL as the last pageview');return}
+        fl();tt=ss=0;ts=document.hidden?0:la=Date.now();last=u;
+        var d=JSON.stringify({u:u,r:document.referrer,w:innerWidth,site:site,utm:utm(),v:ver,e:0});
         log('pageview',u);
         navigator.sendBeacon?navigator.sendBeacon(ep,d):0;
       }
       function q(){'requestIdleCallback' in window?requestIdleCallback(s):setTimeout(s,0)}
       q();
+      addEventListener('visibilitychange',function(){document.hidden?(fl(),ts=0):ts=la=Date.now()});
+      addEventListener('pagehide',fl);
+      ['mousemove','keydown','scroll','touchstart','timeupdate'].forEach(function(e){addEventListener(e,ac,{capture:!0,passive:!0})});
       if(history.pushState){var o=history.pushState;history.pushState=function(){o.apply(this,arguments);q()};addEventListener('popstate',q)}
       var prev=window.puls;
       window.puls={page:s,track:function(name,data){if(!name||off())return;var p={event_name:name,site:site,page_path:pth()};if(ver)p.app_version=ver;if(data&&typeof data==='object')p.event_data=data;log('event',name,data||'');navigator.sendBeacon?navigator.sendBeacon(evEp,JSON.stringify(p)):0}};
@@ -717,9 +732,15 @@ function handle_collect(array $config): void
     $input = json_decode($raw, true);
     if (!$input || empty($input['u'])) return;
 
+    // The page's engaged time so far, from the script: a total, so a lost send is made up by
+    // the next. A pageview from the script carries 0, which marks it as measured
+    $engaged = isset($input['e']) ? max(0, min((int) $input['e'], ENGAGED_MAX_MS)) : null;
+
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
     $bot = detect_script_bot($ua, $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
     if ($bot) {
+        // Its pageview is in Bots already; the time it kept a page open is not a visit
+        if ($engaged) return;
         if (is_ignored_bot($ua, $config['ignored_bots'] ?? [])) return;
         $db = get_db($config['db_path']);
         $site = normalize_site(!empty($input['site']) ? $input['site'] : ($_SERVER['HTTP_HOST'] ?? 'unknown'));
@@ -737,6 +758,14 @@ function handle_collect(array $config): void
     if (is_excluded_ip($db, $site, $ip)) return;
 
     $hash = visitor_hash($db, $site, $ip, $_SERVER['HTTP_USER_AGENT'] ?? '');
+
+    if ($engaged) {
+        $rawUrl = substr($input['u'], 0, 500);
+        parse_str(parse_url($rawUrl, PHP_URL_QUERY) ?? '', $query);
+        $path = normalize_path(urldecode($rawUrl), is_meta_source(is_string($query['utm_source'] ?? null) ? $query['utm_source'] : null) ? meta_ad_params() : []);
+        record_engagement($db, $site, $hash, $path, $engaged);
+        return;
+    }
 
     $browser = detect_browser($ua);
     $device = detect_device((int)($input['w'] ?? 0));
@@ -782,7 +811,7 @@ function handle_collect(array $config): void
     $appVersion = normalize_version($input['v'] ?? null);
     record_app_version($db, $site, $appVersion);
 
-    $stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, utm_term, utm_content, language, country, app_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, utm_term, utm_content, language, country, app_version, created_at, engaged_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $stmt->execute([
         $site,
         $path,
@@ -799,10 +828,24 @@ function handle_collect(array $config): void
         $country,
         $appVersion,
         date('Y-m-d H:i:s'),
+        $engaged,
     ]);
 
     refresh_statistics($db);
     sum_closed_day($db);
+}
+
+/**
+ * Raises the visitor's latest pageview of the page to its engaged time so far. No id
+ * leaves the browser: the visitor hash, the site and the path find the row, and a page viewed again
+ * is a newer row. Only the last 4 hours are searched, which keeps this a short walk of the covering
+ * index on a busy site; a tab left that long and then read again keeps what was sent before
+ */
+function record_engagement(PDO $db, string $site, string $hash, string $path, int $ms): void
+{
+    // CAST: PDO binds text, which SQLite sorts after every number, so MAX would always take it
+    $db->prepare('UPDATE pageviews SET engaged_ms = MAX(COALESCE(engaged_ms, 0), CAST(? AS INTEGER)) WHERE id = (SELECT MAX(id) FROM pageviews WHERE site = ? AND created_at >= ? AND visitor_hash = ? AND path = ?)')
+        ->execute([$ms, $site, date('Y-m-d H:i:s', time() - 4 * 3600), $hash, $path]);
 }
 
 /**
@@ -854,6 +897,7 @@ function tracked_sites(PDO $db): array
  *   country   the code      visitors
  *   browser, device, language   the value ('' for none)   views
  *   duration  seconds       visitors with more than one pageview and that length
+ *   engaged   seconds       visitors with a measured pageview and that much engaged time, summed
  * The day row is there for every summed day, also one without pageviews, so a summed day can
  * be told from one not summed yet.
  */
@@ -871,6 +915,17 @@ function create_daily_table(PDO $db): void
         exits INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (site, date, kind, key)
     ) WITHOUT ROWID');
+}
+
+// A visitor's engaged time over a day (an aggregate over GROUP BY visitor_hash, on rows where
+// engaged_ms IS NOT NULL): whole seconds under a minute, then steps of 5 s to ten minutes, 30 s to
+// an hour and 5 minutes after, so a day holds a few hundred lengths in the summary, not thousands.
+// The steps keep the order, so the median of them is the step the true median is in. The summary
+// and the rows count it the same way
+function engaged_seconds_sql(): string
+{
+    $step = 'CASE WHEN SUM(engaged_ms) < 60000 THEN 1 WHEN SUM(engaged_ms) < 600000 THEN 5 WHEN SUM(engaged_ms) < 3600000 THEN 30 ELSE 300 END';
+    return "SUM(engaged_ms) / 1000 / ({$step}) * ({$step})";
 }
 
 // A visitor's channel, from their pageviews of a day (an aggregate over GROUP BY visitor_hash)
@@ -927,6 +982,7 @@ function range_rows(PDO $db, array $sites, string $from, string $to): array
         $each("SELECT site, {$day} as d, {$column} as k, COUNT(*) as views FROM pageviews WHERE {$where} GROUP BY site, d, {$column}", fn ($r) => $add($r['site'], $r['d'], $column, $r['k'], ['views' => (int) $r['views']]));
     }
     $each("SELECT site, d, duration as k, COUNT(*) as visitors FROM (SELECT site, {$day} as d, strftime('%s', MAX(created_at)) - strftime('%s', MIN(created_at)) as duration FROM pageviews WHERE {$where} GROUP BY site, d, visitor_hash HAVING COUNT(*) > 1) GROUP BY site, d, duration", fn ($r) => $add($r['site'], $r['d'], 'duration', $r['k'], ['visitors' => (int) $r['visitors']]));
+    $each("SELECT site, d, seconds as k, COUNT(*) as visitors FROM (SELECT site, {$day} as d, " . engaged_seconds_sql() . " as seconds FROM pageviews WHERE {$where} AND engaged_ms IS NOT NULL GROUP BY site, d, visitor_hash) GROUP BY site, d, seconds", fn ($r) => $add($r['site'], $r['d'], 'engaged', $r['k'], ['visitors' => (int) $r['visitors']]));
     return $rows;
 }
 
@@ -1141,6 +1197,8 @@ function summary_figures(PDO $db, array $sites, string $since, string $end, stri
         'previousBounceRate' => $prevDay['visitors'] > 0 ? round(100 * $prevDay['bounces'] / $prevDay['visitors'], 1) : null,
         'medianSession' => $median($cur['duration'] ?? []) ?? 0,
         'previousMedianSession' => $median($prev['duration'] ?? []),
+        'medianEngaged' => $median($cur['engaged'] ?? []),
+        'previousMedianEngaged' => $median($prev['engaged'] ?? []),
         'firstLast' => array_values(array_map(fn ($k, $r) => ['path' => (string) $k, 'entries' => $r['entries'], 'bounces' => $r['bounces'], 'exits' => $r['exits']], array_keys($cur['path'] ?? []), $cur['path'] ?? [])),
         'browsers' => $counts('browser', false),
         'devices' => $counts('device', false),
@@ -1855,6 +1913,25 @@ function get_api_data(array $config, array $user): string
         $previousMedianSession = $median !== false ? (int) $median : null;
     }
 
+    // Engaged time per visitor: the median of each visitor's measured pageviews summed, the row at
+    // n/2 as above. Visits of one page count too. With a path filter it is the time on that page.
+    // Null when no pageview in the period was measured (before v33, or from an older script)
+    if ($fig) {
+        $medianEngaged = $fig['medianEngaged'];
+        $previousMedianEngaged = $fig['previousMedianEngaged'];
+    } else {
+        $engagedSql = fn (string $where) => "SELECT seconds FROM (SELECT seconds, ROW_NUMBER() OVER (ORDER BY seconds) AS rn, COUNT(*) OVER () AS n FROM (SELECT " . engaged_seconds_sql() . " as seconds FROM pageviews WHERE {$where} AND engaged_ms IS NOT NULL GROUP BY visitor_hash)) WHERE rn = n / 2 + 1";
+        $stmt = $db->prepare($engagedSql("{$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter}"));
+        $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
+        $median = $stmt->fetchColumn();
+        $medianEngaged = $median !== false ? (int) $median : null;
+
+        $stmt = $db->prepare($engagedSql("created_at >= ? AND created_at < ? {$siteFilter} {$pathFilter} {$channelFilter}"));
+        $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
+        $median = $stmt->fetchColumn();
+        $previousMedianEngaged = $median !== false ? (int) $median : null;
+    }
+
     // Entry/exit pages (skip when filtered to a single path)
     $entryPages = [];
     $exitPages = [];
@@ -2283,6 +2360,8 @@ function get_api_data(array $config, array $user): string
         'previousBounceRate' => $previousBounceRate,
         'medianSessionSeconds' => $medianSession,
         'previousMedianSessionSeconds' => $previousMedianSession,
+        'medianEngagedSeconds' => $medianEngaged,
+        'previousMedianEngagedSeconds' => $previousMedianEngaged,
         'entryPages' => $entryPages,
         'exitPages'  => $exitPages,
         'pageviews' => $byDay,
@@ -2433,9 +2512,9 @@ function report_markdown(array $d): string
         $md .= "## Numbers\n\n";
         $md .= '- Visitors: ' . md_number($d['totals']['visitors']) . md_change($d['totals']['visitors'], $d['previousTotals']['visitors'] ?? null) . "\n";
         $md .= '- Pageviews: ' . md_number($d['totals']['views']) . md_change($d['totals']['views'], $d['previousTotals']['views'] ?? null) . "\n";
-        // A page filter measures neither bounce nor session length, and both come back as 0
+        // A page filter does not measure bounce, which comes back as 0
         if (!$d['path']) $md .= "- Bounce rate: {$d['bounceRate']}%" . ($d['previousBounceRate'] !== null ? " against {$d['previousBounceRate']}%" : '') . "\n";
-        if ($d['medianSessionSeconds']) $md .= '- Median time between first and last page, for visitors with more than one: ' . md_duration($d['medianSessionSeconds']) . "\n";
+        if ($d['medianEngagedSeconds'] !== null) $md .= '- Median engaged time per visitor' . ($d['path'] ? ' on this page' : '') . ': ' . md_duration($d['medianEngagedSeconds']) . ($d['previousMedianEngagedSeconds'] !== null ? ' against ' . md_duration($d['previousMedianEngagedSeconds']) : '') . "\n";
         $md .= "- On the site in the last 5 minutes: {$d['live']}\n";
         if (!empty($d['summary']['bestDay'])) $md .= '- Busiest: ' . md_text($d['summary']['bestDay']) . (!empty($d['summary']['peakHour']) ? ', ' . md_text($d['summary']['peakHour']) : '') . "\n";
         $md .= "\n";
@@ -2663,7 +2742,8 @@ function get_db(string $path): PDO
             language TEXT,
             country TEXT,
             app_version TEXT,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            engaged_ms INTEGER
         )');
         // Covers the dashboard's visitor counts, bounces and sessions (filter by site and period,
         // count or group by visitor) without reading the table rows; see migration v26
@@ -2969,7 +3049,7 @@ function site_groups(PDO $db): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 32; // Bump this when adding new migrations
+    $currentVersion = 33; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -3488,6 +3568,14 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
             WHEN 'claude.ai' THEN 'Claude' WHEN 'copilot.microsoft.com' THEN 'Copilot' WHEN 'gemini.google.com' THEN 'Gemini'
             END WHERE referrer IN ('chatgpt.com', 'chat.openai.com', 'perplexity.ai', 'www.perplexity.ai', 'claude.ai', 'copilot.microsoft.com', 'gemini.google.com')");
         $db->exec('DELETE FROM daily');
+    }
+
+    // v33: a page's engaged time (record_engagement). NULL on every row before it, and on a
+    // pageview from a script that does not measure it, so those visits stay out of the measure.
+    // The summary keeps its days: none of them holds a measured visit yet
+    if ($version < 33) {
+        $columns = array_column($db->query('PRAGMA table_info(pageviews)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        if (!in_array('engaged_ms', $columns, true)) $db->exec('ALTER TABLE pageviews ADD COLUMN engaged_ms INTEGER');
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);

@@ -174,10 +174,11 @@
   delegate('pointerdown', 'data-on-pointerdown');
   delegate('focusout', 'data-on-blur');
   function num(n) { return Number(n || 0).toLocaleString('en-US'); }
-  // 0 means nothing was measured (only one-page visits, or a page filter), as in the Markdown report
+  // Null means nothing was measured (a period before the script measured engaged time), as in the
+  // Markdown report; 0 is a measured visit of under a second
   function formatDuration(s) {
-    if (!s) return '–';
-    if (s < 10) return '< 10s';
+    if (s === null || s === undefined) return '–';
+    if (s < 1) return '< 1s';
     if (s < 60) return Math.round(s) + 's';
     var m = Math.floor(s / 60);
     var sec = Math.round(s % 60);
@@ -697,10 +698,10 @@
       bounceTrend = Math.round(((d.bounceRate - d.previousBounceRate) / d.previousBounceRate) * 100);
     }
 
-    // Session length trend
+    // Engaged time trend, when both periods were measured
     var sessionTrend = null;
-    if (d.medianSessionSeconds > 0 && d.previousMedianSessionSeconds !== null && d.previousMedianSessionSeconds > 0) {
-      sessionTrend = Math.round(((d.medianSessionSeconds - d.previousMedianSessionSeconds) / d.previousMedianSessionSeconds) * 100);
+    if (d.medianEngagedSeconds > 0 && d.previousMedianEngagedSeconds > 0) {
+      sessionTrend = Math.round(((d.medianEngagedSeconds - d.previousMedianEngagedSeconds) / d.previousMedianEngagedSeconds) * 100);
     }
 
     var filtered = !!d.path;
@@ -1334,7 +1335,7 @@
       statCard('Unique visitors', num(visitors), icons.users, visitorsTrend) +
       statCard('Bounce rate', d.path ? '–' : d.bounceRate + '%', icons.bounce, bounceTrend, true) +
       statCard('Pages / visitor', pagesPerVisitor, icons.layers, ppvTrend) +
-      statCard('Time / session', formatDuration(d.medianSessionSeconds), icons.clock, sessionTrend) +
+      statCard('Time / visitor', formatDuration(d.medianEngagedSeconds), icons.clock, sessionTrend) +
       statCard('Live now', num(d.live), icons.zap, null) +
     '</div>';
   }
@@ -3396,6 +3397,7 @@
         totals: d.totals,
         bounce_rate: d.bounceRate,
         median_session_seconds: d.medianSessionSeconds,
+        median_engaged_seconds: d.medianEngagedSeconds,
         pageviews_by_day: d.pageviews,
         pages: d.pages,
         referrers: d.referrers,
@@ -3456,7 +3458,8 @@
       ['Views', d.totals.views],
       ['Visitors', d.totals.visitors],
       ['Bounce rate', d.bounceRate != null ? d.bounceRate + '%' : ''],
-      ['Median session (s)', d.medianSessionSeconds]
+      ['Median session (s)', d.medianSessionSeconds],
+      ['Median engaged time per visitor (s)', d.medianEngagedSeconds != null ? d.medianEngagedSeconds : '']
     ]));
 
     // Pageviews by day

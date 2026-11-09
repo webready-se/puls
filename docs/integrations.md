@@ -12,6 +12,15 @@ Puls automatically tracks:
 
 - Page views (including SPA client-side navigation via `pushState`/`popstate`, and [`puls.page()`](#counting-a-pageview-yourself) for the rest)
 - Referrers, UTM parameters, browsers, devices, languages
+- [Engaged time](#engaged-time): how long each page is in use
+
+### Engaged time
+
+The script counts engaged time, the time a page is on screen and in use, which Chartbeat and Parse.ly also count with a shorter pause. It pauses while the tab is hidden, and stops two minutes after the last input (mouse, keyboard, scroll, touch, or a video or audio playing on the page), until the next. So a page left open while nobody is there, or on a computer that went to sleep without hiding it, adds two minutes at most, and a page counts at most 30 minutes in all. When the page is hidden or left, and before the next pageview of a single-page app, it sends the total so far to `?collect` as `{u, site, e}` (milliseconds), nothing for a page left within a second. No id leaves the browser: Puls finds the pageview by the same visitor hash as the pageview's, the site and the path, among the last 4 hours. A pageview from the script carries `e: 0`, which marks it as measured, so pages counted by an older copy of the script, or sent by a server, stay out of the measure rather than count as no time at all.
+
+The dashboard's **Time / visitor** is the median of each visitor's engaged time over a day, visits of one page included; filtered to one page, it is the time on that page.
+
+Expect it to be lower than the time in Google Analytics or Plausible, for two reasons. They show an average, which a few tabs left open pull up, where a median is the time a typical visitor spent. And they count a page in focus whether or not anyone is there, where Puls stops two minutes after the last input.
 
 ### Script attributes
 
@@ -310,6 +319,7 @@ Add `data-debug` to the script tag to log every pageview and event to the browse
 [puls] pageview /guides/carrot
 [puls] draining 2 queued event(s)
 [puls] event zone_set {zone: 4}
+[puls] engaged /guides/carrot 48213
 ```
 
 Beacons are fire-and-forget, so this is the only way to see from the browser what Puls received. Remove the attribute in production.

@@ -17,7 +17,7 @@ Upload it to any PHP host and see your traffic in minutes, without a cookie bann
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard.png">
-  <img alt="The Puls dashboard: pageviews, visitors, bounce rate and session length with trends, a chart with a release marker and a note, a summary row, and goals with targets" src="docs/screenshots/dashboard-light.png">
+  <img alt="The Puls dashboard: pageviews, visitors, bounce rate and time per visitor with trends, a chart with a release marker and a note, a summary row, and goals with targets" src="docs/screenshots/dashboard-light.png">
 </picture>
 
 ## Get started in two minutes
@@ -43,7 +43,7 @@ That's it. Docker, Nginx, Laravel Forge and shared hosting without SSH are cover
 - **One file, no infrastructure.** A PHP file, a dashboard page and SQLite. No Node, no Docker, no database server, no build step. It runs on ordinary PHP web hosting.
 - **Private by design.** No cookies and no stored IP addresses. A visitor is a hash with a random salt that is deleted after the day, so it can never be computed again, not even by whoever runs the server. Puls is designed to work without a consent banner.
 - **Your data, on your server.** One SQLite file you can copy, back up or delete. MIT licensed, no limits, no account.
-- **Light on your pages.** The tracking script is under 2 KB gzipped and sends with `sendBeacon`, so it never holds up the page.
+- **Light on your pages.** The tracking script is under 2.5 KB gzipped and sends with `sendBeacon`, so it never holds up the page.
 
 ## What you get
 
@@ -67,7 +67,7 @@ A goal is a page or an event. Its tile shows the visitors who converted, their s
 
 ### And the rest
 
-- **Traffic:** channels (paid, campaign, organic, social, referral, direct), UTM campaigns with a link builder, Google Ads detection, entry and exit pages, bounce rate and session length
+- **Traffic:** channels (paid, campaign, organic, social, referral, direct), UTM campaigns with a link builder, Google Ads detection, entry and exit pages, bounce rate and engaged time
 - **Over time:** compare with the previous period, custom date ranges, chart notes for campaigns and mentions, release markers from your app version, a live visitor count
 - **Teams and clients:** one dashboard for many sites, sites in groups, users limited to their own sites, read-only share links, a [JSON and CSV API](docs/api.md)
 - **Tracking without code:** phone and email clicks, downloads, form submissions, outbound links

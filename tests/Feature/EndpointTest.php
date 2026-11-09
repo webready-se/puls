@@ -160,6 +160,56 @@ test('collect logs a browser that sends no language as a bot, not as a visitor',
     }
 });
 
+test('collect keeps a page\'s engaged time on the visitor\'s latest pageview of it', function () {
+    $db = getTestDb();
+    $site = 'engaged-' . uniqid();
+    $send = fn (array $body, string $headers = "\r\nAccept-Language: sv") => http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0 Engaged{$headers}",
+        'content' => json_encode($body + ['site' => $site]),
+    ]);
+    $engaged = fn () => $db->query("SELECT path, engaged_ms FROM pageviews WHERE site = '{$site}' ORDER BY id")->fetchAll(PDO::FETCH_NUM);
+
+    // A pageview from the script carries 0, which marks it as measured; one without e stays unmeasured
+    $send(['u' => '/read', 'r' => '', 'e' => 0]);
+    $send(['u' => '/old', 'r' => '']);
+    expect($engaged())->toBe([['/read', 0], ['/old', null]]);
+
+    // A total so far: a lower one sent late never lowers it, and 30 minutes is the most one page counts
+    expect($send(['u' => '/read', 'e' => 45000])['status'])->toBe(204);
+    $send(['u' => '/read', 'e' => 12000]);
+    expect($engaged()[0])->toBe(['/read', 45000]);
+    $send(['u' => '/read', 'e' => 99_000_000]);
+    expect($engaged()[0])->toBe(['/read', 1_800_000]);
+
+    // The page viewed again is a newer row, and the time goes there
+    $send(['u' => '/read', 'r' => '', 'e' => 0]);
+    $send(['u' => '/read', 'e' => 5000]);
+    expect(array_column($engaged(), 1))->toBe([1_800_000, null, 5000]);
+
+    // Nothing for a page the visitor has no pageview of, and nothing from a browser that sends no
+    // language: its pageview went to Bots, and its time is neither a visit nor a bot visit
+    $send(['u' => '/never-viewed', 'e' => 8000]);
+    $send(['u' => '/read', 'e' => 600000], '');
+    expect(count($engaged()))->toBe(3)
+        ->and(array_column($engaged(), 1)[2])->toBe(5000)
+        ->and((int) $db->query("SELECT COUNT(*) FROM bot_visits WHERE site = '{$site}'")->fetchColumn())->toBe(0);
+    $db->exec("DELETE FROM pageviews WHERE site = '{$site}'");
+});
+
+test('collect finds the page of a Meta ad by the path its pageview was stored under', function () {
+    $db = getTestDb();
+    $site = 'engaged-meta-' . uniqid();
+    $send = fn (array $body) => http('POST', '/?collect', [
+        'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0 Meta\r\nAccept-Language: sv",
+        'content' => json_encode($body + ['site' => $site]),
+    ]);
+    $u = '/offer?utm_source=fb&utm_medium=paid&brid=abc123';
+    $send(['u' => $u, 'r' => '', 'utm' => ['source' => 'fb', 'medium' => 'paid'], 'e' => 0]);
+    $send(['u' => $u, 'e' => 20000]);
+    expect($db->query("SELECT path, engaged_ms FROM pageviews WHERE site = '{$site}'")->fetchAll(PDO::FETCH_NUM))->toBe([['/offer', 20000]]);
+    $db->exec("DELETE FROM pageviews WHERE site = '{$site}'");
+});
+
 test('event drops a browser that sends no language', function () {
     $db = getTestDb();
     $send = fn (string $language) => http('POST', '/?event', [
@@ -801,6 +851,31 @@ test('api median session length is the middle visit, computed in SQL', function 
     expect($data['medianSessionSeconds'])->toBe(60);
 });
 
+test('api median engaged time is per visitor, counts visits of one page, and is the time on a page under a path filter', function () {
+    $site = 'engaged-api-' . uniqid();
+    $db = getTestDb();
+    $stmt = $db->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash, engaged_ms) VALUES (?, ?, ?, ?, ?)');
+    $at = date('Y-m-d H:i:s', max(time() - 3600, strtotime('today')));
+    $token = createTestShareToken($site);
+    $read = fn (string $extra = '') => json_decode(http('GET', '/?api&days=1' . $extra . '&share=' . $token)['body'], true);
+
+    // Nothing measured yet: a pageview from an older script says nothing about time
+    $stmt->execute([$at, $site, '/', 'old', null]);
+    expect($read()['medianEngagedSeconds'])->toBeNull()
+        ->and($read()['previousMedianEngagedSeconds'])->toBeNull();
+
+    // a: two pages, 30 s and 90 s; b: one page for 5 min; c: one page left in under a second
+    $stmt->execute([$at, $site, '/', 'a', 30000]);
+    $stmt->execute([$at, $site, '/pricing', 'a', 90000]);
+    $stmt->execute([$at, $site, '/', 'b', 300000]);
+    $stmt->execute([$at, $site, '/', 'c', 0]);
+    // Sorted 0, 120, 300: the middle is a's two pages together
+    expect($read()['medianEngagedSeconds'])->toBe(120)
+        // On / alone: 0, 30, 300
+        ->and($read('&path=%2F')['medianEngagedSeconds'])->toBe(30)
+        ->and($read('&path=%2Fpricing')['medianEngagedSeconds'])->toBe(90);
+});
+
 test('api counts beyond the limit, exit pages and the summary come from the same passes as the tables', function () {
     $site = 'passes-' . uniqid();
     $db = getTestDb();
@@ -1047,6 +1122,18 @@ test('format=md leaves the bounce rate out under a page filter, which does not m
     expect($all)->toContain('- Bounce rate: 100%')
         ->and($page)->toContain('## Numbers')
         ->not->toContain('Bounce rate');
+});
+
+test('format=md gives the engaged time when it was measured, for the site or the page', function () {
+    $site = 'report-engaged-' . uniqid() . '.example';
+    seedReportSite($site);
+    $token = createTestShareToken($site);
+    $report = fn (string $extra = '') => http('GET', '/?api&days=7&format=md' . $extra . '&share=' . $token)['body'];
+    expect($report())->not->toContain('engaged time');
+
+    getTestDb()->prepare('INSERT INTO pageviews (site, path, visitor_hash, engaged_ms, created_at) VALUES (?, ?, ?, ?, ?)')->execute([$site, '/page-1', 'measured', 75000, date('Y-m-d H:i:s')]);
+    expect($report())->toContain('- Median engaged time per visitor: 1 min 15 s')
+        ->and($report('&path=%2Fpage-1'))->toContain('- Median engaged time per visitor on this page: 1 min 15 s');
 });
 
 test('format=md keeps a value from outside on one line in a code span, where it cannot be a heading', function () {
