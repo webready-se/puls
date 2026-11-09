@@ -178,6 +178,10 @@ async function main() {
   // A Content Security Policy violation is a console.error, which fails the run below
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `document.addEventListener('securitypolicyviolation', (e) => console.error('CSP violation: ' + e.violatedDirective + ' blocked ' + (e.blockedURI || 'inline') + ' at ' + (e.sourceFile || location.pathname) + ':' + e.lineNumber))` });
   await send('Emulation.setTimezoneOverride', { timezoneId: TIMEZONE });
+  // Headless Chrome sends no focus or blur events to a page it does not see as focused, so a step
+  // that waits on one (renaming a card on blur, the undo toast's focusout) would pass or fail for
+  // the wrong reason
+  await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 
   // 5. Load the shared dashboard and walk through it
   const wait = loaded();
@@ -845,6 +849,17 @@ async function main() {
     if (titles().join() !== start.join()) fails.push('dragging the grip onto another card moves it there');
     if (!await waitSaved(start)) fails.push('the dragged order is saved');
 
+    // A card's title is renamed in place: Enter blurs it, and the blur saves (needs focus emulation)
+    const rename = async (from, to) => {
+      const title = [...document.querySelectorAll('.breakdown-card .card-title')].find((t) => t.textContent === from);
+      title.focus();
+      title.textContent = to;
+      title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      return waitSaved(start.map((s) => (s === from ? to : s)));
+    };
+    if (!await rename(start[0], start[0] + ' (renamed)')) fails.push('Enter on a card title saves the new name');
+    if (!await rename(start[0] + ' (renamed)', start[0])) fails.push('a card renamed back keeps its old name');
+
     // Removing a card or goal waits behind an Undo toast; leaving the page sends it
     const toast = q('#toast');
     const cardCount = document.querySelectorAll('.breakdown-card').length;
@@ -1252,7 +1267,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab. No JS errors.');
   }
 }
 

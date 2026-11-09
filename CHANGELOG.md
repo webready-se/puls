@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **Time / visitor: engaged time.** The script now counts engaged time, the time a page is on screen and in use, which Chartbeat and Parse.ly also count with a shorter pause: paused while the tab is hidden, stopped two minutes after the last input (mouse, keyboard, scroll, touch, or a video playing), and at most 30 minutes a page, and the card that said Time / session shows the median of each visitor's engaged time in a day, visits of one page included. Filtered to one page, it is the time on that page. Time / session was the time between a visitor's first and last pageview, which left out every visit of one page and the time on the last page, and had no limit: on a site of one page it was mostly the time between two visits. A period from before the upgrade shows a dash, since nothing in it was measured, and its trend starts once both periods were. A copy of the script cached from before measures nothing until the browser fetches it again, within an hour. The API adds `medianEngagedSeconds` and keeps `medianSessionSeconds` for scripts that read it; the Markdown report gives the new figure. It will read lower than Google Analytics' engagement time: a median, and no time counted with nobody there. The script is about 2.3 KB gzipped, up from 2.0 KB. How it works: [engaged time](docs/integrations.md#engaged-time).
+- **`--yes` for a script that removes.** `sites:remove`, `user:remove` and `share:revoke` ask before they act, so a script had to pipe the right answer, and `sites:remove` wants the site's name typed, so a piped `y` aborted it. `--yes` skips the question and prints what was done; without it, they ask as before.
+- **Group a site before its first visit.** `sites:group` refuses a name it has not seen a visit from, to catch a typo, so a hub setting up many sites had to wait for each one's first pageview. The refusal now says what to do: check the name with `sites:list`, or open the site once in a browser, which also shows that the script is in place. `--new` groups it now, and `sites:list` shows it under its group as "no visits yet" until one comes. A name is stored as a pageview stores it, so an international domain typed as `xn--...` matches.
+
+### Changed
+
+- **Each tracked visit costs the server less.** The database now syncs to disk at checkpoints instead of on every write (`synchronous=NORMAL` in WAL mode), and a pageview's write went from about 1 ms to 0.1 ms on a server with one vCPU. On a crash of the server or a power loss the last writes before it can be lost; the database itself stays intact, and a PHP error or a stopped process loses nothing.
+
+### Fixed
+
+- **The CLI says "all sites" everywhere.** `user:list` and the pickers in `user:edit` and `user:remove` still said "alla" in Swedish for a user with every site; 1.28.0 fixed it in the other places only.
+- **A full URL sent as the page is stored as its path.** A pageview sent by hand or from a server with `u` as a whole URL (`https://shop.example/boots`) was stored as `https:/shop.example/boots`, a page of its own. Puls now keeps the path and query and drops the host, since the site is named in `site`. The script sends a path and was not affected; stored rows keep their old path.
 
 ## [1.31.0] - 2026-11-09
 

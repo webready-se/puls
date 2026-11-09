@@ -40,6 +40,23 @@ it('user:remove shows picker when no arg', function () {
         ->and($result['output'])->toContain('client');
 });
 
+it('user:list and the user pickers say "all sites" for a user with every site', function () {
+    file_put_contents($this->usersFile, json_encode([
+        'admin' => ['password' => '$2y$12$fake', 'sites' => []],
+        'client' => ['password' => '$2y$12$fake', 'sites' => ['my-site']],
+    ]));
+    createCliTestDb($this->dbPath);
+
+    $list = runCli($this->tmpDir, 'user:list');
+    $remove = runCli($this->tmpDir, 'user:remove', [], "0");
+    $edit = runCli($this->tmpDir, 'user:edit', [], "0");
+
+    expect($list['output'])->toMatch('/admin\s+all sites/')
+        ->and($remove['output'])->toContain('1) admin (all sites)')
+        ->and($edit['output'])->toContain('1) admin (all sites)')
+        ->and($list['output'] . $remove['output'] . $edit['output'])->not->toContain('alla');
+});
+
 it('user:remove shows no users message when empty', function () {
     createCliTestDb($this->dbPath);
 
@@ -77,6 +94,22 @@ it('user:remove deletes user after confirmation', function () {
 
     $users = json_decode(file_get_contents($this->usersFile), true);
     expect($users)->not->toHaveKey('admin');
+});
+
+it('user:remove --yes removes without asking', function () {
+    file_put_contents($this->usersFile, json_encode([
+        'admin' => ['password' => '$2y$12$fake', 'sites' => []],
+        'client' => ['password' => '$2y$12$fake', 'sites' => ['my-site']],
+    ]));
+    createCliTestDb($this->dbPath);
+
+    // No input at all: a question would read end of file and abort
+    $result = runCli($this->tmpDir, 'user:remove', ['client', '--yes']);
+
+    expect($result['exit'])->toBe(0)
+        ->and($result['output'])->toContain("User 'client' removed");
+    $users = json_decode(file_get_contents($this->usersFile), true);
+    expect($users)->toHaveKey('admin')->not->toHaveKey('client');
 });
 
 // =====================================================================
@@ -236,6 +269,35 @@ it('sites:remove shows no sites message when db empty', function () {
         ->and($result['output'])->toContain('No sites tracked');
 });
 
+it('sites:remove --yes deletes without typing the name, wherever the flag stands', function () {
+    $db = createCliTestDb($this->dbPath);
+    $db->exec("INSERT INTO pageviews (site, path) VALUES ('alpha', '/')");
+    $db->exec("INSERT INTO pageviews (site, path) VALUES ('beta', '/')");
+    $db->exec("INSERT INTO pageviews (site, path) VALUES ('gamma', '/')");
+
+    $after = runCli($this->tmpDir, 'sites:remove', ['alpha', '--yes']);
+    $before = runCli($this->tmpDir, 'sites:remove', ['--yes', 'beta']);
+
+    expect($after['exit'])->toBe(0)
+        ->and($after['output'])->toContain('pageviews: 1 rows deleted')
+        ->and($after['output'])->toContain("Site 'alpha' removed")
+        ->and($after['output'])->not->toContain('permanently delete')
+        ->and($before['output'])->toContain("Site 'beta' removed");
+    $left = $db->query('SELECT DISTINCT site FROM pageviews')->fetchAll(PDO::FETCH_COLUMN);
+    expect($left)->toBe(['gamma']);
+});
+
+it('sites:remove without --yes still asks, and a piped y is not the name', function () {
+    $db = createCliTestDb($this->dbPath);
+    $db->exec("INSERT INTO pageviews (site, path) VALUES ('alpha', '/')");
+
+    $result = runCli($this->tmpDir, 'sites:remove', ['alpha'], 'y');
+
+    expect($result['output'])->toContain('permanently delete')
+        ->and($result['output'])->toContain('Aborted')
+        ->and((int) $db->query('SELECT COUNT(*) FROM pageviews')->fetchColumn())->toBe(1);
+});
+
 // =====================================================================
 // share:revoke
 // =====================================================================
@@ -275,4 +337,18 @@ it('share:revoke deletes token after confirmation', function () {
 
     $count = $db->query("SELECT COUNT(*) FROM share_tokens")->fetchColumn();
     expect((int) $count)->toBe(0);
+});
+
+it('share:revoke --yes revokes the named token without asking', function () {
+    $db = createCliTestDb($this->dbPath);
+    $keep = bin2hex(random_bytes(32));
+    $revoke = 'abcdef' . bin2hex(random_bytes(29));
+    $db->exec("INSERT INTO share_tokens (token, site, label, created_at) VALUES ('{$keep}', 'my-site', 'Keep', datetime('now'))");
+    $db->exec("INSERT INTO share_tokens (token, site, label, created_at) VALUES ('{$revoke}', 'my-site', 'Revoke me', datetime('now'))");
+
+    $result = runCli($this->tmpDir, 'share:revoke', ['abcdef', '--yes']);
+
+    expect($result['exit'])->toBe(0)
+        ->and($result['output'])->toContain('Token revoked');
+    expect($db->query('SELECT token FROM share_tokens')->fetchAll(PDO::FETCH_COLUMN))->toBe([$keep]);
 });

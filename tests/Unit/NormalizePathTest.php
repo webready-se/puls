@@ -8,6 +8,28 @@ test('keeps root slash', function () {
     expect(normalize_path('/'))->toBe('/');
 });
 
+// The script sends a path, but a hand-made or server-side collect can send the whole URL;
+// the site is named apart, so the host is dropped instead of becoming the first segment
+test('keeps the path and query of a full URL', function () {
+    expect(normalize_path('https://shop.example/test'))->toBe('/test')
+        ->and(normalize_path('http://shop.example/search?q=boots'))->toBe('/search?q=boots')
+        ->and(normalize_path('HTTPS://shop.example:8443/a/b'))->toBe('/a/b');
+});
+
+test('a full URL without a path is the root', function () {
+    expect(normalize_path('https://shop.example'))->toBe('/')
+        ->and(normalize_path('https://shop.example/?q=1'))->toBe('/?q=1');
+});
+
+test('a full URL is cleaned as a path is', function () {
+    expect(normalize_path('https://shop.example/page/?fbclid=abc#reviews'))->toBe('/page')
+        ->and(normalize_path('https://shop.example/page/?fbclid=abc&q=1'))->toBe(normalize_path('/page/?fbclid=abc&q=1'));
+});
+
+test('a URL in the query is not taken for the page', function () {
+    expect(normalize_path('/go?to=https://example.com/x'))->toStartWith('/go?to=');
+});
+
 test('strips fbclid', function () {
     expect(normalize_path('/page?fbclid=abc123'))->toBe('/page');
 });
