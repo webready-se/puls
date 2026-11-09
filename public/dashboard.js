@@ -1671,47 +1671,6 @@
     if (el) el.focus({ preventScroll: true });
   }
 
-  function renderTable(title, rows, labelKey, valKey, color) {
-    if (!rows || !rows.length) {
-      return '<div class="card"><span class="card-title">' + title + '</span>' +
-        '<p class="muted fs-13 mt-12">No data yet</p></div>';
-    }
-    var max = Math.max.apply(null, rows.map(function(r) { return +r[valKey]; }));
-    var prefix = '';
-    if (labelKey === 'path' && currentSite && rows.length > 1) {
-      // Check if site name is a path prefix (subpath sites like /garden-guide)
-      var sitePrefix = '/' + currentSite + '/';
-      var sitePrefixBase = '/' + currentSite;
-      if (rows.some(function(r) { var p = decode(r[labelKey]); return p.indexOf(sitePrefix) === 0; })) {
-        prefix = sitePrefix;
-      } else {
-        // Generic common prefix detection
-        var parts = decode(rows[0][labelKey]).split('/');
-        for (var i = 1; i < parts.length; i++) {
-          var candidate = parts.slice(0, i + 1).join('/') + '/';
-          var base = candidate.slice(0, -1);
-          if (rows.every(function(r) { var p = decode(r[labelKey]); return p === base || p.indexOf(candidate) === 0; })) {
-            prefix = candidate;
-          } else break;
-        }
-      }
-    }
-    var html = '<div class="card"><span class="card-title">' + title + (prefix ? ' <span class="fw-400 faint fs-12">' + esc(prefix) + '</span>' : '') + '</span><div class="mt-14">';
-    rows.forEach(function(r) {
-      var pct = (+r[valKey] / max) * 100;
-      var full = decode(r[labelKey]);
-      var stripped = prefix ? full.substring(prefix.length) : '';
-      var label = prefix ? (stripped ? '/' + stripped : '/') : full;
-      html += '<div class="trow">' +
-        '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + '</span>' +
-        '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="' + color + '"></div></div>' +
-        '<span class="trow-val">' + num(r[valKey]) + '</span>' +
-      '</div>';
-    });
-    html += '</div></div>';
-    return html;
-  }
-
   function renderTableContent(rows, labelKey, valKey, color) {
     if (!rows || !rows.length) {
       return '<p class="muted fs-13 mt-12">No data yet</p>';

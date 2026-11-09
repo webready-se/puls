@@ -340,7 +340,7 @@ An AI assistant already reads Puls with a token and `?api`. What is missing is w
 ## Maintenance
 
 - [x] **Release marker edge clipping** — `.chart-release` labels clip at the edge on narrow screens (fixed for chart notes, not for release markers)
-- [ ] **Remove dead `renderTable()`** — no callers in dashboard.html
+- [x] **Remove dead `renderTable()`** — no callers in dashboard.html
 - [x] **Shorter cache for the tracking script** — `?js` was cached 24 h, so new attributes took up to a day to reach every visitor. Now 1 h plus an ETag, so the hourly check is a bodyless 304
 - [x] **Visitor IP behind a proxy** — Puls behind a reverse proxy or Cloudflare saw every visitor as the proxy (visitor hashes differed by user agent only). `TRUSTED_PROXIES` lets those proxies set the visitor IP via `X-Forwarded-For` / `X-Real-IP`; Forge (Nginx + PHP-FPM) was not affected
 - [x] **What a page posts is not a crawled page** - a crawler that renders a page runs its script, and the Nginx mirror copied what the script posted, so a shop's two statistics endpoints topped its most crawled pages with no page behind them. `?log` counts GET and HEAD only. Those calls did show which crawlers render pages; storing the method to keep that was set aside, since nobody has asked what it would answer
