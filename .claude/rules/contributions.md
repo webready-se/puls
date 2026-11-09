@@ -6,7 +6,7 @@ Puls takes pull requests from outside, and many are written with Claude Code, so
 
 - A new feature or a visible change to the dashboard starts with an issue or a draft pull request, so the direction is agreed before the work (CONTRIBUTING.md). Bug fixes and docs can go straight to a pull request
 - The dashboard is calm by default (Design in CLAUDE.md): a new card or panel usually opens on demand, not always on
-- A pull request carries its tests, a step in `scripts/smoke.mjs` for a dashboard change, the docs it affects, and a line in `CHANGELOG.md` under Unreleased
+- A pull request carries its tests, a step in `scripts/smoke.mjs` for a dashboard change, the docs it affects, and a line in `CHANGELOG.md` under Unreleased that opens with a sentence in bold saying what changed for the person using Puls, the reasons after it, so the release notes can be skimmed by their bold sentences
 - Fix what the change itself needs; open an issue for unrelated problems you notice on the way
 
 ## Reviewing a pull request

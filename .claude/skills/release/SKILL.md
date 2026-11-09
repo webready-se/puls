@@ -51,6 +51,15 @@ ten tags in three weeks; the same work fits in two or three releases.
 adds its lines there, under Added / Changed / Fixed / Security. If a PR would
 create a second Unreleased heading, merge into the existing one instead.
 
+Every entry opens with a sentence in bold that says what changed for the person
+using Puls and stands alone (`- **Only the latest load is drawn.** A slow answer
+...`); the reasons follow. Why: the release notes are skimmed, and the bold
+sentences alone should tell a self-hoster what an upgrade brings. Before tagging,
+check that no entry under Unreleased starts without one:
+`awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f && /^- [^*]/' CHANGELOG.md`
+prints nothing. The rule lived only in a commit message at first, and 15 of the 39
+entries of 1.31.0 shipped without it.
+
 Credit people outside the team on their line: `Contributed by @handle (#81).`
 for a pull request, `Reported by @handle (#80).` for an issue. The release notes
 are built from the changelog, so the credit shows there and GitHub notifies them.
