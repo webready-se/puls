@@ -27,7 +27,8 @@ $db->exec('CREATE TABLE pageviews (
     utm_content TEXT,
     language TEXT,
     country TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    engaged_ms INTEGER
 )');
 $db->exec('CREATE INDEX idx_site_date ON pageviews (site, created_at)');
 $db->exec('CREATE TABLE bot_visits (
@@ -168,7 +169,7 @@ function pickWeighted($items) {
     return $items[0][0];
 }
 
-$stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, language, country, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+$stmt = $db->prepare('INSERT INTO pageviews (site, path, referrer, browser, device, visitor_hash, utm_source, utm_medium, utm_campaign, language, country, created_at, engaged_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
 // Generate 30 days of data, ~200-500 pageviews per day
 // with a trend: growing traffic over the period
@@ -188,13 +189,17 @@ $addVisit = function (string $site, array $paths, string $visitor, int $start) u
     $campaign = $campaigns[array_rand($campaigns)];
     $t = $start;
     for ($p = pickWeighted($sessionPages); $p > 0 && $t <= $now; $p--) {
+        // Time in view: most of the wait before the next page, or for the last one anything from
+        // under a second to four minutes
+        $gap = mt_rand(20, 180);
+        $engaged = $p > 1 ? (int) ($gap * mt_rand(40, 95) * 10) : (mt_rand(0, 5) === 0 ? 0 : mt_rand(3, 240) * 1000);
         $stmt->execute([
             $site, pickWeighted($paths), $referrer, $browser, $device, $visitor,
             $campaign[0] ?? null, $campaign[1] ?? null, $campaign[2] ?? null,
-            $lang, $country, date('Y-m-d H:i:s', $t),
+            $lang, $country, date('Y-m-d H:i:s', $t), $engaged,
         ]);
         $totalInserted++;
-        $t += mt_rand(20, 180);
+        $t += $gap;
     }
 };
 // The demo site and two smaller ones with their own pages and trends, so the site picker,

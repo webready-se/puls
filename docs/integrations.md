@@ -12,6 +12,13 @@ Puls automatically tracks:
 
 - Page views (including SPA client-side navigation via `pushState`/`popstate`, and [`puls.page()`](#counting-a-pageview-yourself) for the rest)
 - Referrers, UTM parameters, browsers, devices, languages
+- [How long each page is in view](#time-in-view)
+
+### Time in view
+
+The script counts the time a page is on screen: it pauses while the tab is hidden, and a page counts at most 30 minutes, since a tab left open is not being read. When the page is hidden or left, and before the next pageview of a single-page app, it sends the total so far to `?collect` as `{u, site, e}` (milliseconds), nothing for a page left within a second. No id leaves the browser: Puls finds the pageview by the same visitor hash as the pageview's, the site and the path, among the last 4 hours. A pageview from the script carries `e: 0`, which marks it as measured, so pages counted by an older copy of the script, or sent by a server, stay out of the measure rather than count as no time at all.
+
+The dashboard's **Time / visitor** is the median of each visitor's time in view over a day, visits of one page included; filtered to one page, it is the time on that page.
 
 ### Script attributes
 
@@ -310,6 +317,7 @@ Add `data-debug` to the script tag to log every pageview and event to the browse
 [puls] pageview /guides/carrot
 [puls] draining 2 queued event(s)
 [puls] event zone_set {zone: 4}
+[puls] in view /guides/carrot 48213
 ```
 
 Beacons are fire-and-forget, so this is the only way to see from the browser what Puls received. Remove the attribute in production.

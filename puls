@@ -708,7 +708,7 @@ function statsBuild(string $dbPath): void
         exit(1);
     }
     $source = file_get_contents(__DIR__ . '/public/index.php');
-    foreach (['create_daily_table', 'channel_sql', 'range_rows', 'store_days', 'last_closed_day', 'sum_missing_days'] as $name) {
+    foreach (['create_daily_table', 'channel_sql', 'engaged_seconds_sql', 'range_rows', 'store_days', 'last_closed_day', 'sum_missing_days'] as $name) {
         if (function_exists($name)) continue;
         if (!preg_match('/^function ' . $name . '\([^)]*\)(?:: [^\n]+)?\n\{.+?\n\}/ms', $source, $m)) {
             echo "Could not read {$name}() from public/index.php.\n";
@@ -722,6 +722,9 @@ function statsBuild(string $dbPath): void
     // Tracking goes on writing meanwhile: wait for it rather than fail; each day is a short write
     $db->exec('PRAGMA busy_timeout = 10000');
     create_daily_table($db);
+    // Run before the first request after an upgrade, the column of migration v33 may not be there yet
+    $columns = array_column($db->query('PRAGMA table_info(pageviews)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+    if (!in_array('engaged_ms', $columns, true)) $db->exec('ALTER TABLE pageviews ADD COLUMN engaged_ms INTEGER');
 
     $sites = $db->query('SELECT DISTINCT site FROM pageviews ORDER BY site')->fetchAll(PDO::FETCH_COLUMN);
     $count = $db->prepare("SELECT COUNT(*) FROM daily WHERE site = ? AND kind = 'day'");

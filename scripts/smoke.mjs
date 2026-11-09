@@ -771,16 +771,19 @@ async function main() {
     selectSite('demo.example.com');
     if (!await waitFor(() => q('#chart-card .card-subtitle')?.textContent.startsWith('demo.example.com') && q('.breakdown-card'), 'back on the demo site')) return fails;
 
-    // A page filter measures neither session length nor bounce: the cards show a dash, not a figure no visit had
+    // A page filter does not measure bounce, so that card shows a dash, not a figure no visit had;
+    // time in view is the time on that page
     const statValue = (label) => [...document.querySelectorAll('.stat')].find((s) => s.querySelector('.stat-label')?.textContent === label)?.querySelector('.stat-value')?.textContent;
+    const siteTime = statValue('Time / visitor');
+    expect(/\d/.test(siteTime), `Time / visitor shows the time in view (shows ${siteTime})`);
     key('k', true);
     typeCmd('/pri');
     if (await waitFor(() => q('#cmd-results [data-path="/pricing"]'), 'page results in the palette')) {
       q('#cmd-results [data-path="/pricing"]').click();
       if (await waitFor(() => q('.path-filter-path')?.textContent === '/pricing', 'a page filter from the palette')) {
-        expect(statValue('Time / session') === '–' && statValue('Bounce rate') === '–', `with a page filter, Time / session and Bounce rate show a dash (show ${statValue('Time / session')} and ${statValue('Bounce rate')})`);
+        expect(statValue('Bounce rate') === '–' && /\d/.test(statValue('Time / visitor')), `with a page filter, Bounce rate shows a dash and Time / visitor the time on the page (show ${statValue('Bounce rate')} and ${statValue('Time / visitor')})`);
         q('.path-filter-clear').click();
-        await waitFor(() => !q('.path-filter') && /\d/.test(statValue('Time / session')) && /\d/.test(statValue('Bounce rate')), 'Time / session and Bounce rate back to figures when the filter is cleared');
+        await waitFor(() => !q('.path-filter') && /\d/.test(statValue('Bounce rate')) && statValue('Time / visitor') === siteTime, 'Bounce rate and the site\'s Time / visitor back when the filter is cleared');
       }
     }
 
@@ -943,6 +946,9 @@ async function main() {
     };
     if (!await waitFor(() => q('#chart-card .card-subtitle'), 'chart for the hostile site')) return fails;
     if (!q('#chart-card .card-subtitle').textContent.startsWith(name)) fails.push('hostile site name shown as text in the chart subtitle');
+    // Its pageviews come from no script that measures time in view: a dash, not a time no visit had
+    const time = [...document.querySelectorAll('.stat')].find((s) => s.querySelector('.stat-label')?.textContent === 'Time / visitor')?.querySelector('.stat-value')?.textContent;
+    if (time !== '–') fails.push(`Time / visitor shows a dash where nothing was measured (shows ${time})`);
     selectSite('');
     if (await waitFor(() => q('.site-overview-row'), 'site overview with the hostile site')) {
       if (![...document.querySelectorAll('.site-overview-name')].some((n) => n.textContent.startsWith(name))) fails.push('hostile site name shown as text in the site overview');
@@ -1142,7 +1148,9 @@ async function main() {
     const sent = [];
     Object.defineProperty(navigator, 'webdriver', { get: () => false });
     navigator.sendBeacon = (url, body) => { sent.push({ url: String(url), body: JSON.parse(body) }); return true; };
-    const pages = () => sent.filter((b) => b.url.endsWith('?collect')).map((b) => b.body.u);
+    // A pageview carries the referrer; the time a page was in view goes to ?collect too, without it
+    const pages = () => sent.filter((b) => b.url.endsWith('?collect') && 'r' in b.body).map((b) => b.body.u);
+    const inView = () => sent.filter((b) => b.url.endsWith('?collect') && !('r' in b.body)).map((b) => b.body);
     window.puls = { q: [], track: function () { this.q.push(arguments); }, page: function () { this.q.push({ page: arguments }); } };
     window.puls.page('/queued/7');
     window.puls.track('queued_event', { a: 1 });
@@ -1167,6 +1175,29 @@ async function main() {
     history.replaceState(null, '', '/');
     const after = pages().slice(2);
     if (after.join() !== '/?page=2,/products/:id?page=3,/full/:id') fails.push(`puls.page() counts the current URL once, a path and a full URL on this site through data-query and the id rule, and nothing for another site (sent ${after.join(', ')})`);
+    if (!sent.filter((b) => b.url.endsWith('?collect') && 'r' in b.body).every((b) => b.body.e === 0)) fails.push('a pageview says it is measured (e: 0)');
+
+    // Time in view: the total so far when the page is hidden, the same total once, and before the
+    // next pageview; nothing for a page left within a second
+    let hidden = false;
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+    const visibility = (h) => { hidden = h; document.dispatchEvent(new Event('visibilitychange', { bubbles: true })); };
+    window.puls.page('/read-me');
+    await sleep(1200);
+    visibility(true);
+    window.dispatchEvent(new Event('pagehide'));
+    const first = inView();
+    if (first.length !== 1 || first[0].u !== '/read-me' || first[0].e < 1000 || first[0].e > 5000 || first[0].site !== 'smoke-tracker') fails.push(`hiding the page sends its time in view once, as a total (sent ${JSON.stringify(first)})`);
+    await sleep(400);
+    visibility(false);
+    await sleep(300);
+    window.puls.page('/next');
+    window.puls.page('/quick');
+    const all = inView();
+    const nextAt = sent.findIndex((b) => b.body.u === '/next' && 'r' in b.body);
+    const lastReadMe = sent.findLastIndex((b) => b.body.u === '/read-me' && !('r' in b.body));
+    if (all.length !== 2 || all[1].u !== '/read-me' || all[1].e <= all[0].e || all[1].e > all[0].e + 1500 || lastReadMe > nextAt) fails.push(`the next pageview first sends the time in view so far, without the time hidden (sent ${JSON.stringify(all)})`);
+    delete document.hidden;
     return fails;
   };
   const result6 = await send('Runtime.evaluate', { expression: `(${trackerSteps.toString()})()`, awaitPromise: true, returnByValue: true });
@@ -1200,7 +1231,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored), a white-labelled install\'s name in a shared link\'s tab. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; time in view sent when hidden and before the next pageview, once per total, nothing under a second), a white-labelled install\'s name in a shared link\'s tab. No JS errors.');
   }
 }
 
