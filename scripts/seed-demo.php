@@ -189,7 +189,7 @@ $addVisit = function (string $site, array $paths, string $visitor, int $start) u
     $campaign = $campaigns[array_rand($campaigns)];
     $t = $start;
     for ($p = pickWeighted($sessionPages); $p > 0 && $t <= $now; $p--) {
-        // Time in view: most of the wait before the next page, or for the last one anything from
+        // Engaged time: most of the wait before the next page, or for the last one anything from
         // under a second to four minutes
         $gap = mt_rand(20, 180);
         $engaged = $p > 1 ? (int) ($gap * mt_rand(40, 95) * 10) : (mt_rand(0, 5) === 0 ? 0 : mt_rand(3, 240) * 1000);

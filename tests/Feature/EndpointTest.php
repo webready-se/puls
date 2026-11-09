@@ -160,7 +160,7 @@ test('collect logs a browser that sends no language as a bot, not as a visitor',
     }
 });
 
-test('collect keeps the time a page was in view on the visitor\'s latest pageview of it', function () {
+test('collect keeps a page\'s engaged time on the visitor\'s latest pageview of it', function () {
     $db = getTestDb();
     $site = 'engaged-' . uniqid();
     $send = fn (array $body, string $headers = "\r\nAccept-Language: sv") => http('POST', '/?collect', [
@@ -851,7 +851,7 @@ test('api median session length is the middle visit, computed in SQL', function 
     expect($data['medianSessionSeconds'])->toBe(60);
 });
 
-test('api median time in view is per visitor, counts visits of one page, and is the time on a page under a path filter', function () {
+test('api median engaged time is per visitor, counts visits of one page, and is the time on a page under a path filter', function () {
     $site = 'engaged-api-' . uniqid();
     $db = getTestDb();
     $stmt = $db->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash, engaged_ms) VALUES (?, ?, ?, ?, ?)');
@@ -1124,16 +1124,16 @@ test('format=md leaves the bounce rate out under a page filter, which does not m
         ->not->toContain('Bounce rate');
 });
 
-test('format=md gives the time in view when it was measured, for the site or the page', function () {
+test('format=md gives the engaged time when it was measured, for the site or the page', function () {
     $site = 'report-engaged-' . uniqid() . '.example';
     seedReportSite($site);
     $token = createTestShareToken($site);
     $report = fn (string $extra = '') => http('GET', '/?api&days=7&format=md' . $extra . '&share=' . $token)['body'];
-    expect($report())->not->toContain('in view');
+    expect($report())->not->toContain('engaged time');
 
     getTestDb()->prepare('INSERT INTO pageviews (site, path, visitor_hash, engaged_ms, created_at) VALUES (?, ?, ?, ?, ?)')->execute([$site, '/page-1', 'measured', 75000, date('Y-m-d H:i:s')]);
-    expect($report())->toContain('- Median time a visitor had the site in view: 1 min 15 s')
-        ->and($report('&path=%2Fpage-1'))->toContain('- Median time a visitor had this page in view: 1 min 15 s');
+    expect($report())->toContain('- Median engaged time per visitor: 1 min 15 s')
+        ->and($report('&path=%2Fpage-1'))->toContain('- Median engaged time per visitor on this page: 1 min 15 s');
 });
 
 test('format=md keeps a value from outside on one line in a code span, where it cannot be a heading', function () {

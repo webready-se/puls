@@ -26,7 +26,7 @@ const PULS_VERSION = '1.30.0';
 // starts the session before execution reaches anything defined further down
 const SESSION_REPLACED_GRACE_SECONDS = 60;
 
-// The most time in view one pageview can count: a tab left open is not being read. The script
+// The most engaged time one pageview can count: a tab left open is not being read. The script
 // stops there too
 const ENGAGED_MAX_MS = 1_800_000;
 
@@ -651,7 +651,7 @@ function show_login(array $config, ?string $error = null): void
 // TRACKING SCRIPT
 // =====================================================================
 
-// Time in view counts while the page is visible and at most two minutes after the last input
+// Engaged time counts while the page is visible and at most two minutes after the last input
 // (mouse, key, scroll, touch, or a playing video or audio, whose timeupdate a capturing listener
 // hears): a page left open with nobody there, or a computer asleep without hiding it, adds two
 // minutes at most, not the 30 that ENGAGED_MAX_MS allows
@@ -681,7 +681,7 @@ function get_tracking_script(): string
       var last,tt=0,ts=0,ss=0,la=0;
       function ad(n){if(ts){var e=Math.min(n,la+12e4);if(e>ts)tt+=e-ts;ts=n}}
       function ac(){var n=Date.now();ad(n);la=n}
-      function fl(){ad(Date.now());if(last&&tt>=1e3&&tt!=ss&&!off()){ss=tt;log('in view',last,tt);navigator.sendBeacon&&navigator.sendBeacon(ep,JSON.stringify({u:last,site:site,e:Math.min(tt,18e5)}))}}
+      function fl(){ad(Date.now());if(last&&tt>=1e3&&tt!=ss&&!off()){ss=tt;log('engaged',last,tt);navigator.sendBeacon&&navigator.sendBeacon(ep,JSON.stringify({u:last,site:site,e:Math.min(tt,18e5)}))}}
       function s(p){
         if(off()){log('ignored: this browser is excluded');return}
         var u=url(p);if(!u){log('ignored: not this site',p);return}if(u===last){log('skipped: same URL as the last pageview');return}
@@ -732,7 +732,7 @@ function handle_collect(array $config): void
     $input = json_decode($raw, true);
     if (!$input || empty($input['u'])) return;
 
-    // How long the page was in view so far, from the script: a total, so a lost send is made up by
+    // The page's engaged time so far, from the script: a total, so a lost send is made up by
     // the next. A pageview from the script carries 0, which marks it as measured
     $engaged = isset($input['e']) ? max(0, min((int) $input['e'], ENGAGED_MAX_MS)) : null;
 
@@ -836,7 +836,7 @@ function handle_collect(array $config): void
 }
 
 /**
- * Raises the visitor's latest pageview of the page to the time it has been in view so far. No id
+ * Raises the visitor's latest pageview of the page to its engaged time so far. No id
  * leaves the browser: the visitor hash, the site and the path find the row, and a page viewed again
  * is a newer row. Only the last 4 hours are searched, which keeps this a short walk of the covering
  * index on a busy site; a tab left that long and then read again keeps what was sent before
@@ -897,7 +897,7 @@ function tracked_sites(PDO $db): array
  *   country   the code      visitors
  *   browser, device, language   the value ('' for none)   views
  *   duration  seconds       visitors with more than one pageview and that length
- *   engaged   seconds       visitors with a measured pageview and that much time in view, summed
+ *   engaged   seconds       visitors with a measured pageview and that much engaged time, summed
  * The day row is there for every summed day, also one without pageviews, so a summed day can
  * be told from one not summed yet.
  */
@@ -917,7 +917,7 @@ function create_daily_table(PDO $db): void
     ) WITHOUT ROWID');
 }
 
-// A visitor's time in view over a day (an aggregate over GROUP BY visitor_hash, on rows where
+// A visitor's engaged time over a day (an aggregate over GROUP BY visitor_hash, on rows where
 // engaged_ms IS NOT NULL): whole seconds under a minute, then steps of 5 s to ten minutes, 30 s to
 // an hour and 5 minutes after, so a day holds a few hundred lengths in the summary, not thousands.
 // The steps keep the order, so the median of them is the step the true median is in. The summary
@@ -1913,7 +1913,7 @@ function get_api_data(array $config, array $user): string
         $previousMedianSession = $median !== false ? (int) $median : null;
     }
 
-    // Time in view per visitor: the median of each visitor's measured pageviews summed, the row at
+    // Engaged time per visitor: the median of each visitor's measured pageviews summed, the row at
     // n/2 as above. Visits of one page count too. With a path filter it is the time on that page.
     // Null when no pageview in the period was measured (before v33, or from an older script)
     if ($fig) {
@@ -2514,7 +2514,7 @@ function report_markdown(array $d): string
         $md .= '- Pageviews: ' . md_number($d['totals']['views']) . md_change($d['totals']['views'], $d['previousTotals']['views'] ?? null) . "\n";
         // A page filter does not measure bounce, which comes back as 0
         if (!$d['path']) $md .= "- Bounce rate: {$d['bounceRate']}%" . ($d['previousBounceRate'] !== null ? " against {$d['previousBounceRate']}%" : '') . "\n";
-        if ($d['medianEngagedSeconds'] !== null) $md .= '- Median time a visitor had ' . ($d['path'] ? 'this page' : 'the site') . ' in view: ' . md_duration($d['medianEngagedSeconds']) . ($d['previousMedianEngagedSeconds'] !== null ? ' against ' . md_duration($d['previousMedianEngagedSeconds']) : '') . "\n";
+        if ($d['medianEngagedSeconds'] !== null) $md .= '- Median engaged time per visitor' . ($d['path'] ? ' on this page' : '') . ': ' . md_duration($d['medianEngagedSeconds']) . ($d['previousMedianEngagedSeconds'] !== null ? ' against ' . md_duration($d['previousMedianEngagedSeconds']) : '') . "\n";
         $md .= "- On the site in the last 5 minutes: {$d['live']}\n";
         if (!empty($d['summary']['bestDay'])) $md .= '- Busiest: ' . md_text($d['summary']['bestDay']) . (!empty($d['summary']['peakHour']) ? ', ' . md_text($d['summary']['peakHour']) : '') . "\n";
         $md .= "\n";
@@ -3570,7 +3570,7 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
         $db->exec('DELETE FROM daily');
     }
 
-    // v33: how long a page was in view (record_engagement). NULL on every row before it, and on a
+    // v33: a page's engaged time (record_engagement). NULL on every row before it, and on a
     // pageview from a script that does not measure it, so those visits stay out of the measure.
     // The summary keeps its days: none of them holds a measured visit yet
     if ($version < 33) {

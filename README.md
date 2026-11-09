@@ -67,7 +67,7 @@ A goal is a page or an event. Its tile shows the visitors who converted, their s
 
 ### And the rest
 
-- **Traffic:** channels (paid, campaign, organic, social, referral, direct), UTM campaigns with a link builder, Google Ads detection, entry and exit pages, bounce rate, and how long visitors have your pages in view
+- **Traffic:** channels (paid, campaign, organic, social, referral, direct), UTM campaigns with a link builder, Google Ads detection, entry and exit pages, bounce rate and engaged time
 - **Over time:** compare with the previous period, custom date ranges, chart notes for campaigns and mentions, release markers from your app version, a live visitor count
 - **Teams and clients:** one dashboard for many sites, sites in groups, users limited to their own sites, read-only share links, a [JSON and CSV API](docs/api.md)
 - **Tracking without code:** phone and email clicks, downloads, form submissions, outbound links

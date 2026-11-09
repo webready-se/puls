@@ -174,7 +174,7 @@
   delegate('pointerdown', 'data-on-pointerdown');
   delegate('focusout', 'data-on-blur');
   function num(n) { return Number(n || 0).toLocaleString('en-US'); }
-  // Null means nothing was measured (a period before the script measured time in view), as in the
+  // Null means nothing was measured (a period before the script measured engaged time), as in the
   // Markdown report; 0 is a measured visit of under a second
   function formatDuration(s) {
     if (s === null || s === undefined) return '–';
@@ -698,7 +698,7 @@
       bounceTrend = Math.round(((d.bounceRate - d.previousBounceRate) / d.previousBounceRate) * 100);
     }
 
-    // Time in view trend, when both periods were measured
+    // Engaged time trend, when both periods were measured
     var sessionTrend = null;
     if (d.medianEngagedSeconds > 0 && d.previousMedianEngagedSeconds > 0) {
       sessionTrend = Math.round(((d.medianEngagedSeconds - d.previousMedianEngagedSeconds) / d.previousMedianEngagedSeconds) * 100);
@@ -3459,7 +3459,7 @@
       ['Visitors', d.totals.visitors],
       ['Bounce rate', d.bounceRate != null ? d.bounceRate + '%' : ''],
       ['Median session (s)', d.medianSessionSeconds],
-      ['Median time in view per visitor (s)', d.medianEngagedSeconds != null ? d.medianEngagedSeconds : '']
+      ['Median engaged time per visitor (s)', d.medianEngagedSeconds != null ? d.medianEngagedSeconds : '']
     ]));
 
     // Pageviews by day

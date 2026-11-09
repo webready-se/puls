@@ -24,12 +24,12 @@ function summaryRows(PDO $db, string $site, string $date, string $kind): array
 test('a day sums to the same figures as its pageviews', function () {
     $db = summaryTestDb();
     $day = '2026-03-10';
-    // a: three pages, the first two in the same second (the one stored first is the entry), in view
+    // a: three pages, the first two in the same second (the one stored first is the entry), engaged
     // 1.5 s, 20 s and 100.9 s
     summaryPageview($db, 's', "{$day} 09:00:00", 'a', '/', ['referrer' => 'Google', 'country' => 'SE', 'language' => 'sv', 'browser' => 'Chrome', 'device' => 'Desktop', 'engaged_ms' => 1500]);
     summaryPageview($db, 's', "{$day} 09:00:00", 'a', '/b', ['referrer' => 'Google', 'country' => 'SE', 'language' => 'sv', 'browser' => 'Chrome', 'device' => 'Desktop', 'engaged_ms' => 20000]);
     summaryPageview($db, 's', "{$day} 09:05:30", 'a', '/c', ['referrer' => 'Google', 'country' => 'SE', 'language' => 'sv', 'browser' => 'Chrome', 'device' => 'Desktop', 'engaged_ms' => 100900]);
-    // b: one page from an ad, a bounce, in view 45 s
+    // b: one page from an ad, a bounce, engaged 45 s
     summaryPageview($db, 's', "{$day} 10:00:00", 'b', '/', ['utm_source' => 'ig', 'utm_medium' => 'paid', 'country' => 'NO', 'language' => 'en', 'browser' => 'Safari', 'device' => 'Mobile', 'engaged_ms' => 45000]);
     // c: two pages, nothing known about where from
     summaryPageview($db, 's', "{$day} 11:00:00", 'c', '/b', ['browser' => 'Chrome', 'device' => 'Desktop']);
@@ -63,7 +63,7 @@ test('a day sums to the same figures as its pageviews', function () {
         ->and($only(summaryRows($db, 's', $day, 'language'), 'views'))->toBe(['' => 2, 'en' => 1, 'sv' => 3])
         // Lengths of visits of more than one page: a 5 min 30 s, c 10 s
         ->and($only(summaryRows($db, 's', $day, 'duration'), 'visitors'))->toBe(['10' => 1, '330' => 1])
-        // Time in view per visitor, summed before cutting: a 122.4 s, in the 5 s step from 120, and b
+        // Engaged time per visitor, summed before cutting: a 122.4 s, in the 5 s step from 120, and b
         // 45 s, whole seconds under a minute; c's pageviews were not measured, so c is not in it
         ->and($only(summaryRows($db, 's', $day, 'engaged'), 'visitors'))->toBe(['120' => 1, '45' => 1]);
 
@@ -159,7 +159,7 @@ test('every figure of the dashboard reads the same from the summary as from the 
                 // A visit ends at midnight: the salt changes with the day, and so does the hash
                 $dayEnd = strtotime($date . ' 23:59:59');
                 for ($n = mt_rand(1, 4); $n > 0 && $at <= $dayEnd; $n--) {
-                    // Time in view from 25 days ago, as if the script measuring it arrived then: now and
+                    // Engaged time from 25 days ago, as if the script measuring it arrived then: now and
                     // then a page left in under a second, or a pageview from an older script
                     $engaged = $ago > 25 || mt_rand(0, 9) === 0 ? null : (mt_rand(0, 4) === 0 ? 0 : mt_rand(1000, 400000));
                     summaryPageview($db, $site, date('Y-m-d H:i:s', min($at, $ago === 0 ? $now : $at)), $visitor, $paths[mt_rand(0, count($paths) - 1)], $more + ['engaged_ms' => $engaged]);
@@ -263,7 +263,7 @@ test('migration v32 names the AI assistants in stored visits, and has the summar
         ->and((int) $db->query('SELECT COUNT(*) FROM daily')->fetchColumn())->toBe(0);
 });
 
-test('migration v33 adds the time in view, unmeasured on every stored visit, and keeps the summary', function () {
+test('migration v33 adds engaged time, unmeasured on every stored visit, and keeps the summary', function () {
     $dir = sys_get_temp_dir() . '/puls-v33-' . uniqid();
     register_shutdown_function(fn () => exec('rm -rf ' . escapeshellarg($dir)));
     $db = get_db($dir . '/puls.sqlite');
