@@ -1979,9 +1979,10 @@ function get_api_data(array $config, array $user): string
     if ($fig) {
         $channels = $fig['channels'];
     } else {
+        // Pages per visitor rounded in PHP, as the summary does: SQLite's ROUND takes 1.95 as the
+        // float it is, 1.9499..., and gives 1.9 where PHP gives 2
         $stmt = $db->prepare("
-            SELECT channel, COUNT(*) as visitors, SUM(pv) as views,
-                   ROUND(AVG(pv), 1) as pages_per_visitor
+            SELECT channel, COUNT(*) as visitors, SUM(pv) as views
             FROM (
                 SELECT visitor_hash, COUNT(*) as pv, " . channel_sql() . " as channel
                 FROM pageviews
@@ -1992,7 +1993,7 @@ function get_api_data(array $config, array $user): string
             ORDER BY visitors DESC, channel
         ");
         $stmt->execute(array_merge($dateParams, $siteParams, $pathParams));
-        $channels = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $channels = array_map(fn ($r) => $r + ['pages_per_visitor' => round($r['views'] / $r['visitors'], 1)], $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     // Bot data: the totals from the counts per day, the lists from the rows unless left out

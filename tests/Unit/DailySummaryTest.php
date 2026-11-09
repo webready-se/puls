@@ -113,6 +113,21 @@ test('the day that is over is summed once a day for the sites that had a pagevie
     expect((int) $db->query('SELECT COUNT(*) FROM daily')->fetchColumn())->toBe(0);
 });
 
+test('pages per visitor of a channel rounds a half up from the rows as from the summary', function () {
+    $db = summaryTestDb();
+    $at = date('Y-m-d H:i:s', max(time() - 3600, strtotime('today')));
+    // 39 pageviews by 20 visitors from another site: 1.95 pages each, which is 1.9499... as a float
+    for ($v = 0; $v < 20; $v++) {
+        for ($p = $v === 0 ? 1 : 2; $p > 0; $p--) summaryPageview($db, 's', $at, "v{$v}", "/{$p}", ['referrer' => 'news.example']);
+    }
+    $config = ['db_path' => $db->query('PRAGMA database_list')->fetch()['file']];
+    $_GET = ['days' => 1, 'site' => 's'];
+    $channel = fn (array $extra) => json_decode(get_api_data($config + $extra, ['sites' => []]), true)['channels'][0];
+    expect($channel(['daily_summary' => false]))->toBe(['channel' => 'Referral', 'visitors' => 20, 'views' => 39, 'pages_per_visitor' => 2])
+        ->and($channel([]))->toBe($channel(['daily_summary' => false]));
+    $_GET = [];
+});
+
 test('every figure of the dashboard reads the same from the summary as from the pageviews', function (int $seed) {
     $db = summaryTestDb();
     mt_srand($seed);
