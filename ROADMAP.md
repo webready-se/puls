@@ -214,6 +214,7 @@ Feedback from the first SPA integration (ten named events with data). Today even
 - [x] **New values highlighted** — values not seen before in a breakdown (also fits referrers)
 - [x] **Longer event history** — `EVENTS_RETENTION_DAYS`, default 400 (0 = forever). Chosen over daily rollups: history does not slow queries and events are small, so keeping raw rows is simpler and keeps every detail
 - [x] **form_submit auto-event** — skip when `defaultPrevented`, read `data-puls-event` on the form for identity
+- [ ] **A saved card before its event's first hit** - a card is saved from an event's drill-down, with a key picked from the data seen so far, so while a site is being set up its cards cannot be shown until each event has fired, and the setup cannot be shown in one go. A goal already can: Add event goal takes a name not seen yet and shows it dimmed until the first hit. The same for a card: an event name and a key typed in, a dimmed card until the first hit. `?breakdown_add` already takes any event and key, so it is the dashboard's part; where it is typed (beside Add event goal, or on the Events card) needs a look, as the dashboard is calm by default
 
 ## Epic 15: Clean Paths (v1.23.0)
 
