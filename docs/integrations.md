@@ -169,12 +169,14 @@ In your base layout (`resources/views/layouts/app.blade.php`):
     @yield('content')
 
     <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
-
-    @if(!request()->header('User-Agent') || str_contains(request()->header('User-Agent'), 'bot'))
-        {{-- noscript pixel with server-side path --}}
-    @endif
+    <noscript>
+        <img src="https://your-puls-domain/?pixel&s=my-site&p={{ request()->getPathInfo() }}"
+             alt="" width="1" height="1" />
+    </noscript>
 </body>
 ```
+
+The pixel is optional ([more](#bot-tracking-pixel-optional)), and `getPathInfo()` gives it the page's path with its leading slash.
 
 ### Statamic
 
