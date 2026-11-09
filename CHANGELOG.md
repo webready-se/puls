@@ -5,11 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.31.0] - 2026-11-09
+## [Unreleased]
 
 ### Added
 
 - **Time / visitor: engaged time.** The script now counts engaged time, the time a page is on screen and in use, which Chartbeat and Parse.ly also count with a shorter pause: paused while the tab is hidden, stopped two minutes after the last input (mouse, keyboard, scroll, touch, or a video playing), and at most 30 minutes a page, and the card that said Time / session shows the median of each visitor's engaged time in a day, visits of one page included. Filtered to one page, it is the time on that page. Time / session was the time between a visitor's first and last pageview, which left out every visit of one page and the time on the last page, and had no limit: on a site of one page it was mostly the time between two visits. A period from before the upgrade shows a dash, since nothing in it was measured, and its trend starts once both periods were. A copy of the script cached from before measures nothing until the browser fetches it again, within an hour. The API adds `medianEngagedSeconds` and keeps `medianSessionSeconds` for scripts that read it; the Markdown report gives the new figure. It will read lower than Google Analytics' engagement time: a median, and no time counted with nobody there. The script is about 2.3 KB gzipped, up from 2.0 KB. How it works: [engaged time](docs/integrations.md#engaged-time).
+
+## [1.31.0] - 2026-11-09
+
+### Added
+
 - **What a daily script needs from the API.** `tokenExpires` says a token's last day, and the Markdown report warns in the last 14 days. `?api&botDays` gives bot visits per day, site and bot, `&bot=` narrows the crawled pages to one bot, and `?api&botAgents` or `php puls bots:unknown` lists the user agents behind visits Puls has no name for. `language=sv` narrows a view to one language.
 - **`llms.txt`.** The repository has an `llms.txt` that tells an agent how to read an install, and the source of the dashboard and of a shared link points at it, with nothing to see on the page. The settings menu has a line about the read API and AI assistants, above Log out. Both are left out under white-label, and an install itself does not serve the file.
 - **A report for your AI assistant.** `?api&format=md` answers with the dashboard's data as Markdown: a short guide for the assistant, then the numbers day by day, pages, sources, goals, events, bots and pages to fix. Everything a visitor's browser sent sits on one line in a code span, so a path cannot pass itself off as an instruction to an assistant that can change your code. It says how to look closer: one site of several, one page, one event by a key in its data, one day by hour. `share:create` now prints the command for it. The JSON also says `version`, `completeThrough`, the latest day whose figures will not change, and `scope`, what a token for groups reads.
