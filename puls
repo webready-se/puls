@@ -11,7 +11,7 @@
  *   php puls sites:list                          List all tracked sites
  *   php puls sites:rename [<old> <new>]             Rename a site
  *   php puls sites:remove [<name>] [--yes]         Delete all data for a site
- *   php puls sites:group [<group> <site>...]       Put sites in a group
+ *   php puls sites:group [<group> <site>...] [--new]  Put sites in a group (--new: before their first visit)
  *   php puls sites:ungroup [<site>...]             Take sites out of their group
  *   php puls sites:clean-paths [<site>] [--query|--keep=a,b] [--ids] [--tokens] [--dry-run]  Clean stored paths
  *   php puls share:create [<site or group>] [--groups=a,b] [--label=...] [--expires=YYYY-MM-DD|never]  Create a read token
@@ -357,6 +357,10 @@ function sitesList(string $dbPath): void
     echo str_repeat('─', $col + 56) . "\n";
 
     $row = function (array $s, string $indent = '') use ($col): void {
+        if (!empty($s['waiting'])) {
+            echo mbPad($indent . $s['site'], $col) . "no visits yet\n";
+            return;
+        }
         echo mbPad($indent . $s['site'], $col) . sprintf("%-12s %-12s %10s %10s %8s\n",
             substr($s['first_seen'], 0, 10),
             substr($s['last_seen'], 0, 10),
@@ -372,6 +376,11 @@ function sitesList(string $dbPath): void
     } else {
         $byGroup = [];
         foreach ($sites as $s) $byGroup[$groups[$s['site']] ?? ''][] = $s;
+        // Grouped before its first visit (sites:group --new): listed so a misspelt name shows
+        $seen = array_column($sites, 'site');
+        foreach ($groups as $site => $g) {
+            if (!in_array($site, $seen, true)) $byGroup[$g][] = ['site' => $site, 'waiting' => true];
+        }
         $names = array_filter(array_keys($byGroup), fn($g) => $g !== '');
         sort($names, SORT_NATURAL | SORT_FLAG_CASE);
         if (isset($byGroup[''])) $names[] = '';
@@ -783,6 +792,17 @@ function siteGroupMap(PDO $db): array
     return $map;
 }
 
+/** A site name as a pageview stores it (normalize_site() in public/index.php), so a site grouped before its first visit matches it */
+function normalizeSiteName(string $site): string
+{
+    $site = substr(trim($site), 0, 100);
+    if (function_exists('idn_to_utf8')) {
+        $decoded = idn_to_utf8($site, 0, INTL_IDNA_VARIANT_UTS46);
+        if ($decoded !== false) $site = $decoded;
+    }
+    return preg_replace('/[\x00-\x1f\x7f<>"\'`\\\\]/', '', $site);
+}
+
 /** A group name as stored: trimmed, at most 100 characters, without the characters a site name may not hold. Null when empty. */
 function normalizeGroupName(string $name): ?string
 {
@@ -814,8 +834,11 @@ function pickSites(array $available): ?array
 function sitesGroup(array $config, array $argv): void
 {
     $db = siteGroupsDb($config['db_path']);
-    $groupArg = $argv[2] ?? null;
-    $siteArgs = array_slice($argv, 3);
+    // --new groups a site before its first visit; it may stand anywhere
+    $new = in_array('--new', $argv, true);
+    $args = array_values(array_filter(array_slice($argv, 2), fn ($arg) => $arg !== '--new'));
+    $groupArg = $args[0] ?? null;
+    $siteArgs = array_values(array_filter(array_map('normalizeSiteName', array_slice($args, 1)), 'strlen'));
     $tracked = getTrackedSites($config['db_path']);
     $groups = siteGroupMap($db);
 
@@ -861,10 +884,14 @@ function sitesGroup(array $config, array $argv): void
         }
     }
 
-    $unknown = array_values(array_diff($siteArgs, $tracked));
-    if ($unknown) {
-        echo "Not a tracked site: " . implode(', ', $unknown) . ".\n";
-        echo "Run `php puls sites:list` to see the names.\n";
+    // Refused unless --new, to catch a typo: a site Puls has not seen is most often a misspelt one
+    $unknown = array_values(array_unique(array_diff($siteArgs, $tracked)));
+    if ($unknown && !$new) {
+        $them = count($unknown) === 1 ? 'it' : 'them';
+        echo "No visits yet from " . implode(', ', $unknown) . ".\n";
+        echo "  Check the name: `php puls sites:list` shows the sites Puls has seen.\n";
+        echo "  A new site: open {$them} once in a browser and run this again, which also shows the script is in place.\n";
+        echo "  Or add --new to group {$them} now, before the first visit.\n";
         exit(1);
     }
 
@@ -873,7 +900,8 @@ function sitesGroup(array $config, array $argv): void
     foreach (array_unique($siteArgs) as $s) {
         $stmt->execute([$s, $group]);
         $from = isset($groups[$s]) && $groups[$s] !== $group ? " (was in '{$groups[$s]}')" : '';
-        echo "  {$s} → {$group}{$from}\n";
+        $waiting = in_array($s, $unknown, true) ? ' (no visits yet)' : '';
+        echo "  {$s} → {$group}{$from}{$waiting}\n";
     }
     $db->commit();
     $total = count(array_keys(siteGroupMap($db), $group, true));
@@ -1741,6 +1769,7 @@ function printHelp(): void
       php puls sites:rename [<old> <new>]       Rename a site
       php puls sites:remove [<name>] [--yes]   Delete all data for a site
       php puls sites:group [<group> <site>...] Put sites in a group (one group per site)
+                [--new]
       php puls sites:ungroup [<site>...]       Take sites out of their group
       php puls sites:clean-paths [<site>]      Strip query strings, collapse ids/tokens in stored paths
       php puls share:create [<site or group>]  Create a read token, also a read-only dashboard link
@@ -1766,6 +1795,7 @@ function printHelp(): void
       --tokens   Replace token segments (16+ letters and digits, or a UUID) with :token.
       --dry-run  Show what would change without writing.
       --yes      Remove or revoke without asking first, for a script.
+      --new      Group a site before its first visit (sites:group).
 
     HELP;
     echo "\n";

@@ -44,12 +44,34 @@ it('moves a site to another group and says where it was', function () {
         ->and(groupRows($this->dbPath))->toBe(['shop-a.example' => 'Archive']);
 });
 
-it('refuses a site that is not tracked, and changes nothing', function () {
-    $result = runCli($this->tmpDir, 'sites:group', ['Shops', 'shop-a.example', 'nope.example']);
+it('refuses a site that is not tracked, says what to do, and changes nothing', function () {
+    $result = runCli($this->tmpDir, 'sites:group', ['Shops', 'shop-a.example', 'nope.example', 'new.example']);
     expect($result['exit'])->toBe(1)
-        ->and($result['output'])->toContain('Not a tracked site: nope.example')
+        ->and($result['output'])->toContain('No visits yet from nope.example, new.example.')
+        ->and($result['output'])->toContain('php puls sites:list')
+        ->and($result['output'])->toContain('open them once in a browser')
+        ->and($result['output'])->toContain('add --new')
         ->and(groupRows($this->dbPath))->toBe([]);
 });
+
+it('groups a site before its first visit with --new, and says which have none yet', function () {
+    $result = runCli($this->tmpDir, 'sites:group', ['--new', 'Shops', 'shop-a.example', 'shop-c.example']);
+    expect($result['exit'])->toBe(0)
+        ->and($result['output'])->toContain('shop-a.example → Shops')
+        ->and($result['output'])->toContain('shop-c.example → Shops (no visits yet)')
+        ->and($result['output'])->not->toContain('shop-a.example → Shops (no visits yet)')
+        ->and(groupRows($this->dbPath))->toBe(['shop-a.example' => 'Shops', 'shop-c.example' => 'Shops']);
+
+    // Listed under its group until it arrives, and taken out again like any other
+    expect(runCli($this->tmpDir, 'sites:list')['output'])->toMatch('/Shops\n.*shop-a\.example.*\n\s+shop-c\.example\s+no visits yet\n/');
+    runCli($this->tmpDir, 'sites:ungroup', ['shop-c.example']);
+    expect(groupRows($this->dbPath))->toBe(['shop-a.example' => 'Shops']);
+});
+
+it('stores a name given with --new as a pageview would store it', function () {
+    runCli($this->tmpDir, 'sites:group', ['Shops', 'xn--smrgs-pra0j.example', '"odd<name>.example', '--new']);
+    expect(groupRows($this->dbPath))->toBe(['oddname.example' => 'Shops', 'smörgås.example' => 'Shops']);
+})->skip(!function_exists('idn_to_utf8'), 'needs the intl extension');
 
 it('refuses an empty group name', function () {
     $result = runCli($this->tmpDir, 'sites:group', ['  ', 'shop-a.example']);

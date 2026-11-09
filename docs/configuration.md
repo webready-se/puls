@@ -68,6 +68,8 @@ php puls sites:list                                        # Sites under their g
 
 Without arguments, `sites:group` offers the groups and the sites by number. A site keeps its group when renamed, and loses it when removed.
 
+A name Puls has not seen a visit from is refused, since it is most often a typo. For a new site, open it once in a browser and run the command again, which also shows that the script is in place (a visit from an [excluded address](#excluding-your-own-visits) is not counted). To group sites before their first visit, as when setting up many at once, add `--new`: `sites:list` shows them under their group as "no visits yet" until one comes, and the dashboard lists them from then on.
+
 ## Share links
 
 A share link shows a dashboard read-only, without a login, and also opens the [read API](api.md) for the same data. It covers one site, or the sites in one or more groups, with a site picker in the dashboard:
@@ -128,7 +130,7 @@ php puls user:list                       # List all users
 php puls sites:list                      # List all tracked sites
 php puls sites:rename <old> <new>        # Rename a tracked site
 php puls sites:remove <name>             # Delete all data for a site (--yes: without typing the name)
-php puls sites:group <group> <site>...   # Put sites in a group (one group per site)
+php puls sites:group <group> <site>...   # Put sites in a group (one group per site; --new: before their first visit)
 php puls sites:ungroup <site>...         # Take sites out of their group
 php puls sites:clean-paths <site> --query --ids  # Clean stored paths (--keep=a,b, --tokens, --dry-run)
 php puls share:create <site or group>    # Create a read token and dashboard link, for 90 days
