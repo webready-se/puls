@@ -1173,6 +1173,26 @@ async function main() {
   if (result6.exceptionDetails) errors.push(`Tracker steps threw: ${result6.exceptionDetails.exception?.description}`);
   failures.push(...(Array.isArray(result6.result?.value) ? result6.result.value : []));
 
+  // A white-labelled install, on a server of its own: a shared link's tab names the install, not Puls
+  // (the dashboard's tab title, the login page's comes from PHP)
+  const WL_PORT = await freePort();
+  children.push(spawn('php', ['-S', `localhost:${WL_PORT}`, '-t', join(root, 'public')], { env: { ...env, APP_NAME: 'Acme Stats' }, stdio: 'ignore' }));
+  await waitForHttp(`http://localhost:${WL_PORT}/?health`);
+  const wait9 = loaded();
+  await send('Page.navigate', { url: `http://localhost:${WL_PORT}/?share=${token}` });
+  await wait9;
+  const whiteLabelSteps = async () => {
+    const fails = [];
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let t = 0; t < 5000 && !document.querySelector('#chart-card'); t += 100) await sleep(100);
+    if (!document.querySelector('#chart-card')) return ['timed out waiting for a shared dashboard on a white-labelled install'];
+    if (!document.title.endsWith('Acme Stats') || document.title.includes('Puls')) fails.push(`a shared dashboard on a white-labelled install names the install in its tab (says ${document.title})`);
+    return fails;
+  };
+  const result8 = await send('Runtime.evaluate', { expression: `(${whiteLabelSteps.toString()})()`, awaitPromise: true, returnByValue: true });
+  if (result8.exceptionDetails) errors.push(`White-label steps threw: ${result8.exceptionDetails.exception?.description}`);
+  failures.push(...(Array.isArray(result8.result?.value) ? result8.result.value : []));
+
   ws.close();
   failures.push(...errors);
   if (failures.length) {
@@ -1180,7 +1200,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored). No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored), a white-labelled install\'s name in a shared link\'s tab. No JS errors.');
   }
 }
 

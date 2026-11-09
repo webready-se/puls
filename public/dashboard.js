@@ -488,7 +488,7 @@
   // Shared mode: hide admin UI
   if (isShared) {
     document.getElementById('menu-btn').style.display = 'none';
-    document.title = (shareSite || (pulsConfig.share.groups || []).join(', ')) + ' — Puls';
+    document.title = (shareSite || (pulsConfig.share.groups || []).join(', ')) + ' — ' + appName;
   }
 
   // Load sites, then data
