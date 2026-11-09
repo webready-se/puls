@@ -529,9 +529,9 @@ async function main() {
     // A campaign's source reads in words, the title keeps what was sent
     {
       const row = (sent) => [...document.querySelectorAll('.trow-label')].find((l) => l.title === sent);
-      expect(row('ig / paid — smoke-ads')?.textContent === 'Instagram / paid — smoke-ads', "Meta's ig reads Instagram");
-      expect(row('fb / paid — smoke-ads')?.textContent === 'Facebook / paid — smoke-ads', "Meta's fb reads Facebook");
-      expect(row('google / cpc — smoke-ads')?.textContent === 'Google Ads — smoke-ads', 'google with cpc reads Google Ads');
+      expect(row('ig / paid – smoke-ads')?.textContent === 'Instagram / paid – smoke-ads', "Meta's ig reads Instagram");
+      expect(row('fb / paid – smoke-ads')?.textContent === 'Facebook / paid – smoke-ads', "Meta's fb reads Facebook");
+      expect(row('google / cpc – smoke-ads')?.textContent === 'Google Ads – smoke-ads', 'google with cpc reads Google Ads');
     }
 
     // The tooltip over the tallest day fits above it, with Compare off and on: the scroll box

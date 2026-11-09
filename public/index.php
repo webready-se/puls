@@ -610,7 +610,7 @@ function show_login(array $config, ?string $error = null): void
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <link rel="manifest" href="/?manifest">
     <link rel="apple-touch-icon" href="/icon-180.png">
-    <title>{$name} — Log in</title>{$configBlock}
+    <title>{$name} – Log in</title>{$configBlock}
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='{$accentEnc}'/><path d='M24 26V16M18 26V10M12 26v-8' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
     <script src="theme.js?v={$v}"></script>
     <link rel="stylesheet" href="login.css?v={$v}">

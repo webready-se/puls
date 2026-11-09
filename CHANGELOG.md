@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The checklist for a new site in `docs/integrations.md` starts with `ALLOWED_ORIGINS`: a domain that is not in it gets `403` on every pageview, so the site never appears, and neither Puls nor the site says why. It has a `curl` that tells whether a domain is let in, without storing anything.
 - The docs no longer say that the `<noscript>` pixel counts visitors without JavaScript. It logs bots only, as it always has, and most crawlers fetch the HTML alone and never request it, which `docs/install.md` now says where it offers the pixel on Apache.
 - The Laravel example in `docs/integrations.md` has the pixel. Where it should be was an `@if` with only a comment in it.
+- A short dash where a long one was: for an empty value in the CLI's lists, between a site and its period above the chart, before a campaign in the UTM list, and in the titles of a shared dashboard and the login page.
 
 ### Fixed
 

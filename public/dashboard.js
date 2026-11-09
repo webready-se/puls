@@ -488,7 +488,7 @@
   // Shared mode: hide admin UI
   if (isShared) {
     document.getElementById('menu-btn').style.display = 'none';
-    document.title = (shareSite || (pulsConfig.share.groups || []).join(', ')) + ' — ' + appName;
+    document.title = (shareSite || (pulsConfig.share.groups || []).join(', ')) + ' – ' + appName;
   }
 
   // Load sites, then data
@@ -1372,7 +1372,7 @@
           '<div class="card-tab' + (chartMode === 'views' ? ' active' : '') + '" data-chart="views" data-action="chart-mode">Pageviews</div>' +
           '<div class="card-tab' + (chartMode === 'visitors' ? ' active' : '') + '" data-chart="visitors" data-action="chart-mode">Visitors</div>' +
         '</div>' +
-        '<span class="card-subtitle">' + esc(siteName) + ' — ' + periodLabel() +
+        '<span class="card-subtitle">' + esc(siteName) + ' – ' + periodLabel() +
           (hasCompare ? '<button class="chart-compare-toggle' + (compareMode ? ' active' : '') + '" data-action="toggle-compare">Compare</button>' : '') +
           (noteSite() ? '<button class="chart-compare-toggle note-toggle" aria-expanded="false" aria-controls="note-form" data-action="toggle-note-form">+ Note</button>' : '') +
         '</span>' +
@@ -2047,7 +2047,7 @@
     var html = '';
     rows.forEach(function(r) {
       var pct = (+r.visitors / max) * 100;
-      var rest = (r.campaign ? ' — ' + esc(r.campaign) : '') + (r.term ? ' [' + esc(r.term) + ']' : '') + (r.content ? ' (' + esc(r.content) + ')' : '');
+      var rest = (r.campaign ? ' – ' + esc(r.campaign) : '') + (r.term ? ' [' + esc(r.term) + ']' : '') + (r.content ? ' (' + esc(r.content) + ')' : '');
       var sent = esc(r.source) + (r.medium ? ' / ' + esc(r.medium) : '') + rest;
       html += '<div class="trow">' +
         '<span class="trow-label" title="' + sent + '">' + utmSourceLabel(r) + rest + '</span>' +
