@@ -96,7 +96,7 @@ Make sure `mod_rewrite` is enabled (`a2enmod rewrite`) and that the virtual host
 </Directory>
 ```
 
-> **Note:** server-side bot tracking (the Nginx mirror) is not available on Apache. Use the `<noscript>` [tracking pixel](integrations.md#bot-tracking-pixel-optional) instead.
+> **Note:** server-side bot tracking (the Nginx mirror) is not available on Apache. The `<noscript>` [tracking pixel](integrations.md#bot-tracking-pixel-optional) is the alternative, but it sees only crawlers that load images, and most fetch the HTML alone, so Bots shows far fewer visits than the mirror would.
 
 ## Laravel Forge
 

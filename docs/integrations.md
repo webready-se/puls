@@ -146,7 +146,7 @@ In your base layout (`src/layouts/Layout.astro`):
 </html>
 ```
 
-For static sites, you can also add a `<noscript>` pixel for visitors with JavaScript disabled:
+For static sites, you can also add a `<noscript>` pixel, which logs crawlers that load images but don't run JavaScript ([more](#bot-tracking-pixel-optional)):
 
 ```astro
 ---
@@ -415,7 +415,7 @@ It is stored in the browser's `localStorage` (no cookie), so it follows the devi
 
 ## Bot Tracking Pixel (optional)
 
-Add a `<noscript>` pixel to catch bots and visitors that don't execute JavaScript:
+Add a `<noscript>` pixel to log crawlers that load images but don't run JavaScript. It logs bots only: a request whose user agent Puls does not know as a bot is ignored, so a person with JavaScript turned off is not counted. Most crawlers fetch the HTML alone and never request the pixel, so where you can use the [Nginx mirror](#server-side-bot-tracking-nginx-mirror), it sees far more of them.
 
 ```html
 <noscript>
