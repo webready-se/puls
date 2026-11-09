@@ -42,6 +42,8 @@ ALLOWED_ORIGINS=example.com,another-site.com
 
 This allows tracking from `example.com`, `www.example.com`, `app.example.com` and so on. Leave it empty to allow all origins.
 
+A domain that is not in the list gets `403` on every pageview and event, and the site shows no error, so add a new site's domain before its script goes live. The [checklist for a new site](integrations.md#checklist-for-a-new-site-or-app) has a `curl` that tells whether a domain is let in.
+
 ## Users and access
 
 Users live in `users.json` (bcrypt password hashes) and are managed with the CLI. A user sees every site, or only the sites you give them:

@@ -29,11 +29,18 @@ Puls automatically tracks:
 
 ### Checklist for a new site or app
 
-1. Add the script tag with `data-site`. The site appears in Puls as soon as its first pageview arrives.
-2. Look at your URLs. If any carry search terms, filters with names, record ids or personal links, add `data-query`, `data-collapse-ids`, `data-collapse-tokens` or `data-path` before going live (see below).
-3. If you deploy with versions, add `data-version` so releases show on the charts.
-4. Add `puls.track` calls for the actions that matter (signups, searches, form results), following the [naming and data conventions](#naming-and-data-conventions).
-5. Create users or share links with the CLI: `php puls user:add client --sites=my-site` or `php puls share:create my-site`. A share link also gives read-only [API access](api.md).
+1. If the install sets [`ALLOWED_ORIGINS`](configuration.md#allowed-origins), add the site's domain to it first. Until then every pageview and event from the site gets `403`, so nothing appears in Puls, and the site itself shows no error. This asks whether a domain is let in, and stores nothing: `204` means it is, `403` that it is not.
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' -X OPTIONS 'https://your-puls-domain/?collect' \
+     -H 'Origin: https://example.com' -H 'Access-Control-Request-Method: POST'
+   ```
+
+2. Add the script tag with `data-site`. The site appears in Puls as soon as its first pageview arrives.
+3. Look at your URLs. If any carry search terms, filters with names, record ids or personal links, add `data-query`, `data-collapse-ids`, `data-collapse-tokens` or `data-path` before going live (see below).
+4. If you deploy with versions, add `data-version` so releases show on the charts.
+5. Add `puls.track` calls for the actions that matter (signups, searches, form results), following the [naming and data conventions](#naming-and-data-conventions).
+6. Create users or share links with the CLI: `php puls user:add client --sites=my-site` or `php puls share:create my-site`. A share link also gives read-only [API access](api.md).
 
 ## Keeping personal data out of URLs
 
@@ -139,7 +146,7 @@ In your base layout (`src/layouts/Layout.astro`):
 </html>
 ```
 
-For static sites, you can also add a `<noscript>` pixel for visitors with JavaScript disabled:
+For static sites, you can also add a `<noscript>` pixel, which logs crawlers that load images but don't run JavaScript ([more](#bot-tracking-pixel-optional)):
 
 ```astro
 ---
@@ -162,12 +169,14 @@ In your base layout (`resources/views/layouts/app.blade.php`):
     @yield('content')
 
     <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
-
-    @if(!request()->header('User-Agent') || str_contains(request()->header('User-Agent'), 'bot'))
-        {{-- noscript pixel with server-side path --}}
-    @endif
+    <noscript>
+        <img src="https://your-puls-domain/?pixel&s=my-site&p={{ request()->getPathInfo() }}"
+             alt="" width="1" height="1" />
+    </noscript>
 </body>
 ```
+
+The pixel is optional ([more](#bot-tracking-pixel-optional)), and `getPathInfo()` gives it the page's path with its leading slash.
 
 ### Statamic
 
@@ -408,7 +417,7 @@ It is stored in the browser's `localStorage` (no cookie), so it follows the devi
 
 ## Bot Tracking Pixel (optional)
 
-Add a `<noscript>` pixel to catch bots and visitors that don't execute JavaScript:
+Add a `<noscript>` pixel to log crawlers that load images but don't run JavaScript. It logs bots only: a request whose user agent Puls does not know as a bot is ignored, so a person with JavaScript turned off is not counted. Most crawlers fetch the HTML alone and never request the pixel, so where you can use the [Nginx mirror](#server-side-bot-tracking-nginx-mirror), it sees far more of them.
 
 ```html
 <noscript>

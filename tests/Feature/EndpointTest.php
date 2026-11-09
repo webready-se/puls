@@ -106,6 +106,25 @@ test('pixel endpoint returns gif', function () {
     expect($contentType)->toContain('image/gif');
 });
 
+test('pixel logs a bot and counts no person', function () {
+    $db = getTestDb();
+    $send = fn (string $ua) => http('GET', '/?pixel&s=pixel-who&p=/', [
+        'header' => "User-Agent: {$ua}\r\nAccept-Language: sv-SE,sv;q=0.9",
+    ]);
+    $count = fn (string $table) => (int) $db->query("SELECT COUNT(*) FROM {$table} WHERE site = 'pixel-who'")->fetchColumn();
+    try {
+        expect($send('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')['status'])->toBe(200)
+            ->and($count('pageviews'))->toBe(0)
+            ->and($count('bot_visits'))->toBe(0);
+
+        $send('Mozilla/5.0 (compatible; Googlebot/2.1)');
+        expect($count('bot_visits'))->toBe(1)
+            ->and($count('pageviews'))->toBe(0);
+    } finally {
+        $db->exec("DELETE FROM bot_visits WHERE site = 'pixel-who'");
+    }
+});
+
 test('collect endpoint accepts POST', function () {
     $r = http('POST', '/?collect', [
         'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",
@@ -1016,6 +1035,18 @@ test('format=md is a report for an assistant, opening with its guide', function 
         ->toContain('## Bots')
         ->toContain('Googlebot')
         ->toContain('Puls ' . PULS_VERSION);
+});
+
+test('format=md leaves the bounce rate out under a page filter, which does not measure it', function () {
+    $site = 'report-' . uniqid() . '.example';
+    seedReportSite($site);
+    $token = createTestShareToken($site);
+    $all = http('GET', '/?api&days=7&format=md&share=' . $token)['body'];
+    $page = http('GET', '/?api&days=7&format=md&path=%2Fpage-1&share=' . $token)['body'];
+
+    expect($all)->toContain('- Bounce rate: 100%')
+        ->and($page)->toContain('## Numbers')
+        ->not->toContain('Bounce rate');
 });
 
 test('format=md keeps a value from outside on one line in a code span, where it cannot be a heading', function () {

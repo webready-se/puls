@@ -80,8 +80,8 @@ Every response compares with the previous period of the same length, in the `pre
 |-------|-------|
 | `totals`, `previousTotals` | `{views, visitors}` |
 | `pageviews`, `previousPageviews` | One row per day: `[{date, views, visitors}]` |
-| `bounceRate`, `previousBounceRate` | Percentage of visitors with a single pageview |
-| `medianSessionSeconds` | Median time between first and last pageview, for visitors with more than one |
+| `bounceRate`, `previousBounceRate` | Percentage of visitors with a single pageview. `0` with `path`, which does not measure it |
+| `medianSessionSeconds` | Median time between first and last pageview, for visitors with more than one. `0` when no visitor had more than one, and with `path` |
 | `pages`, `pagesTotal` | `[{path, views, visitors}]` and the number of distinct paths |
 | `entryPages` | `[{path, entries, bounces, bounceRate}]` |
 | `exitPages` | `[{path, exits}]` |

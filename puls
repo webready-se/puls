@@ -1289,10 +1289,10 @@ function printShareTokens(array $tokens, array $groupMap): void
         $expired = $t['expires_at'] && $t['expires_at'] < date('Y-m-d H:i:s');
         $expires = $t['expires_at'] ? substr($t['expires_at'], 0, 10) : 'never';
         if ($expired) $expires .= ' ✗';
-        $label = $t['label'] ?: '—';
+        $label = $t['label'] ?: '–';
         if (mb_strlen($label) > 18) $label = mb_substr($label, 0, 17) . '…';
         echo sprintf("  %d) ", $i + 1) . mbPad(shareReads($t, $groupMap), $col) . mbPad($label, 21) . mbPad(shareTokenStart($t) . '…', 16) . mbPad($expires, 13)
-            . (!empty($t['last_used_at']) ? substr($t['last_used_at'], 0, 10) : '—') . "\n";
+            . (!empty($t['last_used_at']) ? substr($t['last_used_at'], 0, 10) : '–') . "\n";
     }
 }
 
@@ -1542,7 +1542,7 @@ function excludeList(array $config, ?string $site): void
     echo str_repeat('─', 96) . "\n";
     foreach ($rows as $r) {
         echo "  " . mbPad(excludeSiteLabel($r['site']), $col) . mbPad($r['ip'], 42)
-            . sprintf("%-20s %s\n", $r['label'] ?: '—', substr($r['created_at'], 0, 10));
+            . sprintf("%-20s %s\n", $r['label'] ?: '–', substr($r['created_at'], 0, 10));
     }
     echo "\n" . count($rows) . " excluded IP(s).\n";
 }

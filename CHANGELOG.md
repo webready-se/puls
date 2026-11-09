@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `php puls nginx:config` prints a mirror block that works on a Forge server as it is: `resolver 127.0.0.53` (systemd-resolved) instead of Google's, no request body sent to Puls, and timeouts of a few seconds so a slow Puls never holds a visitor's connection. The mirror snippet in `docs/integrations.md` has the same lines; it lacked `resolver` and `proxy_ssl_server_name on`, and failed silently without them: Nginx logs "no resolver defined" and drops the mirror, and without SNI the copy reaches the server's default HTTPS site instead of Puls. The docs now also say how to see that the mirror fires, that server-level `if` rules apply to the mirror too, and that a page can mirror more than once.
 - `docs/install.md` says that Forge's default `try_files $uri $uri/ ...` answers an `OPTIONS` request with 405 before PHP runs, so a `fetch()` with a JSON content type fails its preflight (`sendBeacon` and the tracking script are not affected), and how to change the line.
 - `docs/integrations.md` says that a site name in punycode and the same name in Unicode are one site.
+- The checklist for a new site in `docs/integrations.md` starts with `ALLOWED_ORIGINS`: a domain that is not in it gets `403` on every pageview, so the site never appears, and neither Puls nor the site says why. It has a `curl` that tells whether a domain is let in, without storing anything.
+- The docs no longer say that the `<noscript>` pixel counts visitors without JavaScript. It logs bots only, as it always has, and most crawlers fetch the HTML alone and never request it, which `docs/install.md` now says where it offers the pixel on Apache.
+- The Laravel example in `docs/integrations.md` has the pixel. Where it should be was an `@if` with only a comment in it.
+- A short dash where a long one was: for an empty value in the CLI's lists, between a site and its period above the chart, before a campaign in the UTM list, and in the titles of a shared dashboard and the login page.
 
 ### Fixed
 
@@ -46,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The date range button opened its picker only from the edge around its icon: a click on the icon itself opened it and closed it again at once. It broke in 1.30.0, when the inline handlers became one listener per event type, since the picker's stopPropagation no longer kept the click from reaching the listener that closes it.
 - A custom date range was not told to screen readers: a period or a site change says "Showing …, last 7 days: … pageviews", a range said nothing. It does now, with its dates as words ("Oct 14 to Oct 24") rather than read out digit by digit.
 - A slow answer for a period chosen earlier could replace the view chosen after it: click 90 days, then 7 days before the 90 have loaded, and the 90 days arrived last and were drawn under the 7-day button. Only the latest load is drawn now.
+- A shared link on a white-labelled install said "Puls" in the browser tab. It says the install's name now, as the rest of the page does.
+- Time / session said `< 10s` when nothing was measured: when every visit was one page, and under a page filter, which measures neither session length nor bounce, where Bounce rate also said `0%`. Both show a dash now, with no trend against the period before. The Markdown report leaves both lines out; it already did for the time, and said "Bounce rate: 0%" under `&path=`.
 - `php puls sites:list` ran a site name of 22 characters or more into its first date ("a-long-shop-name.example2026-11-02"). The site column is now as wide as the longest name needs, under a group too, so every column stays under its header.
 
 ## [1.30.0] - 2026-11-02
