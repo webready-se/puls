@@ -6,18 +6,18 @@
  * Usage:
  *   php puls user:add <name> [--sites=a,b]       Add a user
  *   php puls user:edit [<name>]                   Edit user (sites, password)
- *   php puls user:remove [<name>]                Remove a user
+ *   php puls user:remove [<name>] [--yes]        Remove a user
  *   php puls user:list                           List all users
  *   php puls sites:list                          List all tracked sites
  *   php puls sites:rename [<old> <new>]             Rename a site
- *   php puls sites:remove [<name>]                 Delete all data for a site
+ *   php puls sites:remove [<name>] [--yes]         Delete all data for a site
  *   php puls sites:group [<group> <site>...]       Put sites in a group
  *   php puls sites:ungroup [<site>...]             Take sites out of their group
  *   php puls sites:clean-paths [<site>] [--query|--keep=a,b] [--ids] [--tokens] [--dry-run]  Clean stored paths
  *   php puls share:create [<site or group>] [--groups=a,b] [--label=...] [--expires=YYYY-MM-DD|never]  Create a read token
  *   php puls share:list [<site>]                  List share tokens
  *   php puls share:edit [<token>] [--label=...|none] [--expires=YYYY-MM-DD|never] [--groups=a,b]  Change a token, which stays the same
- *   php puls share:revoke [<token>]                Revoke a share token
+ *   php puls share:revoke [<token>] [--yes]        Revoke a share token
  *   php puls exclude:add [<site> <ip>] [--label=...]  Stop counting an IP or range (site * = all sites)
  *   php puls exclude:list [<site>]                 List excluded IPs
  *   php puls exclude:remove [<site> <ip>]          Count an excluded IP again
@@ -27,6 +27,9 @@
  */
 
 $config = require __DIR__ . '/config.php';
+// --yes answers a removal's question, so a script can run it; it may stand anywhere
+$yes = in_array('--yes', $argv, true);
+$argv = array_values(array_filter($argv, fn($arg) => $arg !== '--yes'));
 $command = $argv[1] ?? 'help';
 
 if ($warning = old_release_warning(__DIR__)) fwrite(STDERR, $warning);
@@ -34,18 +37,18 @@ if ($warning = old_release_warning(__DIR__)) fwrite(STDERR, $warning);
 match ($command) {
     'user:add'      => userAdd($config, $argv[2] ?? null, $argv),
     'user:edit'     => userEdit($config, $argv[2] ?? null),
-    'user:remove'   => userRemove($config['users_file'], $argv[2] ?? null),
+    'user:remove'   => userRemove($config['users_file'], $argv[2] ?? null, $yes),
     'user:list'     => userList($config['users_file']),
     'sites:list'    => sitesList($config['db_path']),
     'sites:rename'  => sitesRename($config, $argv[2] ?? null, $argv[3] ?? null),
-    'sites:remove'  => sitesRemove($config, $argv[2] ?? null),
+    'sites:remove'  => sitesRemove($config, $argv[2] ?? null, $yes),
     'sites:group'   => sitesGroup($config, $argv),
     'sites:ungroup' => sitesUngroup($config, $argv),
     'sites:clean-paths' => sitesCleanPaths($config, $argv),
     'share:create'  => shareCreate($config, $argv[2] ?? null, $argv),
     'share:list'    => shareList($config, $argv[2] ?? null),
     'share:edit'    => shareEdit($config, $argv),
-    'share:revoke'  => shareRevoke($config, $argv[2] ?? null),
+    'share:revoke'  => shareRevoke($config, $argv[2] ?? null, $yes),
     'exclude:add'   => excludeAdd($config, $argv),
     'exclude:list'  => excludeList($config, $argv[2] ?? null),
     'exclude:remove' => excludeRemove($config, $argv[2] ?? null, $argv[3] ?? null),
@@ -241,7 +244,7 @@ function userEdit(array $config, ?string $username): void
 // user:remove
 // =====================================================================
 
-function userRemove(string $file, ?string $username): void
+function userRemove(string $file, ?string $username, bool $yes = false): void
 {
     $users = loadUsers($file);
 
@@ -271,10 +274,12 @@ function userRemove(string $file, ?string $username): void
         exit(1);
     }
 
-    $confirm = strtolower(prompt("Remove user '{$username}'? (y/N): "));
-    if ($confirm !== 'y' && $confirm !== 'j') {
-        echo "Aborted.\n";
-        exit(0);
+    if (!$yes) {
+        $confirm = strtolower(prompt("Remove user '{$username}'? (y/N): "));
+        if ($confirm !== 'y' && $confirm !== 'j') {
+            echo "Aborted.\n";
+            exit(0);
+        }
     }
 
     unset($users[$username]);
@@ -930,7 +935,7 @@ function sitesUngroup(array $config, array $argv): void
 // sites:remove
 // =====================================================================
 
-function sitesRemove(array $config, ?string $siteName): void
+function sitesRemove(array $config, ?string $siteName, bool $yes = false): void
 {
     $dbPath = $config['db_path'];
     if (!file_exists($dbPath)) {
@@ -984,16 +989,18 @@ function sitesRemove(array $config, ?string $siteName): void
         exit(1);
     }
 
-    echo "This will permanently delete ALL data for '{$siteName}':\n";
-    echo "  Pageviews:    {$pvCount}\n";
-    echo "  Bot visits:   {$botCount}\n";
-    echo "  Broken links: {$blCount}\n";
-    echo "  Events:       {$evCount}\n";
-    $confirm = prompt("\nType the site name to confirm: ");
+    if (!$yes) {
+        echo "This will permanently delete ALL data for '{$siteName}':\n";
+        echo "  Pageviews:    {$pvCount}\n";
+        echo "  Bot visits:   {$botCount}\n";
+        echo "  Broken links: {$blCount}\n";
+        echo "  Events:       {$evCount}\n";
+        $confirm = prompt("\nType the site name to confirm: ");
 
-    if ($confirm !== $siteName) {
-        echo "Aborted.\n";
-        exit(1);
+        if ($confirm !== $siteName) {
+            echo "Aborted.\n";
+            exit(1);
+        }
     }
 
     $db->beginTransaction();
@@ -1395,7 +1402,7 @@ function shareList(array $config, ?string $site): void
 // share:revoke
 // =====================================================================
 
-function shareRevoke(array $config, ?string $tokenPrefix): void
+function shareRevoke(array $config, ?string $tokenPrefix, bool $yes = false): void
 {
     $dbPath = $config['db_path'];
     if (!file_exists($dbPath)) {
@@ -1406,13 +1413,15 @@ function shareRevoke(array $config, ?string $tokenPrefix): void
     $db = shareTokensDb($dbPath);
     $token = pickShareToken($db, $tokenPrefix, 'revoke');
 
-    echo "Revoke the token that reads " . shareReads($token, siteGroupMap($db));
-    if ($token['label']) echo " ({$token['label']})";
-    $confirm = strtolower(prompt("? (y/N): "));
+    if (!$yes) {
+        echo "Revoke the token that reads " . shareReads($token, siteGroupMap($db));
+        if ($token['label']) echo " ({$token['label']})";
+        $confirm = strtolower(prompt("? (y/N): "));
 
-    if ($confirm !== 'y' && $confirm !== 'j') {
-        echo "Aborted.\n";
-        exit(0);
+        if ($confirm !== 'y' && $confirm !== 'j') {
+            echo "Aborted.\n";
+            exit(0);
+        }
     }
 
     $stmt = $db->prepare('DELETE FROM share_tokens WHERE id = ?');
@@ -1726,11 +1735,11 @@ function printHelp(): void
     Usage:
       php puls user:add [<name>] [--sites=a,b] Add a user
       php puls user:edit [<name>]               Edit user (sites, password)
-      php puls user:remove [<name>]             Remove a user
+      php puls user:remove [<name>] [--yes]     Remove a user
       php puls user:list                       List all users
       php puls sites:list                      List all tracked sites
       php puls sites:rename [<old> <new>]       Rename a site
-      php puls sites:remove [<name>]           Delete all data for a site
+      php puls sites:remove [<name>] [--yes]   Delete all data for a site
       php puls sites:group [<group> <site>...] Put sites in a group (one group per site)
       php puls sites:ungroup [<site>...]       Take sites out of their group
       php puls sites:clean-paths [<site>]      Strip query strings, collapse ids/tokens in stored paths
@@ -1739,7 +1748,7 @@ function printHelp(): void
       php puls share:list [<site>]             List share tokens
       php puls share:edit [<token>]            Change a token's label, last day or groups
                 [--label=...|none] [--expires=YYYY-MM-DD|never] [--groups=a,b]
-      php puls share:revoke [<token>]           Revoke a share token
+      php puls share:revoke [<token>] [--yes]   Revoke a share token
       php puls exclude:add [<site> <ip>]       Stop counting an IP or range (site * = all sites)
       php puls exclude:list [<site>]           List excluded IPs
       php puls exclude:remove [<site> <ip>]    Count an excluded IP again
@@ -1756,6 +1765,7 @@ function printHelp(): void
       --ids      Collapse numeric path segments to :id (/lead/1234 -> /lead/:id).
       --tokens   Replace token segments (16+ letters and digits, or a UUID) with :token.
       --dry-run  Show what would change without writing.
+      --yes      Remove or revoke without asking first, for a script.
 
     HELP;
     echo "\n";

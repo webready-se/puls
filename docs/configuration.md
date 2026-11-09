@@ -117,7 +117,7 @@ This changes the login page, dashboard header, PWA manifest and favicon. `APP_AC
 
 ## CLI reference
 
-All management goes through `php puls`. Every command also works without arguments: pickers and prompts guide you through.
+All management goes through `php puls`. Every command also works without arguments: pickers and prompts guide you through. A command that removes or revokes something asks first; `--yes` skips that question, for a script.
 
 ```bash
 php puls user:add [<name>]               # Add user with full access
@@ -127,7 +127,7 @@ php puls user:remove <name>              # Remove a user
 php puls user:list                       # List all users
 php puls sites:list                      # List all tracked sites
 php puls sites:rename <old> <new>        # Rename a tracked site
-php puls sites:remove <name>             # Delete all data for a site
+php puls sites:remove <name>             # Delete all data for a site (--yes: without typing the name)
 php puls sites:group <group> <site>...   # Put sites in a group (one group per site)
 php puls sites:ungroup <site>...         # Take sites out of their group
 php puls sites:clean-paths <site> --query --ids  # Clean stored paths (--keep=a,b, --tokens, --dry-run)
