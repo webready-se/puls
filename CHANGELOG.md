@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **Time / visitor: engaged time.** The script now counts engaged time, the time a page is on screen and in use, which Chartbeat and Parse.ly also count with a shorter pause: paused while the tab is hidden, stopped two minutes after the last input (mouse, keyboard, scroll, touch, or a video playing), and at most 30 minutes a page, and the card that said Time / session shows the median of each visitor's engaged time in a day, visits of one page included. Filtered to one page, it is the time on that page. Time / session was the time between a visitor's first and last pageview, which left out every visit of one page and the time on the last page, and had no limit: on a site of one page it was mostly the time between two visits. A period from before the upgrade shows a dash, since nothing in it was measured, and its trend starts once both periods were. A copy of the script cached from before measures nothing until the browser fetches it again, within an hour. The API adds `medianEngagedSeconds` and keeps `medianSessionSeconds` for scripts that read it; the Markdown report gives the new figure. It will read lower than Google Analytics' engagement time: a median, and no time counted with nobody there. The script is about 2.3 KB gzipped, up from 2.0 KB. How it works: [engaged time](docs/integrations.md#engaged-time).
 
+### Fixed
+
+- **The CLI says "all sites" everywhere.** `user:list` and the pickers in `user:edit` and `user:remove` still said "alla" in Swedish for a user with every site; 1.28.0 fixed it in the other places only.
+
 ## [1.31.0] - 2026-11-09
 
 ### Added

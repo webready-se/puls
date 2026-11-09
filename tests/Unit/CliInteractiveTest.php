@@ -40,6 +40,23 @@ it('user:remove shows picker when no arg', function () {
         ->and($result['output'])->toContain('client');
 });
 
+it('user:list and the user pickers say "all sites" for a user with every site', function () {
+    file_put_contents($this->usersFile, json_encode([
+        'admin' => ['password' => '$2y$12$fake', 'sites' => []],
+        'client' => ['password' => '$2y$12$fake', 'sites' => ['my-site']],
+    ]));
+    createCliTestDb($this->dbPath);
+
+    $list = runCli($this->tmpDir, 'user:list');
+    $remove = runCli($this->tmpDir, 'user:remove', [], "0");
+    $edit = runCli($this->tmpDir, 'user:edit', [], "0");
+
+    expect($list['output'])->toMatch('/admin\s+all sites/')
+        ->and($remove['output'])->toContain('1) admin (all sites)')
+        ->and($edit['output'])->toContain('1) admin (all sites)')
+        ->and($list['output'] . $remove['output'] . $edit['output'])->not->toContain('alla');
+});
+
 it('user:remove shows no users message when empty', function () {
     createCliTestDb($this->dbPath);
 

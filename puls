@@ -195,7 +195,7 @@ function userEdit(array $config, ?string $username): void
         } else {
             echo "Select user to edit:\n";
             foreach ($names as $i => $name) {
-                $sites = !empty($users[$name]['sites']) ? implode(', ', $users[$name]['sites']) : 'alla';
+                $sites = !empty($users[$name]['sites']) ? implode(', ', $users[$name]['sites']) : 'all sites';
                 echo sprintf("  %d) %s (%s)\n", $i + 1, $name, $sites);
             }
             $idx = (int) prompt("\nSelect (number): ") - 1;
@@ -255,7 +255,7 @@ function userRemove(string $file, ?string $username): void
         $names = array_keys($users);
         echo "Select user to remove:\n";
         foreach ($names as $i => $name) {
-            $sites = !empty($users[$name]['sites']) ? implode(', ', $users[$name]['sites']) : 'alla';
+            $sites = !empty($users[$name]['sites']) ? implode(', ', $users[$name]['sites']) : 'all sites';
             echo sprintf("  %d) %s (%s)\n", $i + 1, $name, $sites);
         }
         $idx = (int) prompt("\nSelect (number): ") - 1;
@@ -298,7 +298,7 @@ function userList(string $file): void
     echo sprintf("%-20s %s\n", 'USERNAME', 'SITES');
     echo str_repeat('-', 50) . "\n";
     foreach ($users as $name => $data) {
-        $sites = !empty($data['sites']) ? implode(', ', $data['sites']) : 'alla';
+        $sites = !empty($data['sites']) ? implode(', ', $data['sites']) : 'all sites';
         echo sprintf("%-20s %s\n", $name, $sites);
     }
 }
