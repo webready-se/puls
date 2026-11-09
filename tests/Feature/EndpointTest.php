@@ -1037,6 +1037,18 @@ test('format=md is a report for an assistant, opening with its guide', function 
         ->toContain('Puls ' . PULS_VERSION);
 });
 
+test('format=md leaves the bounce rate out under a page filter, which does not measure it', function () {
+    $site = 'report-' . uniqid() . '.example';
+    seedReportSite($site);
+    $token = createTestShareToken($site);
+    $all = http('GET', '/?api&days=7&format=md&share=' . $token)['body'];
+    $page = http('GET', '/?api&days=7&format=md&path=%2Fpage-1&share=' . $token)['body'];
+
+    expect($all)->toContain('- Bounce rate: 100%')
+        ->and($page)->toContain('## Numbers')
+        ->not->toContain('Bounce rate');
+});
+
 test('format=md keeps a value from outside on one line in a code span, where it cannot be a heading', function () {
     $site = 'report-hostile-' . uniqid() . '.example';
     seedReportSite($site);

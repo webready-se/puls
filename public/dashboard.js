@@ -174,8 +174,10 @@
   delegate('pointerdown', 'data-on-pointerdown');
   delegate('focusout', 'data-on-blur');
   function num(n) { return Number(n || 0).toLocaleString('en-US'); }
+  // 0 means nothing was measured (only one-page visits, or a page filter), as in the Markdown report
   function formatDuration(s) {
-    if (!s || s < 10) return '< 10s';
+    if (!s) return '–';
+    if (s < 10) return '< 10s';
     if (s < 60) return Math.round(s) + 's';
     var m = Math.floor(s / 60);
     var sec = Math.round(s % 60);
@@ -675,7 +677,7 @@
 
     var totalViews = +d.totals.views;
     var totalVisitors = +d.totals.visitors;
-    var pagesPerVisitor = totalVisitors > 0 ? (totalViews / totalVisitors).toFixed(1) : '—';
+    var pagesPerVisitor = totalVisitors > 0 ? (totalViews / totalVisitors).toFixed(1) : '–';
 
     // Trend comparison
     var prev = d.previousTotals;
@@ -697,7 +699,7 @@
 
     // Session length trend
     var sessionTrend = null;
-    if (d.previousMedianSessionSeconds !== null && d.previousMedianSessionSeconds > 0) {
+    if (d.medianSessionSeconds > 0 && d.previousMedianSessionSeconds !== null && d.previousMedianSessionSeconds > 0) {
       sessionTrend = Math.round(((d.medianSessionSeconds - d.previousMedianSessionSeconds) / d.previousMedianSessionSeconds) * 100);
     }
 
@@ -1330,7 +1332,7 @@
     return '<div class="stats">' +
       statCard('Pageviews', num(views), icons.eye, viewsTrend) +
       statCard('Unique visitors', num(visitors), icons.users, visitorsTrend) +
-      statCard('Bounce rate', d.bounceRate + '%', icons.bounce, bounceTrend, true) +
+      statCard('Bounce rate', d.path ? '–' : d.bounceRate + '%', icons.bounce, bounceTrend, true) +
       statCard('Pages / visitor', pagesPerVisitor, icons.layers, ppvTrend) +
       statCard('Time / session', formatDuration(d.medianSessionSeconds), icons.clock, sessionTrend) +
       statCard('Live now', num(d.live), icons.zap, null) +
