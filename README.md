@@ -43,7 +43,7 @@ That's it. Docker, Nginx, Laravel Forge and shared hosting without SSH are cover
 - **One file, no infrastructure.** A PHP file, a dashboard page and SQLite. No Node, no Docker, no database server, no build step. It runs on ordinary PHP web hosting.
 - **Private by design.** No cookies and no stored IP addresses. A visitor is a hash with a random salt that is deleted after the day, so it can never be computed again, not even by whoever runs the server. Puls is designed to work without a consent banner.
 - **Your data, on your server.** One SQLite file you can copy, back up or delete. MIT licensed, no limits, no account.
-- **Light on your pages.** The tracking script is about 2 KB gzipped and sends with `sendBeacon`, so it never holds up the page.
+- **Light on your pages.** The tracking script is under 2.5 KB gzipped and sends with `sendBeacon`, so it never holds up the page.
 
 ## What you get
 

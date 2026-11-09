@@ -651,6 +651,10 @@ function show_login(array $config, ?string $error = null): void
 // TRACKING SCRIPT
 // =====================================================================
 
+// Time in view counts while the page is visible and at most two minutes after the last input
+// (mouse, key, scroll, touch, or a playing video or audio, whose timeupdate a capturing listener
+// hears): a page left open with nobody there, or a computer asleep without hiding it, adds two
+// minutes at most, not the 30 that ENGAGED_MAX_MS allows
 function get_tracking_script(): string
 {
     return <<<'JS'
@@ -674,20 +678,23 @@ function get_tracking_script(): string
       opt();addEventListener('hashchange',opt);
       function utm(){var p=new URLSearchParams(location.search),o={};['source','medium','campaign','term','content'].forEach(function(k){var v=p.get('utm_'+k);if(v)o[k]=v});if(!o.source&&p.get('gad_source')){o.source='google';o.medium='cpc';var c=p.get('gad_campaignid');if(c)o.campaign=c}return Object.keys(o).length?o:null}
       function url(p){var s=location.search,x;if(typeof p=='string'){try{p=new URL(p,location.href)}catch(e){return}if(p.origin!==location.origin)return;x=p.pathname;s=p.search}if(qk!==undefined&&s){var k=qk==='none'?[]:qk.split(',').map(function(x){return x.trim()}),p=new URLSearchParams(s),o=new URLSearchParams();p.forEach(function(v,n){if(k.indexOf(n)>=0)o.append(n,v)});s=o.toString();s=s?'?'+s:''}return pth(x)+s}
-      var last,tt=0,ts=0,ss=0;
-      function fl(){var n=Date.now();if(ts){tt+=n-ts;ts=n}if(last&&tt>=1e3&&tt!=ss&&!off()){ss=tt;log('in view',last,tt);navigator.sendBeacon&&navigator.sendBeacon(ep,JSON.stringify({u:last,site:site,e:Math.min(tt,18e5)}))}}
+      var last,tt=0,ts=0,ss=0,la=0;
+      function ad(n){if(ts){var e=Math.min(n,la+12e4);if(e>ts)tt+=e-ts;ts=n}}
+      function ac(){var n=Date.now();ad(n);la=n}
+      function fl(){ad(Date.now());if(last&&tt>=1e3&&tt!=ss&&!off()){ss=tt;log('in view',last,tt);navigator.sendBeacon&&navigator.sendBeacon(ep,JSON.stringify({u:last,site:site,e:Math.min(tt,18e5)}))}}
       function s(p){
         if(off()){log('ignored: this browser is excluded');return}
         var u=url(p);if(!u){log('ignored: not this site',p);return}if(u===last){log('skipped: same URL as the last pageview');return}
-        fl();tt=ss=0;ts=document.hidden?0:Date.now();last=u;
+        fl();tt=ss=0;ts=document.hidden?0:la=Date.now();last=u;
         var d=JSON.stringify({u:u,r:document.referrer,w:innerWidth,site:site,utm:utm(),v:ver,e:0});
         log('pageview',u);
         navigator.sendBeacon?navigator.sendBeacon(ep,d):0;
       }
       function q(){'requestIdleCallback' in window?requestIdleCallback(s):setTimeout(s,0)}
       q();
-      addEventListener('visibilitychange',function(){document.hidden?(fl(),ts=0):ts=Date.now()});
+      addEventListener('visibilitychange',function(){document.hidden?(fl(),ts=0):ts=la=Date.now()});
       addEventListener('pagehide',fl);
+      ['mousemove','keydown','scroll','touchstart','timeupdate'].forEach(function(e){addEventListener(e,ac,{capture:!0,passive:!0})});
       if(history.pushState){var o=history.pushState;history.pushState=function(){o.apply(this,arguments);q()};addEventListener('popstate',q)}
       var prev=window.puls;
       window.puls={page:s,track:function(name,data){if(!name||off())return;var p={event_name:name,site:site,page_path:pth()};if(ver)p.app_version=ver;if(data&&typeof data==='object')p.event_data=data;log('event',name,data||'');navigator.sendBeacon?navigator.sendBeacon(evEp,JSON.stringify(p)):0}};

@@ -16,9 +16,11 @@ Puls automatically tracks:
 
 ### Time in view
 
-The script counts the time a page is on screen: it pauses while the tab is hidden, and a page counts at most 30 minutes, since a tab left open is not being read. When the page is hidden or left, and before the next pageview of a single-page app, it sends the total so far to `?collect` as `{u, site, e}` (milliseconds), nothing for a page left within a second. No id leaves the browser: Puls finds the pageview by the same visitor hash as the pageview's, the site and the path, among the last 4 hours. A pageview from the script carries `e: 0`, which marks it as measured, so pages counted by an older copy of the script, or sent by a server, stay out of the measure rather than count as no time at all.
+The script counts the time a page is on screen and in use: it pauses while the tab is hidden, and stops two minutes after the last input (mouse, keyboard, scroll, touch, or a video or audio playing on the page), until the next. So a page left open while nobody is there, or on a computer that went to sleep without hiding it, adds two minutes at most, and a page counts at most 30 minutes in all. When the page is hidden or left, and before the next pageview of a single-page app, it sends the total so far to `?collect` as `{u, site, e}` (milliseconds), nothing for a page left within a second. No id leaves the browser: Puls finds the pageview by the same visitor hash as the pageview's, the site and the path, among the last 4 hours. A pageview from the script carries `e: 0`, which marks it as measured, so pages counted by an older copy of the script, or sent by a server, stay out of the measure rather than count as no time at all.
 
 The dashboard's **Time / visitor** is the median of each visitor's time in view over a day, visits of one page included; filtered to one page, it is the time on that page.
+
+Expect it to be lower than the time in Google Analytics or Plausible, for two reasons. They show an average, which a few tabs left open pull up, where a median is the time a typical visitor spent. And they count a page in focus whether or not anyone is there, where Puls stops two minutes after the last input.
 
 ### Script attributes
 
