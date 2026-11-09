@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `php puls nginx:config` prints a mirror block that works on a Forge server as it is: `resolver 127.0.0.53` (systemd-resolved) instead of Google's, no request body sent to Puls, and timeouts of a few seconds so a slow Puls never holds a visitor's connection. The mirror snippet in `docs/integrations.md` has the same lines; it lacked `resolver` and `proxy_ssl_server_name on`, and failed silently without them: Nginx logs "no resolver defined" and drops the mirror, and without SNI the copy reaches the server's default HTTPS site instead of Puls. The docs now also say how to see that the mirror fires, that server-level `if` rules apply to the mirror too, and that a page can mirror more than once.
 - `docs/install.md` says that Forge's default `try_files $uri $uri/ ...` answers an `OPTIONS` request with 405 before PHP runs, so a `fetch()` with a JSON content type fails its preflight (`sendBeacon` and the tracking script are not affected), and how to change the line.
 - `docs/integrations.md` says that a site name in punycode and the same name in Unicode are one site.
+- The checklist for a new site in `docs/integrations.md` starts with `ALLOWED_ORIGINS`: a domain that is not in it gets `403` on every pageview, so the site never appears, and neither Puls nor the site says why. It has a `curl` that tells whether a domain is let in, without storing anything.
 
 ### Fixed
 
