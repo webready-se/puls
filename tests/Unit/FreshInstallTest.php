@@ -24,6 +24,17 @@ test('a fresh database has every table and the current schema version', function
     expect((int) $db->query('PRAGMA user_version')->fetchColumn())->toBe((int) $m[1]);
 });
 
+test('a connection writes in WAL mode with synchronous NORMAL', function () {
+    $dir = sys_get_temp_dir() . '/puls-sync-' . uniqid();
+    register_shutdown_function(fn () => exec('rm -rf ' . escapeshellarg($dir)));
+    get_db($dir . '/puls.sqlite');
+    $db = get_db($dir . '/puls.sqlite');
+
+    // An existing database as well as a new one; 1 is NORMAL, 2 is FULL
+    expect($db->query('PRAGMA journal_mode')->fetchColumn())->toBe('wal')
+        ->and((int) $db->query('PRAGMA synchronous')->fetchColumn())->toBe(1);
+});
+
 test('migration v26 replaces idx_site_date and idx_visitor with the covering index and gathers statistics', function () {
     $dir = sys_get_temp_dir() . '/puls-v26-' . uniqid();
     register_shutdown_function(fn () => exec('rm -rf ' . escapeshellarg($dir)));

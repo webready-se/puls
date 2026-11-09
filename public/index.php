@@ -2724,6 +2724,9 @@ function get_db(string $path): PDO
     $db = new PDO('sqlite:' . $path);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $db->exec('PRAGMA journal_mode=WAL');
+    // In WAL mode NORMAL keeps the database intact on a crash or power loss and can lose only the
+    // latest writes; a pageview's write went from about 1 ms to 0.1 ms on a 1 vCPU server
+    $db->exec('PRAGMA synchronous=NORMAL');
 
     if ($isNew) {
         $db->exec('CREATE TABLE pageviews (

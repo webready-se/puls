@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **`--yes` for a script that removes.** `sites:remove`, `user:remove` and `share:revoke` ask before they act, so a script had to pipe the right answer, and `sites:remove` wants the site's name typed, so a piped `y` aborted it. `--yes` skips the question and prints what was done; without it, they ask as before.
 - **Group a site before its first visit.** `sites:group` refuses a name it has not seen a visit from, to catch a typo, so a hub setting up many sites had to wait for each one's first pageview. The refusal now says what to do: check the name with `sites:list`, or open the site once in a browser, which also shows that the script is in place. `--new` groups it now, and `sites:list` shows it under its group as "no visits yet" until one comes. A name is stored as a pageview stores it, so an international domain typed as `xn--...` matches.
 
+### Changed
+
+- **Each tracked visit costs the server less.** The database now syncs to disk at checkpoints instead of on every write (`synchronous=NORMAL` in WAL mode), and a pageview's write went from about 1 ms to 0.1 ms on a server with one vCPU. On a crash of the server or a power loss the last writes before it can be lost; the database itself stays intact, and a PHP error or a stopped process loses nothing.
+
 ### Fixed
 
 - **The CLI says "all sites" everywhere.** `user:list` and the pickers in `user:edit` and `user:remove` still said "alla" in Swedish for a user with every site; 1.28.0 fixed it in the other places only.
