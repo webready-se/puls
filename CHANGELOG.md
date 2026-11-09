@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - **The CLI says "all sites" everywhere.** `user:list` and the pickers in `user:edit` and `user:remove` still said "alla" in Swedish for a user with every site; 1.28.0 fixed it in the other places only.
+- **A full URL sent as the page is stored as its path.** A pageview sent by hand or from a server with `u` as a whole URL (`https://shop.example/boots`) was stored as `https:/shop.example/boots`, a page of its own. Puls now keeps the path and query and drops the host, since the site is named in `site`. The script sends a path and was not affected; stored rows keep their old path.
 
 ## [1.31.0] - 2026-11-09
 

@@ -2996,6 +2996,13 @@ function accent_text_colours(string $accent): array
 
 function normalize_path(string $path, array $extraStrip = []): string
 {
+    // A whole URL from a hand-made or server-side collect: the site is named apart, so keep
+    // its path and query and drop the host, which would otherwise become the first segment
+    if (preg_match('#^[a-z][a-z0-9+.-]*://#i', $path) && ($url = parse_url($path)) !== false) {
+        $path = ($url['path'] ?? '') ?: '/';
+        if (isset($url['query'])) $path .= '?' . $url['query'];
+    }
+
     // Strip tracking query params (fbclid, gclid, utm_*, etc.)
     if (str_contains($path, '?')) {
         [$pathPart, $query] = explode('?', $path, 2);
