@@ -9,7 +9,7 @@
  *   php puls user:remove [<name>] [--yes]        Remove a user
  *   php puls user:list                           List all users
  *   php puls sites:list                          List all tracked sites
- *   php puls sites:rename [<old> <new>]             Rename a site
+ *   php puls sites:rename [<old> <new>] [--merge]   Rename a site (--merge: into one that has visits)
  *   php puls sites:remove [<name>] [--yes]         Delete all data for a site
  *   php puls sites:group [<group> <site>...] [--new]  Put sites in a group (--new: before their first visit)
  *   php puls sites:ungroup [<site>...]             Take sites out of their group
@@ -40,7 +40,7 @@ match ($command) {
     'user:remove'   => userRemove($config['users_file'], $argv[2] ?? null, $yes),
     'user:list'     => userList($config['users_file']),
     'sites:list'    => sitesList($config['db_path']),
-    'sites:rename'  => sitesRename($config, $argv[2] ?? null, $argv[3] ?? null),
+    'sites:rename'  => sitesRename($config, $argv),
     'sites:remove'  => sitesRemove($config, $argv[2] ?? null, $yes),
     'sites:group'   => sitesGroup($config, $argv),
     'sites:ungroup' => sitesUngroup($config, $argv),
@@ -397,8 +397,13 @@ function sitesList(string $dbPath): void
 // sites:rename
 // =====================================================================
 
-function sitesRename(array $config, ?string $oldName, ?string $newName): void
+function sitesRename(array $config, array $argv): void
 {
+    // --merge moves a site into one that already has visits; it may stand anywhere
+    $merge = in_array('--merge', $argv, true);
+    $args = array_values(array_filter(array_slice($argv, 2), fn ($arg) => $arg !== '--merge'));
+    $oldName = $args[0] ?? null;
+    $newName = $args[1] ?? null;
     $dbPath = $config['db_path'];
     if (!file_exists($dbPath)) {
         echo "No database found.\n";
@@ -434,10 +439,12 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
     // Interactive prompt for new name
     if (!$newName) {
         $newName = prompt("New name for '{$oldName}': ");
-        if ($newName === '') {
-            echo "Name cannot be empty.\n";
-            exit(1);
-        }
+    }
+    // As the tracker stores it, so the script's data-site lands on the new name
+    $newName = normalizeSiteName($newName);
+    if ($newName === '') {
+        echo "Name cannot be empty.\n";
+        exit(1);
     }
 
     if ($oldName === $newName) {
@@ -455,12 +462,22 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
         exit(1);
     }
 
-    // Check that new name doesn't already exist
+    // Check that new name doesn't already exist, unless merging into it
     $stmt = $db->prepare('SELECT COUNT(*) FROM pageviews WHERE site = ?');
     $stmt->execute([$newName]);
-    if ($stmt->fetchColumn() > 0) {
+    $merging = $stmt->fetchColumn() > 0;
+    if ($merging && !$merge) {
         echo "Site '{$newName}' already exists. Cannot rename to an existing site.\n";
+        echo "  To move '{$oldName}' into it, add --merge: its visits, settings and share links then belong to '{$newName}'.\n";
         exit(1);
+    }
+
+    // The site name is part of the visitor hash, so a visitor seen under both names on a day counts twice
+    $sharedDays = 0;
+    if ($merging) {
+        $stmt = $db->prepare('SELECT COUNT(*) FROM (SELECT substr(created_at, 1, 10) FROM pageviews WHERE site = ? INTERSECT SELECT substr(created_at, 1, 10) FROM pageviews WHERE site = ?)');
+        $stmt->execute([$oldName, $newName]);
+        $sharedDays = (int) $stmt->fetchColumn();
     }
 
     // Rename in all tables
@@ -470,12 +487,16 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
     // Skip tables a not-yet-migrated database does not have
     $existing = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
     foreach (array_intersect($tables, $existing) as $table) {
-        $stmt = $db->prepare("UPDATE {$table} SET site = ? WHERE site = ?");
-        $stmt->execute([$newName, $oldName]);
-        $affected = $stmt->rowCount();
-        if ($affected > 0) {
-            echo "  {$table}: {$affected} rows updated\n";
+        // The daily summary is a cache: both names' days are summed again, from the merged rows
+        if ($merging && $table === 'daily') {
+            $db->prepare('DELETE FROM daily WHERE site IN (?, ?)')->execute([$oldName, $newName]);
+            continue;
         }
+        [$moved, $kept] = moveSiteRows($db, $table, $oldName, $newName);
+        $done = [];
+        if ($moved > 0) $done[] = "{$moved} rows " . ($merging ? 'moved' : 'updated');
+        if ($kept > 0) $done[] = "{$kept} already in '{$newName}', kept as it is";
+        if ($done) echo "  {$table}: " . implode(', ', $done) . "\n";
     }
 
     $db->commit();
@@ -487,10 +508,10 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
 
     foreach ($users as &$user) {
         if (!empty($user['sites']) && in_array($oldName, $user['sites'])) {
-            $user['sites'] = array_values(array_map(
+            $user['sites'] = array_values(array_unique(array_map(
                 fn($s) => $s === $oldName ? $newName : $s,
                 $user['sites']
-            ));
+            )));
             $usersUpdated++;
         }
     }
@@ -501,7 +522,99 @@ function sitesRename(array $config, ?string $oldName, ?string $newName): void
         echo "  users.json: {$usersUpdated} user(s) updated\n";
     }
 
-    echo "\nRenamed '{$oldName}' → '{$newName}'.\n";
+    if (!$merging) {
+        echo "\nRenamed '{$oldName}' → '{$newName}'.\n";
+        return;
+    }
+    if ($sharedDays > 0) {
+        $days = $sharedDays === 1 ? '1 day' : "{$sharedDays} days";
+        echo "\n{$days} had visits under both names. A visitor seen under both counts twice on those days,\n";
+        echo "since the site name is part of the visitor hash.\n";
+    }
+    echo "\nMerged '{$oldName}' into '{$newName}'. The dashboard sums its days again as it shows them.\n";
+}
+
+/**
+ * Moves a site's rows in one table to another name, returning [moved, kept]. Into a site with
+ * rows of its own (sites:rename --merge) a row can collide with one of theirs: counts are added
+ * (bots per day, broken links), a release keeps the day it was first seen, and a setting (a goal,
+ * a card, an excluded IP, the group) stays as the other site has it. Kept counts those dropped.
+ */
+function moveSiteRows(PDO $db, string $table, string $old, string $new): array
+{
+    switch ($table) {
+        case 'bot_days':
+            $db->prepare('INSERT INTO bot_days (site, date, name, category, visits)
+                SELECT ?, date, name, category, visits FROM bot_days WHERE site = ?
+                ON CONFLICT (site, date, name, category) DO UPDATE SET visits = visits + excluded.visits')
+                ->execute([$new, $old]);
+            $moved = $db->prepare('DELETE FROM bot_days WHERE site = ?');
+            $moved->execute([$old]);
+            return [$moved->rowCount(), 0];
+
+        case 'app_versions':
+            $db->prepare('INSERT INTO app_versions (site, version, first_seen)
+                SELECT ?, version, first_seen FROM app_versions WHERE site = ?
+                ON CONFLICT (site, version) DO UPDATE SET first_seen = MIN(first_seen, excluded.first_seen)')
+                ->execute([$new, $old]);
+            $moved = $db->prepare('DELETE FROM app_versions WHERE site = ?');
+            $moved->execute([$old]);
+            return [$moved->rowCount(), 0];
+
+        case 'broken_links':
+            // A path broken under both names: hits added, first and last seen widened, referrers joined
+            $both = $db->prepare('SELECT o.id AS old_id, n.id AS new_id, o.hits, o.first_seen, o.last_seen, o.referrers, n.referrers AS new_referrers
+                FROM broken_links o JOIN broken_links n ON n.site = ? AND n.path = o.path AND n.status = o.status
+                WHERE o.site = ?');
+            $both->execute([$new, $old]);
+            $fold = $db->prepare('UPDATE broken_links SET hits = hits + ?, first_seen = MIN(first_seen, ?), last_seen = MAX(last_seen, ?), referrers = ? WHERE id = ?');
+            $drop = $db->prepare('DELETE FROM broken_links WHERE id = ?');
+            $folded = 0;
+            foreach ($both->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $fold->execute([$row['hits'], $row['first_seen'], $row['last_seen'], joinReferrers($row['new_referrers'], $row['referrers']), $row['new_id']]);
+                $drop->execute([$row['old_id']]);
+                $folded++;
+            }
+            $moved = $db->prepare('UPDATE broken_links SET site = ? WHERE site = ?');
+            $moved->execute([$new, $old]);
+            return [$folded + $moved->rowCount(), 0];
+
+        case 'breakdowns':
+            // After the other site's own cards, in their order (position came after the table)
+            $columns = array_column($db->query('PRAGMA table_info(breakdowns)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+            if (in_array('position', $columns, true)) {
+                $after = $db->prepare('SELECT COALESCE(MAX(position), -1) + 1 FROM breakdowns WHERE site = ?');
+                $after->execute([$new]);
+                $db->prepare('UPDATE breakdowns SET position = position + ? WHERE site = ?')->execute([(int) $after->fetchColumn(), $old]);
+            }
+            // Then as the other settings
+        case 'goals':
+        case 'excluded_ips':
+        case 'site_groups':
+            $moved = $db->prepare("UPDATE OR IGNORE {$table} SET site = ? WHERE site = ?");
+            $moved->execute([$new, $old]);
+            $kept = $db->prepare("DELETE FROM {$table} WHERE site = ?");
+            $kept->execute([$old]);
+            return [$moved->rowCount(), $kept->rowCount()];
+
+        default:
+            $moved = $db->prepare("UPDATE {$table} SET site = ? WHERE site = ?");
+            $moved->execute([$new, $old]);
+            return [$moved->rowCount(), 0];
+    }
+}
+
+// Joins two lists of a broken link's referrers as storing a hit does: no repeats, nothing added past 1900 characters
+function joinReferrers(?string $into, ?string $from): ?string
+{
+    foreach (array_filter(explode(',', (string) $from), 'strlen') as $referrer) {
+        if ($into === null || $into === '') {
+            $into = $referrer;
+        } elseif (!in_array($referrer, explode(',', $into), true) && strlen($into) <= 1900) {
+            $into .= ',' . $referrer;
+        }
+    }
+    return $into;
 }
 
 // =====================================================================
@@ -1767,6 +1880,7 @@ function printHelp(): void
       php puls user:list                       List all users
       php puls sites:list                      List all tracked sites
       php puls sites:rename [<old> <new>]       Rename a site
+                [--merge]
       php puls sites:remove [<name>] [--yes]   Delete all data for a site
       php puls sites:group [<group> <site>...] Put sites in a group (one group per site)
                 [--new]
@@ -1796,6 +1910,7 @@ function printHelp(): void
       --dry-run  Show what would change without writing.
       --yes      Remove or revoke without asking first, for a script.
       --new      Group a site before its first visit (sites:group).
+      --merge    Rename into a site that already has visits, joining the two (sites:rename).
 
     HELP;
     echo "\n";

@@ -128,7 +128,7 @@ php puls user:edit <name>                # Edit user (sites, password)
 php puls user:remove <name>              # Remove a user
 php puls user:list                       # List all users
 php puls sites:list                      # List all tracked sites
-php puls sites:rename <old> <new>        # Rename a tracked site
+php puls sites:rename <old> <new>        # Rename a tracked site (--merge: into a name that already has visits)
 php puls sites:remove <name>             # Delete all data for a site (--yes: without typing the name)
 php puls sites:group <group> <site>...   # Put sites in a group (one group per site; --new: before their first visit)
 php puls sites:ungroup <site>...         # Take sites out of their group
