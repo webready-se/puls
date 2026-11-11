@@ -340,7 +340,7 @@ Some spikes have no source in the data: a film shown in the Facebook or Instagra
 
 ### Posts next to traffic
 
-A post on Instagram, Facebook or a blog can show on the day it went out, next to the visits it brought: a small dot on the day's date line, the posts in the day's tooltip, and, a click on the day away, the posts under that day's hours with a link to each. A **Posts** button beside Compare hides them, remembered per viewer; it shows only when the period has a post. The API has them as `posts`.
+A post on Instagram, Facebook or a blog can show on the day it went out, next to the visits it brought: a small dot on the day's date line, how many in the day's tooltip, and, a click on the day away, the posts under that day's hours with a link to each. A **Posts** button beside Compare hides them, remembered per viewer; it shows only when the period has a post. The API has them as `posts`.
 
 Puls does not fetch posts itself. A tool on the same server that collects a site's posts hands each one to the CLI, one post as JSON on stdin:
 

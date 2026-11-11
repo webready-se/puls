@@ -1098,17 +1098,18 @@ body[data-first-load] .load-status { animation-delay: .3s; }
 .tip-delta { font-weight: 500; }
 .tip-prev { color: var(--text-3); margin-top: 2px; }
 .tip-hint { color: var(--text-3); margin-top: 2px; }
-.tip-posts { margin-top: 4px; }
+/* A day's posts in its hint line, in the tooltip's own colour, the dot ringed so it stands off it */
+.tip-hint-posts { color: var(--bg); }
+.tip-hint-posts .post-dot { box-shadow: 0 0 0 1.5px var(--bg); margin-right: 5px; }
 .hours-posts { list-style: none; margin: 14px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
 .hours-posts .post-dot { margin-right: 8px; }
 .hours-post-time { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
 .hours-post-sources { color: var(--text-3); }
-.hours-post-text { color: var(--text); }
+.hours-post-text { color: var(--text); overflow-wrap: anywhere; }
 .hours-posts a { color: var(--accent); text-underline-offset: 2px; white-space: nowrap; }
 /* As on the day chart: the dot where the bar meets the label line, so the bars keep their baseline,
    on the column and not the label, which an hour that is not a multiple of three hides */
 .hour-col.has-post::after { content: ''; position: absolute; left: 50%; bottom: 13px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--post); box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
-.tip-posts > span { display: block; }
 .bot-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .bot-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
 .bl-row { padding: 8px 0; border-bottom: 1px solid var(--line); }

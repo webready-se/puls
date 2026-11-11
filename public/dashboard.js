@@ -1476,9 +1476,11 @@
     return chartMarkers(dates, d && d.versions, d && d.annotations, postsMode && d ? d.posts : null);
   }
 
-  // Where a post went out: instagram,facebook reads Instagram + Facebook
+  // Where a post went out: instagram,facebook reads Instagram + Facebook. The names a first
+  // capital gets wrong are spelled out
+  var SOURCE_NAMES = { rss: 'RSS', tiktok: 'TikTok', linkedin: 'LinkedIn', youtube: 'YouTube' };
   function postSources(p) {
-    return p.sources.map(function(s) { return s === 'rss' ? 'RSS' : s.charAt(0).toUpperCase() + s.slice(1); }).join(' + ');
+    return p.sources.map(function(s) { return SOURCE_NAMES[s] || s.charAt(0).toUpperCase() + s.slice(1); }).join(' + ');
   }
 
   // A post's link, only to a web address: anything else that reached the table stays text
@@ -1486,16 +1488,9 @@
     return /^https?:\/\//i.test(p.url || '') ? p.url : '';
   }
 
-  // A day's posts in its bar's tooltip, three and then how many more
-  function postTip(posts) {
-    if (!posts || !posts.length) return '';
-    var lines = posts.slice(0, 3).map(function(p) {
-      var text = p.text || '';
-      if (text.length > 60) text = text.slice(0, 59) + '\u2026';
-      return '<span>' + esc((currentSite ? '' : p.site + ' \u00b7 ') + p.time + ' ' + postSources(p) + (text ? ': ' + text : '')) + '</span>';
-    });
-    if (posts.length > 3) lines.push('<span>+' + (posts.length - 3) + ' more</span>');
-    return '<div class="tip-posts">' + lines.join('') + '</div>';
+  // A post's time as the install's other clock times: 08:15, or 8:15 AM with TIME_FORMAT=12h
+  function postTime(p) {
+    return clock(+p.time.slice(0, 2), +p.time.slice(3, 5));
   }
 
   function buildBars(pageviews, previousPageviews) {
@@ -1519,7 +1514,11 @@
       var day = ' data-date="' + p.date + '" data-action="pick-day" role="button" tabindex="' + (p.date === stop ? 0 : -1) + '" aria-pressed="' + picked + '"' +
         ' aria-label="' + esc(label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors' +
           (posts.length ? ', ' + posts.length + (posts.length === 1 ? ' post' : ' posts') : '') + '. ' + (picked ? 'Close the hours' : 'See by hour')) + '"';
-      var hint = '<div class="tip-hint">' + (picked ? 'Click to close' : 'Click to see by hour') + '</div>';
+      // A day with posts says so in the hint line, so its tooltip keeps two lines over the tallest
+      // bar: the posts themselves, with their text and link, are in the hours a click away
+      var hint = '<div class="tip-hint">' + (posts.length ? '<span class="tip-hint-posts"><span class="post-dot"></span>' +
+        (posts.length === 1 ? 'Post at ' + postTime(posts[0]) : posts.length + ' posts') + '</span> \u00b7 ' + (picked ? 'click to close' : 'click to see by hour') :
+        (picked ? 'Click to close' : 'Click to see by hour')) + '</div>';
       var prev = showCompare && previousPageviews[i] ? previousPageviews[i] : null;
       var prevH = prev ? Math.max(4, (+prev[key] / maxVal) * 128) : 0;
 
@@ -1536,7 +1535,6 @@
           '<div class="tip-head">' + label + '<span class="tip-delta" data-color="' + deltaColor + '">' + deltaStr + '</span></div>' +
           '<div>' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
           (prev ? '<div class="tip-prev">vs ' + prevLabel + ': ' + num(prev.views) + ' / ' + num(prev.visitors) + '</div>' : '') +
-          postTip(posts) +
           hint +
         '</div>';
 
@@ -1560,7 +1558,7 @@
           (marks[p.date] ? marks[p.date].html : '') +
           '<span class="chart-val">' + num(p[key]) + '</span>' +
           '<div class="chart-bar" data-h="' + h + '">' +
-            '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors' + postTip(posts) + hint + '</div>' +
+            '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors' + hint + '</div>' +
           '</div>' +
           axisDate(p.date) +
         '</div>';
@@ -1692,10 +1690,11 @@
     return '<ul class="hours-posts" aria-label="Posts">' + posts.map(function(p) {
       var link = postLink(p);
       return '<li><span class="post-dot" aria-hidden="true"></span>' +
-        '<span class="hours-post-time">' + esc(p.time) + '</span> ' +
+        '<span class="hours-post-time">' + postTime(p) + '</span> ' +
         '<span class="hours-post-sources">' + esc((currentSite ? '' : p.site + ' \u00b7 ') + postSources(p)) + '</span>' +
         (p.text ? ' <span class="hours-post-text">' + esc(p.text) + '</span>' : '') +
-        (link ? ' <a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer">Open post</a>' : '') +
+        // A screen reader's list of links says which post each one opens
+        (link ? ' <a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc('Open the ' + postTime(p) + ' ' + postSources(p) + ' post') + '">Open post</a>' : '') +
       '</li>';
     }).join('') + '</ul>';
   }
