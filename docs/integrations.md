@@ -338,6 +338,27 @@ The day a version is first seen shows as a marker on the pageview chart and on e
 
 Some spikes have no source in the data: a film shown in the Facebook or Instagram app sends no referrer, so its visitors land under Direct and Social. Click **+ Note** on the pageview chart to mark the date, with an optional end date for something that runs over several days, such as a campaign week. A single day shows as a line with its text, a range as a tinted band. Notes are per site, show on event trends too, and appear on shared dashboards, read-only. Change the text or remove a note under **Settings**. API: `annotations` in the dashboard response, `[{id, site, date, end_date, label}]`, every note that overlaps the period.
 
+### Posts next to traffic
+
+A post on Instagram, Facebook or a blog can show on the day it went out, next to the visits it brought: a small dot on the day's date line, the posts in the day's tooltip, and, a click on the day away, the posts under that day's hours with a link to each. A **Posts** button beside Compare hides them, remembered per viewer; it shows only when the period has a post. The API has them as `posts`.
+
+Puls does not fetch posts itself. A tool on the same server that collects a site's posts hands each one to the CLI, one post as JSON on stdin:
+
+```bash
+echo '{"id": "instagram:17900000000000001", "site": "shop.example", "at": "2026-11-03T08:15:00+00:00",
+  "sources": ["instagram", "facebook"], "text": "The autumn collection is in",
+  "url": "https://www.instagram.com/p/EXAMPLE/"}' | php /path/to/puls posts:add --json
+```
+
+- `id`: the sender's id for the post. The same id for the same site again is taken as done, so a sender that delivers at least once can send it again after a run that failed halfway
+- `site`: the site as Puls names it (its `data-site`, or the domain). Puls takes posts for a site once it has had a visit, or a group (`sites:group --new`), so set the site up in Puls first
+- `at`: when it went out, ISO 8601 with an offset. It shows on that day in the install's [time zone](configuration.md#time-zone)
+- `sources`: where it went out, a list of short lowercase names (`instagram`, `facebook`, `rss`)
+- `text` (optional): the caption, kept on one line and at most 280 characters
+- `url` (optional): a link to the post; anything but `http://` or `https://` is dropped, and the post kept
+
+It exits 0 when the post is stored or already there, and 1 with one line on stderr that says why otherwise (not a post, an unknown site, a locked database), so the sender can try again and show the line. A caption edited on the platform is not updated: the id is done. `php puls posts:list` shows what arrived, and `php puls posts:remove` takes out a post deleted on the platform or sent to the wrong site.
+
 ### TypeScript
 
 Puls ships no npm package. Declare the global once in your project:
