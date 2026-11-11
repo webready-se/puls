@@ -1806,10 +1806,12 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$since], $until ? [$until] : [], $siteParams));
     $annotations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Posts a tool on the same server handed over (php puls posts:add), each a dot on its day
-    $postsUntil = $until ? 'AND at < ?' : '';
-    $stmt = $db->prepare("SELECT site, at, sources, text, url FROM posts WHERE at >= ? {$postsUntil} {$siteFilter} ORDER BY at, id LIMIT 500");
-    $stmt->execute(array_merge([$since], $until ? [$until] : [], $siteParams));
+    // Posts a tool on the same server handed over (php puls posts:add), each a dot on its day:
+    // the newest 500, oldest first, and none after today, which has no bar to put a dot on
+    $postsFilter = "at >= ? AND at < ? {$siteFilter}";
+    $postsParams = array_merge([$since, $until ?: date('Y-m-d', strtotime('+1 day'))], $siteParams);
+    $stmt = $db->prepare("SELECT site, at, sources, text, url FROM posts WHERE {$postsFilter} ORDER BY at DESC, id DESC LIMIT 500");
+    $stmt->execute($postsParams);
     $posts = array_map(fn ($p) => [
         'date' => substr($p['at'], 0, 10),
         'time' => substr($p['at'], 11, 5),
@@ -1817,7 +1819,13 @@ function get_api_data(array $config, array $user): string
         'sources' => explode(',', $p['sources']),
         'text' => $p['text'],
         'url' => $p['url'],
-    ], $stmt->fetchAll(PDO::FETCH_ASSOC));
+    ], array_reverse($stmt->fetchAll(PDO::FETCH_ASSOC)));
+    $postsTotal = count($posts);
+    if ($postsTotal === 500) {
+        $stmt = $db->prepare("SELECT COUNT(*) FROM posts WHERE {$postsFilter}");
+        $stmt->execute($postsParams);
+        $postsTotal = (int) $stmt->fetchColumn();
+    }
 
     // Funnel (?event=a&then=b): of the visitors who did A, how many did B at or
     // after their first A. visitor_hash rotates daily, so a funnel spans one day.
@@ -2401,6 +2409,7 @@ function get_api_data(array $config, array $user): string
         'versions'  => $versions,
         'annotations' => $annotations,
         'posts'     => $posts,
+        'postsTotal' => $postsTotal,
         'siteOverview' => $siteOverview ?? [],
         'brokenLinks' => $brokenLinks,
         'events'    => $events,
@@ -2568,8 +2577,8 @@ function report_markdown(array $d): string
 
     $md .= md_list('Chart notes', $d['annotations'], fn ($a) => $a['date'] . (!empty($a['end_date']) ? " to {$a['end_date']}" : '') . ': ' . md_text($a['label']));
     // A caption is written by the site's own people, as a note's label is
-    $md .= md_list('Posts', $d['posts'], fn ($p) => ($d['site'] === 'All sites' ? md_code($p['site']) . ' ' : '') . "{$p['date']} {$p['time']}, " .
-        md_text(implode(' + ', $p['sources'])) . ': ' . md_text($p['text'] ?? '') . ($p['url'] ? ' ' . md_code($p['url']) : ''));
+    $md .= md_list('Posts', array_slice($d['posts'], -20), fn ($p) => ($d['site'] === 'All sites' ? md_code($p['site']) . ' ' : '') . "{$p['date']} {$p['time']}, " .
+        md_text(implode(' + ', $p['sources'])) . ': ' . md_text($p['text'] ?? '') . ($p['url'] ? ' ' . md_code($p['url']) : ''), $d['postsTotal']);
     $md .= md_list('Releases', array_slice($d['versions'], -5), fn ($v) => md_code($v['version']) . ', first seen ' . substr($v['first_seen'], 0, 10));
 
     if ($d['bots']) {
