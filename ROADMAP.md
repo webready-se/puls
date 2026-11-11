@@ -380,6 +380,14 @@ One word everywhere: posts (`posts:add`, `posts` in the API, Posts in the dashbo
 - [ ] **Sparklines say what a day holds at once** - the sparklines in saved cards and goal tiles use an SVG `title` per day, which waits a second and never shows on a phone. The kit's `docs/charts.md` (0.5.0) asks a bar to say what it holds where it is pointed at or tapped, as the main chart's tooltip already does. Some design to it: a tooltip on a 100 px chart must not cover what it explains
 - [x] **Focus events in the smoke test** - headless Chrome sends no focus events without `Emulation.setFocusEmulationEnabled` (learned in Vaka). The smoke test checks focus through `document.activeElement`, which works, but a step that waits on a focus or blur handler would pass or fail for the wrong reason; turn it on in `scripts/smoke.mjs`. On, with a step that renames a saved card in place, which saves on blur: without the emulation that step fails
 - [x] **One clock format** - times are formatted four ways today: Peak hour in 24 h from PHP, the footer in `en-GB`, the live list and event details in `en-US` (`formatTime`, "02:32 PM"), and the hourly card from #104 as "2p". `TIME_FORMAT=24h` (default) or `12h` in `.env`, like `APP_ACCENT`, and one helper in the dashboard for every clock time; Peak hour also gets its hour as a number, so the API string stays. Not the browser's locale: Chrome formats by its UI language, not the OS region, so a Swede on English Chrome would get 2 PM. A per-viewer choice can come if someone asks for it
+- [ ] **Backups** - every site's history is in one file on one server, and statistics cannot be collected afterwards. `php puls backup [<dir>] [--keep=7]` in the shape a sibling tool already runs, so a self-hoster sees the same thing in each:
+  - `VACUUM INTO` a copy: one consistent moment while tracking goes on writing, without the free space, and no `sqlite3` binary needed
+  - `PRAGMA integrity_check` on the copy, then gzip where PHP has zlib, read back against the copy; only then are older backups removed, and a copy that fails is removed instead
+  - Written under a name that starts with a dot and renamed when whole, so a job that copies `puls-*` never takes half a backup; what a stopped backup left is removed after a day
+  - `puls-YYYY-MM-DD-HHMMSS.sqlite.gz` in `data/backups/`, so the newest sorts last; the newest 7 kept, removing only files that match that name. `umask(0077)` around it and `chmod 0600` after, since the copy holds everything
+  - Off the server: rclone in the same scheduled job, to storage the install already pays for (`docs/install.md`). For the production installs that is an app folder in an existing Dropbox account, so no new monthly cost, which is what held this back before. Not encrypted: Puls stores nothing personal about visitors (the addresses in the login log and the excluded IPs are the install's own people), and a key kept only on the server is lost with it, which leaves the copies useless the day they are needed
+  - Restoring is documented, not a command: Puls writes on every tracking request, so PHP for the site has to stop before the copy goes in and `-wal`/`-shm` are removed, and a CLI cannot do that safely for every way Puls runs
+  - The docs say to take a backup before `sites:clean-paths`; they now say how
 
 ---
 
@@ -394,14 +402,6 @@ Things to explore later — not committed to.
 - **Who is online per site in the site picker and CMD+K** - left out of both: the site list (`?api&sites`) gives names only, so it would take a query on every open or a change to a documented endpoint, and the site overview on All sites already shows it. Worth it if a hub's owner switches sites to find where visitors are now
 - **Slack/Discord notifications** — daily summary via webhook
 - **Aggregation tables** — daily rollups for faster queries at scale
-- **Backup/restore CLI** - `php puls backup` / `php puls restore` for SQLite snapshots. A shape that works:
-  - `VACUUM INTO` a bound path: one consistent copy while tracking goes on writing, without the free space, and no `sqlite3` binary needed
-  - `umask(0077)` around it and `chmod 0600` after, since the copy holds all the data
-  - `PRAGMA integrity_check` on the copy; a copy that fails is removed and the older ones kept
-  - Named `puls-YYYY-MM-DD-HHMMSS.sqlite` so the newest sorts last; the newest 7 kept (`--keep=N`), deleting only files that match that pattern
-  - Off the server is not the tool's job: a storage bucket shared by all Webready tools' backups, copied by rclone in a scheduled job per tool, is likely but not decided, since it is a new monthly cost
-  - Restore is the hard part: Puls writes on every tracking request, so stopping scheduled jobs is not enough. Writes have to stop (PHP-FPM or the site) before the database is copied over and `-wal`/`-shm` removed, or an open connection writes to the old file
-  - `docs/integrations.md` already says to take a backup before `sites:clean-paths` without saying how; the docs for this command answer that
 - **Funnels** — visualize visitor paths (landing → page → conversion)
 - **MySQL support** — optional driver via PDO adapter, SQLite remains default
 - **Numeric aggregates on event data** — sum, mean and median of a numeric key (today: send buckets)
