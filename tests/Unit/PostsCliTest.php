@@ -108,7 +108,10 @@ it('refuses what is not a post with one line that says why, and stores nothing',
     'no site' => [array_diff_key(aPost(), ['site' => 1]), 'Not a post: site is missing.'],
     'no at' => [array_diff_key(aPost(), ['at' => 1]), 'Not a post: at is missing.'],
     'no sources' => [array_diff_key(aPost(), ['sources' => 1]), 'Not a post: sources is missing.'],
-    'empty sources' => [aPost(['sources' => []]), 'Not a post: sources is missing.'],
+    'empty sources' => [aPost(['sources' => []]), 'Not a post: sources is empty.'],
+    'an id that is a number' => [aPost(['id' => 17]), 'Not a post: id must be a string.'],
+    'sources that is a string' => [aPost(['sources' => 'instagram']), 'Not a post: sources must be a list, as ["instagram"].'],
+    'sources that is an object' => [aPost(['sources' => ['instagram' => true]]), 'Not a post: sources must be a list, as ["instagram"].'],
     'a source with a space' => [aPost(['sources' => ['in stagram']]), 'Not a post: "in stagram" is not a source name (a-z, 0-9 and -).'],
     'at without an offset' => [aPost(['at' => '2026-11-03T08:15:00']), 'Not a post: at needs a date, a time and an offset, as 2026-11-03T08:15:00+01:00.'],
     'at that is no date' => [aPost(['at' => 'yesterday+01:00']), 'Not a post: at needs a date, a time and an offset, as 2026-11-03T08:15:00+01:00.'],
@@ -176,6 +179,33 @@ it('lists fewer days with --days, and one site when named', function () {
     $one = runCli($this->tmpDir, 'posts:list', ['other.example']);
     expect($recent['output'])->toContain('instagram:2', 'instagram:9')->not->toContain('instagram:1')
         ->and($one['output'])->toContain('instagram:9')->not->toContain('instagram:2');
+});
+
+it('finds the site after --days too, and in either spelling of an international domain', function () {
+    addPost($this->tmpDir, aPost());
+    $db = new PDO('sqlite:' . $this->dbPath);
+    $now = date('Y-m-d H:i:s');
+    $db->exec("INSERT INTO posts (site, post_id, at, sources, created_at) VALUES ('other.example', 'instagram:9', '{$now}', 'instagram', '{$now}')");
+    $db->exec("INSERT INTO posts (site, post_id, at, sources, created_at) VALUES ('café.example', 'instagram:8', '{$now}', 'instagram', '{$now}')");
+
+    $after = runCli($this->tmpDir, 'posts:list', ['--days=7', 'other.example']);
+    $puny = runCli($this->tmpDir, 'posts:list', ['xn--caf-dma.example']);
+    expect($after['output'])->toContain('instagram:9')->not->toContain('instagram:8')
+        ->and($puny['output'])->toContain('instagram:8')->not->toContain('instagram:9');
+});
+
+it('prints no control characters a sender put in an id or a site', function () {
+    addPost($this->tmpDir, aPost());
+    $db = new PDO('sqlite:' . $this->dbPath);
+    $now = date('Y-m-d H:i:s');
+    $db->prepare('INSERT INTO posts (site, post_id, at, sources, created_at) VALUES (?, ?, ?, ?, ?)')
+        ->execute(["shop.example\e]0;title\x07", "instagram:\e[31mred\u{9b}2J", $now, 'instagram', $now]);
+
+    $output = runCli($this->tmpDir, 'posts:list')['output'];
+    $removed = runCli($this->tmpDir, 'posts:remove', ["instagram:\e[31mred\u{9b}2J", '--yes'])['output'];
+    expect($output)->toContain('instagram:[31mred2J')
+        ->and(preg_match('/[\x00-\x09\x0b-\x1f\x7f]|\x{9b}/u', $output))->toBe(0)
+        ->and($removed)->toBe('Removed instagram:[31mred2J from shop.example]0;title.');
 });
 
 it('says when there are no posts', function () {

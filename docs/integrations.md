@@ -357,7 +357,7 @@ echo '{"id": "instagram:17900000000000001", "site": "shop.example", "at": "2026-
 - `text` (optional): the caption, kept on one line and at most 280 characters
 - `url` (optional): a link to the post; anything but `http://` or `https://` is dropped, and the post kept
 
-It exits 0 when the post is stored or already there, and 1 with one line on stderr that says why otherwise (not a post, an unknown site, a locked database), so the sender can try again and show the line. A caption edited on the platform is not updated: the id is done. `php puls posts:list` shows what arrived, and `php puls posts:remove` takes out a post deleted on the platform or sent to the wrong site.
+It exits 0 when the post is stored or already there, and 1 with one line on stderr that says why otherwise (not a post, an unknown site, a locked database), so the sender can try again and show the line. Run the sender as the user the web server runs as (`forge` on Forge): SQLite keeps a `-wal` and a `-shm` file next to the database, and one created by another user can stop the dashboard from writing. A caption edited on the platform is not updated: the id is done. `php puls posts:list` shows what arrived, and `php puls posts:remove` takes out a post deleted on the platform or sent to the wrong site.
 
 ### TypeScript
 

@@ -59,7 +59,7 @@ match ($command) {
     'stats:build'   => statsBuild($config['db_path']),
     'bots:unknown'  => botsUnknown($config['db_path'], $argv),
     'posts:add'     => postsAdd($config, $argv),
-    'posts:list'    => postsList($config, isset($argv[2]) && !str_starts_with($argv[2], '--') ? $argv[2] : null, $argv),
+    'posts:list'    => postsList($config, $argv),
     'posts:remove'  => postsRemove($config, $argv[2] ?? null, $yes),
     default         => printHelp(),
 };
@@ -1801,10 +1801,14 @@ function parsePost(string $input): array
     }
     if (!is_array($post) || array_is_list($post)) throw new InvalidArgumentException('Not a post: the JSON is not an object.');
 
+    // A field of the wrong type says so, since "missing" would send the sender looking for the wrong thing
     foreach (['id', 'site', 'at'] as $field) {
-        if (!is_string($post[$field] ?? null) || trim($post[$field]) === '') throw new InvalidArgumentException("Not a post: {$field} is missing.");
+        if (isset($post[$field]) && !is_string($post[$field])) throw new InvalidArgumentException("Not a post: {$field} must be a string.");
+        if (trim($post[$field] ?? '') === '') throw new InvalidArgumentException("Not a post: {$field} is missing.");
     }
-    if (!is_array($post['sources'] ?? null) || !$post['sources']) throw new InvalidArgumentException('Not a post: sources is missing.');
+    if (!isset($post['sources'])) throw new InvalidArgumentException('Not a post: sources is missing.');
+    if (!is_array($post['sources']) || !array_is_list($post['sources'])) throw new InvalidArgumentException('Not a post: sources must be a list, as ["instagram"].');
+    if (!$post['sources']) throw new InvalidArgumentException('Not a post: sources is empty.');
     $sources = [];
     foreach ($post['sources'] as $source) {
         $name = is_string($source) ? strtolower(trim($source)) : '';
@@ -1864,6 +1868,8 @@ function postsAdd(array $config, array $argv): void
         exit(1);
     }
 
+    // A sender pipes the post; a person who runs it in a terminal is told what it waits for
+    if (stream_isatty(STDIN)) fwrite(STDERR, "Reading one post as JSON from stdin, ended with Ctrl+D.\n");
     try {
         $row = parsePost(stream_get_contents(STDIN));
     } catch (InvalidArgumentException $e) {
@@ -1887,16 +1893,18 @@ function postsAdd(array $config, array $argv): void
     }
 
     echo $stmt->rowCount()
-        ? "Added {$row['post_id']} to {$row['site']} on " . substr($row['at'], 0, 10) . ".\n"
-        : "Already there: {$row['post_id']} on {$row['site']}.\n";
+        ? 'Added ' . terminalSafe($row['post_id']) . ' to ' . terminalSafe($row['site']) . ' on ' . substr($row['at'], 0, 10) . ".\n"
+        : 'Already there: ' . terminalSafe($row['post_id']) . ' on ' . terminalSafe($row['site']) . ".\n";
 }
 
 /** One line per post, newest first: a sender's posts can be checked here, and an id found for posts:remove */
-function postsList(array $config, ?string $site, array $argv): void
+function postsList(array $config, array $argv): void
 {
+    $site = null;
     $days = 30;
-    foreach ($argv as $arg) {
+    foreach (array_slice($argv, 2) as $arg) {
         if (preg_match('/^--days=(\d+)$/', $arg, $m)) $days = max(1, (int) $m[1]);
+        elseif (!str_starts_with($arg, '--')) $site = normalizeSiteName($arg);
     }
     $db = postsDb($config['db_path']);
     // Today and the days before it, as the dashboard counts a period
@@ -1928,9 +1936,16 @@ function postTextStart(?string $text, int $length): string
     return mb_strlen($text) > $length ? mb_substr($text, 0, $length - 1) . '…' : $text;
 }
 
+/** An id, a site or a caption is what a sender wrote: no control character reaches the terminal */
+function terminalSafe(?string $value): string
+{
+    return preg_replace('/[\x00-\x1f\x7f-\x{9f}]/u', '', $value ?? '');
+}
+
 /** Columns as wide as their longest value, two spaces apart */
 function printPostRows(array $header, array $rows): void
 {
+    $rows = array_map(fn ($row) => array_map('terminalSafe', $row), $rows);
     $widths = array_map(fn ($i) => max(array_map('mb_strlen', array_column([$header, ...$rows], $i))), array_keys($header));
     foreach ([$header, ...$rows] as $row) {
         echo rtrim(implode('  ', array_map(fn ($value, $width) => mbPad($value, $width), $row, $widths))) . "\n";
@@ -1952,7 +1967,7 @@ function postsRemove(array $config, ?string $postId, bool $yes): void
             return;
         }
         foreach ($latest as $i => $p) {
-            echo mbPad(($i + 1) . '.', 4) . substr($p['at'], 0, 16) . "  {$p['site']}  {$p['sources']}  " . postTextStart($p['text'], 40) . "  ({$p['post_id']})\n";
+            echo mbPad(($i + 1) . '.', 4) . substr($p['at'], 0, 16) . '  ' . terminalSafe($p['site']) . "  {$p['sources']}  " . terminalSafe(postTextStart($p['text'], 40)) . '  (' . terminalSafe($p['post_id']) . ")\n";
         }
         $answer = prompt("\nWhich post? (number, Enter to cancel): ");
         $picked = ctype_digit($answer) ? ($latest[(int) $answer - 1] ?? null) : null;
@@ -1972,15 +1987,16 @@ function postsRemove(array $config, ?string $postId, bool $yes): void
         }
     }
 
-    $sites = array_column($rows, 'site');
+    $sites = array_map('terminalSafe', array_column($rows, 'site'));
     $from = count($sites) > 1 ? implode(', ', array_slice($sites, 0, -1)) . ' and ' . end($sites) : $sites[0];
-    if (!$yes && strtolower(prompt("Remove {$postId} from {$from}? [y/N] ")) !== 'y') {
+    $shown = terminalSafe($postId);
+    if (!$yes && strtolower(prompt("Remove {$shown} from {$from}? [y/N] ")) !== 'y') {
         echo "Aborted.\n";
         exit(1);
     }
     $delete = $db->prepare('DELETE FROM posts WHERE id = ?');
     foreach (array_column($rows, 'id') as $id) $delete->execute([$id]);
-    echo "Removed {$postId} from {$from}.\n";
+    echo "Removed {$shown} from {$from}.\n";
 }
 
 // =====================================================================

@@ -141,7 +141,7 @@ php puls share:revoke <token>            # Revoke a share token
 php puls bots:unknown [<site>] --days=30 # The user agents behind visits Puls has no name for
 php puls posts:add --json < post.json    # Add a post to show on its day (one post as JSON on stdin)
 php puls posts:list [<site>] --days=30   # The latest posts, newest first
-php puls posts:remove <id>               # Remove a post deleted on the platform or sent to the wrong site
+php puls posts:remove [<id>] [--yes]     # Remove a post deleted on the platform or sent to the wrong site (without an id, pick from the latest)
 php puls exclude:add <site> <ip>         # Stop counting an IP or range (e.g. 81.2.3.0/24, site * = all)
 php puls exclude:list                    # List excluded IPs
 php puls exclude:remove <site> <ip>      # Count an excluded IP again
