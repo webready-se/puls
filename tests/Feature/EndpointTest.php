@@ -2243,6 +2243,127 @@ test('api returns annotations that overlap the period, scoped to the site', func
     expect(array_column($data['annotations'], 'label'))->toBe(['campaign into the period']);
 });
 
+function insertTestPost(string $site, string $postId, string $at, string $sources = 'instagram', ?string $text = null, ?string $url = null): void
+{
+    getTestDb()->prepare('INSERT INTO posts (site, post_id, at, sources, text, url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        ->execute([$site, $postId, $at, $sources, $text, $url, date('Y-m-d H:i:s')]);
+}
+
+test('api returns the posts in the period, scoped to the token\'s site', function () {
+    $site = 'posts-' . uniqid() . '.example';
+    $day = fn (int $ago) => date('Y-m-d', strtotime("-{$ago} days"));
+    insertTestPost($site, 'instagram:1', $day(3) . ' 09:15:00', 'instagram,facebook', 'The autumn collection is in', 'https://example.com/p/1');
+    insertTestPost($site, 'instagram:2', $day(1) . ' 18:40:00');
+    insertTestPost($site, 'instagram:old', $day(20) . ' 09:00:00');
+    insertTestPost($site . '-other', 'instagram:3', $day(2) . ' 10:00:00');
+
+    try {
+        $data = json_decode(http('GET', '/?api&days=7&share=' . createTestShareToken($site))['body'], true);
+        expect($data['posts'])->toBe([
+            ['date' => $day(3), 'time' => '09:15', 'site' => $site, 'sources' => ['instagram', 'facebook'], 'text' => 'The autumn collection is in', 'url' => 'https://example.com/p/1'],
+            ['date' => $day(1), 'time' => '18:40', 'site' => $site, 'sources' => ['instagram'], 'text' => null, 'url' => null],
+        ]);
+    } finally {
+        getTestDb()->prepare('DELETE FROM posts WHERE site LIKE ?')->execute([$site . '%']);
+    }
+});
+
+test('api keeps the newest 500 posts, oldest first, and counts them all', function () {
+    $site = 'many-posts-' . uniqid() . '.example';
+    $db = getTestDb();
+    $db->beginTransaction();
+    // 600 posts over the last five days, one a little over ten minutes after the other
+    $first = strtotime(date('Y-m-d') . ' -5 days');
+    for ($i = 0; $i < 600; $i++) insertTestPost($site, "instagram:{$i}", date('Y-m-d H:i:s', $first + $i * 610));
+    $db->commit();
+
+    try {
+        $data = json_decode(http('GET', '/?api&days=7&share=' . createTestShareToken($site))['body'], true);
+        $at = fn ($p) => $p['date'] . ' ' . $p['time'];
+        expect($data['posts'])->toHaveCount(500)
+            ->and($data['postsTotal'])->toBe(600)
+            ->and($at($data['posts'][0]))->toBe(date('Y-m-d H:i', $first + 100 * 610))
+            ->and($at($data['posts'][499]))->toBe(date('Y-m-d H:i', $first + 599 * 610));
+    } finally {
+        $db->prepare('DELETE FROM posts WHERE site = ?')->execute([$site]);
+    }
+});
+
+test('a post dated after today is not in a period that runs to today', function () {
+    $site = 'future-post-' . uniqid() . '.example';
+    insertTestPost($site, 'instagram:now', date('Y-m-d') . ' 00:05:00');
+    insertTestPost($site, 'instagram:later', date('Y-m-d', strtotime('+1 day')) . ' 00:05:00');
+
+    try {
+        $data = json_decode(http('GET', '/?api&days=7&share=' . createTestShareToken($site))['body'], true);
+        expect(array_column($data['posts'], 'date'))->toBe([date('Y-m-d')])
+            ->and($data['postsTotal'])->toBe(1);
+    } finally {
+        getTestDb()->prepare('DELETE FROM posts WHERE site = ?')->execute([$site]);
+    }
+});
+
+test('a custom range has the posts from its first day to its last', function () {
+    $site = 'range-posts-' . uniqid() . '.example';
+    $day = fn (int $ago) => date('Y-m-d', strtotime("-{$ago} days"));
+    foreach ([9, 6, 3, 2] as $ago) insertTestPost($site, "instagram:{$ago}", $day($ago) . ' 23:30:00');
+
+    try {
+        $data = json_decode(http('GET', '/?api&from=' . $day(6) . '&to=' . $day(3) . '&share=' . createTestShareToken($site))['body'], true);
+        expect(array_column($data['posts'], 'date'))->toBe([$day(6), $day(3)]);
+    } finally {
+        getTestDb()->prepare('DELETE FROM posts WHERE site = ?')->execute([$site]);
+    }
+});
+
+test('a token for groups sees the posts of its sites only', function () {
+    $id = uniqid('seed');
+    [$a, $other] = ["a-{$id}", "other-{$id}"];
+    seedGroupedSite($a, "one-{$id}");
+    seedGroupedSite($other, "two-{$id}");
+    insertTestPost($a, 'instagram:1', date('Y-m-d H:i:s'));
+    insertTestPost($other, 'instagram:2', date('Y-m-d H:i:s'));
+
+    try {
+        $data = json_decode(http('GET', '/?api&days=7&share=' . createTestGroupToken(["one-{$id}"]))['body'], true);
+        expect(array_column($data['posts'], 'site'))->toBe([$a]);
+    } finally {
+        clearGroupSeeds();
+        getTestDb()->prepare('DELETE FROM posts WHERE site LIKE ?')->execute(["%-{$id}"]);
+    }
+});
+
+test('the Markdown report lists the posts, the text escaped and the link in a code span', function () {
+    $site = 'report-posts-' . uniqid() . '.example';
+    seedReportSite($site);
+    insertTestPost($site, 'instagram:1', date('Y-m-d') . ' 09:15:00', 'instagram,facebook', 'New *autumn* `range` <b>in</b>', 'https://example.com/p/1');
+
+    try {
+        $body = http('GET', '/?api&days=7&format=md&share=' . createTestShareToken($site))['body'];
+        expect($body)->toContain("## Posts\n\n- " . date('Y-m-d') . " 09:15, instagram + facebook: New \\*autumn\\* \\`range\\` \\<b\\>in\\</b\\> `https://example.com/p/1`\n");
+    } finally {
+        getTestDb()->prepare('DELETE FROM posts WHERE site = ?')->execute([$site]);
+    }
+});
+
+test('the Markdown report lists the latest 20 posts and counts the rest', function () {
+    $site = 'report-many-posts-' . uniqid() . '.example';
+    seedReportSite($site);
+    for ($i = 0; $i < 25; $i++) insertTestPost($site, "instagram:{$i}", date('Y-m-d H:i:s', strtotime(date('Y-m-d') . ' -3 days') + $i * 3600), 'instagram', "Post {$i}");
+
+    try {
+        $body = http('GET', '/?api&days=7&format=md&share=' . createTestShareToken($site))['body'];
+        preg_match("/## Posts\n\n(.*?)\n\n/s", $body, $m);
+        $lines = explode("\n", $m[1] ?? '');
+        expect($lines)->toHaveCount(21)
+            ->and($lines[0])->toEndWith(': Post 5')
+            ->and($lines[19])->toEndWith(': Post 24')
+            ->and($lines[20])->toBe('- and 5 more');
+    } finally {
+        getTestDb()->prepare('DELETE FROM posts WHERE site = ?')->execute([$site]);
+    }
+});
+
 test('share API with path filter does not crash on events table', function () {
     // Regression: events table has page_path, not path — using $pathFilter caused SQL error
     $token = createTestShareToken('test');

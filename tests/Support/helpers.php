@@ -123,7 +123,7 @@ function createCliTestDb(string $path): PDO
 /**
  * Run a CLI command as subprocess with env overrides. Optional STDIN input.
  */
-function runCli(string $tmpDir, string $command, array $args = [], ?string $stdin = null): array
+function runCli(string $tmpDir, string $command, array $args = [], ?string $stdin = null, array $env = []): array
 {
     $puls = realpath(__DIR__ . '/../../puls');
     $wrapper = $tmpDir . '/run.php';
@@ -136,14 +136,16 @@ function runCli(string $tmpDir, string $command, array $args = [], ?string $stdi
     file_put_contents($wrapper, "<?php\n"
         . "\$_ENV['DB_PATH'] = " . var_export($tmpDir . '/test.sqlite', true) . ";\n"
         . "\$_ENV['USERS_FILE'] = " . var_export($tmpDir . '/users.json', true) . ";\n"
+        . implode('', array_map(fn ($k, $v) => "\$_ENV[" . var_export($k, true) . "] = " . var_export($v, true) . ";\n", array_keys($env), $env))
         . "\$argv = ['puls', " . var_export($command, true) . $argsExport . "];\n"
         . "\$argc = count(\$argv);\n"
         . "require " . var_export($puls, true) . ";\n"
     );
 
     $cmd = "php " . escapeshellarg($wrapper) . " 2>&1";
-    // Without input a prompt gets end of file, so a question never leaves a test run waiting
-    $cmd = $stdin !== null ? "echo " . escapeshellarg($stdin) . " | " . $cmd : $cmd . " < /dev/null";
+    // Without input a prompt gets end of file, so a question never leaves a test run waiting.
+    // printf, not echo: sh's echo turns the \n inside a JSON string into a line break
+    $cmd = $stdin !== null ? "printf '%s\\n' " . escapeshellarg($stdin) . " | " . $cmd : $cmd . " < /dev/null";
     exec($cmd, $output, $exitCode);
     @unlink($wrapper);
 

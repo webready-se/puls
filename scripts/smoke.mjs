@@ -119,6 +119,13 @@ async function main() {
     $note->execute([date('Y-m-d', strtotime('-6 days')), date('Y-m-d', strtotime('-4 days')), 'Smoke campaign']);
     $note->execute([date('Y-m-d', strtotime('-2 days')), null, 'Say "hi" <b>bold</b>']);
     $note->execute([date('Y-m-d'), null, 'Smoke film']);
+    // Posts: two on one day (one with markup and a script link, which must stay text), one on
+    // another day and one before the period. Inserted as rows, so the dashboard's own guard is tested
+    $postRow = $db->prepare("INSERT INTO posts (site, post_id, at, sources, text, url, created_at) VALUES ('demo.example.com', ?, ?, ?, ?, ?, '$now')");
+    $postRow->execute(['instagram:smoke-1', date('Y-m-d', strtotime('-3 days')) . ' 08:15:00', 'instagram,facebook', 'Smoke autumn post', 'https://example.com/p/1']);
+    $postRow->execute(['facebook:smoke-2', date('Y-m-d', strtotime('-3 days')) . ' 19:40:00', 'facebook', 'Say "hi" <b>bold</b>', 'javascript:alert(1)']);
+    $postRow->execute(['instagram:smoke-3', date('Y-m-d', strtotime('-1 day')) . ' 12:00:00', 'instagram', 'Smoke spring post', 'https://example.com/p/3']);
+    $postRow->execute(['instagram:smoke-old', date('Y-m-d', strtotime('-40 days')) . ' 09:00:00', 'instagram', 'Before the period', null]);
     // A version that sorts first as text but is the newest by number (9.10.0 after 9.9.2)
     $db->prepare("INSERT OR IGNORE INTO app_versions (site, version, first_seen) VALUES ('demo.example.com', '9.10.0', ?)")->execute([date('Y-m-d')]);
   `, dbPath]);
@@ -300,6 +307,78 @@ async function main() {
     expect(notes.some((n) => n.textContent === 'Say "hi" <b>bold</b>') && !q('#chart-card .chart-note b'), 'annotation label is escaped');
     expect(q('#chart-card .chart-note.stacked') && q('#chart-card .chart-scroll.stacked-marks'), 'annotation and release on one day stack');
     expect(!q('.note-toggle'), 'no + Note button on a shared dashboard');
+
+    // Posts: a dot on each day with posts, how many in the tooltip's hint line, a Posts button that hides them
+    const postCols = () => [...document.querySelectorAll('#chart-card .chart-col.has-post')];
+    expect(postCols().length === 2, `a dot on the two days with posts (found ${postCols().length})`);
+    expect(postCols().every((c) => c.querySelectorAll('.chart-post[aria-hidden="true"]').length === 1), 'one hidden-from-readers dot per day');
+    const postHint = (c) => c.querySelector('.tip-hint-posts')?.textContent;
+    const twoPosts = postCols().find((c) => postHint(c) === '2 posts');
+    expect(twoPosts && postCols().some((c) => postHint(c) === 'Post at 12:00'), `the hint line says how many posts, or one post's time (says ${postCols().map(postHint).join(', ')})`);
+    if (twoPosts) {
+      expect(/, 2 posts\. See by hour$/.test(twoPosts.getAttribute('aria-label')), `the day's label says how many posts (${twoPosts.getAttribute('aria-label')})`);
+    }
+    // A day with posts keeps the tooltip's two lines, so every day's fits in the chart, the tallest too
+    // (the scroll box clips what rises above it)
+    const tipBox = (c) => {
+      const tip = c.querySelector('.chart-bar > .tip');
+      tip.style.display = 'block';
+      const r = tip.getBoundingClientRect();
+      tip.style.display = '';
+      return r;
+    };
+    const dayCols = [...document.querySelectorAll('#chart-card .chart-col[data-date]')];
+    const quietCol = dayCols.find((c) => !c.classList.contains('has-post'));
+    expect(twoPosts && quietCol && tipBox(twoPosts).height === tipBox(quietCol).height, 'a day with posts has a tooltip as high as a day without');
+    const chartTop = q('#chart-card .chart-scroll').getBoundingClientRect().top;
+    const clipped = dayCols.filter((c) => tipBox(c).top < chartTop);
+    expect(!clipped.length, `every day's tooltip fits inside the chart (clipped: ${clipped.map((c) => c.dataset.date).join(', ')})`);
+    const postsToggle = () => q('#chart-card .posts-toggle');
+    expect(postsToggle() && postsToggle().textContent.trim() === 'Posts' && postsToggle().querySelector('.post-dot') && postsToggle().getAttribute('aria-pressed') === 'true', 'a Posts button with its dot, on');
+    if (postsToggle()) {
+      postsToggle().click();
+      expect(postsToggle()?.getAttribute('aria-pressed') === 'false' && !q('#chart-card .chart-post') && !q('#chart-card .tip-hint-posts'), 'Posts off hides the dots and the tooltip line');
+      expect(localStorage.getItem('puls-posts') === '0', 'Posts off is remembered');
+      postsToggle().click();
+      expect(postsToggle()?.getAttribute('aria-pressed') === 'true' && postCols().length === 2 && localStorage.getItem('puls-posts') === '1', 'Posts on again');
+    }
+
+    // The day's posts in its hours card, a link only to a web address, a dot under each post's hour
+    const postDay = postCols().find((c) => postHint(c) === '2 posts');
+    if (postDay) {
+      postDay.click();
+      if (await waitFor(() => q('#hours-card .hours-chart'), 'hours card for the day with posts')) {
+        const items = [...document.querySelectorAll('#hours-card .hours-posts > li')];
+        expect(items.length === 2, `the hours card lists the day's two posts (found ${items.length})`);
+        const link = items[0]?.querySelector('a');
+        expect(link && link.textContent === 'Open post' && link.getAttribute('href') === 'https://example.com/p/1' && link.target === '_blank' && link.rel === 'noopener noreferrer', 'a post links to itself in a new tab');
+        expect(link?.getAttribute('aria-label') === 'Open the 08:15 Instagram + Facebook post', `the link says which post it opens (${link?.getAttribute('aria-label')})`);
+        expect(getComputedStyle(items[0].querySelector('.hours-post-text')).overflowWrap === 'anywhere', 'a caption without spaces wraps inside the card');
+        const accent = document.createElement('span');
+        accent.className = 'hours-post-time';
+        accent.style.color = 'var(--accent)';
+        document.body.append(accent);
+        expect(link && getComputedStyle(link).color === getComputedStyle(accent).color, 'the post link in the accent colour, as the dashboard\'s other text links');
+        accent.remove();
+        expect(items[1] && !items[1].querySelector('a') && /Say "hi" <b>bold<\/b>/.test(items[1].textContent) && !items[1].querySelector('b'), 'a script link is no link, and the text stays text');
+        const postHours = [...document.querySelectorAll('#hours-card .hour-col.has-post')].map((c) => [...c.parentNode.children].indexOf(c));
+        expect(postHours.join() === '8,19', `a dot under each post's hour (found ${postHours.join()})`);
+        const hourDot = (c) => getComputedStyle(c, '::after');
+        expect([...document.querySelectorAll('#hours-card .hour-col.has-post')].every((c) => hourDot(c).content !== 'none' && hourDot(c).visibility === 'visible' && hourDot(c).position === 'absolute'),
+          'the hour dot shows, also on an hour without a label, and leaves the bars where they are');
+        postsToggle().click();
+        expect(!q('#hours-card .hours-posts') && !q('#hours-card .hour-col.has-post'), 'Posts off takes them out of the hours card');
+        postsToggle().click();
+        expect(document.querySelectorAll('#hours-card .hours-posts > li').length === 2, 'Posts on brings them back to the hours card');
+      }
+      const quietDay = [...document.querySelectorAll('#chart-card .chart-col[data-date]:not(.has-post)')].at(-1);
+      quietDay?.click();
+      if (await waitFor(() => q('#hours-card .hours-chart') && q('#chart-card .chart-col.selected')?.dataset.date === quietDay?.dataset.date, 'hours card for a day without posts')) {
+        expect(!q('#hours-card .hours-posts'), 'no post list on a day without posts');
+      }
+      q('#hours-card .card-close')?.click();
+      localStorage.removeItem('puls-hours');
+    }
     expect(!q('.breakdown-grip'), 'no card grip on a shared dashboard');
 
     // Accessibility: tabs pattern, dialog focus handling
@@ -345,6 +424,7 @@ async function main() {
     if (!await waitFor(() => q('.event-detail') && q('.event-detail')._state, 'event drill-down opened with Enter')) return fails;
     expect(q('.event-detail .event-summary'), 'drill-down summary');
     expect(q('.event-detail .event-chart .chart-bar'), 'drill-down trend bars');
+    expect(document.querySelectorAll('.event-detail .event-chart .chart-post').length === 2, 'the event chart has the posts\' dots too');
     expect(q('.event-detail .event-chip[data-key="@version"]'), 'version group chip');
     expect(q('.event-detail .event-csv'), 'CSV link');
 
@@ -466,6 +546,7 @@ async function main() {
     if (await waitFor(() => /, today:/.test(q('#sr-status').textContent), 'screen reader status says today')) {
       const sub = q('#chart-card .card-subtitle')?.textContent || '';
       expect(/today/.test(sub) && !/last 1 days/.test(sub), 'chart subtitle says today');
+      expect(!q('#chart-card .posts-toggle'), 'no Posts button on a period without posts');
     }
 
     // A slow answer for an earlier choice never replaces the view chosen after it
@@ -577,13 +658,13 @@ async function main() {
       const [day, latest] = dates.slice(-2);
       expect(!q('#hours-card') && !picked() && !hoursAsked.length, 'the hours are closed on load, no day picked, nothing asked for');
       expect(document.querySelectorAll('#chart-card .chart-col[tabindex="0"]').length === 1 && col(latest).tabIndex === 0, 'the chart is one tab stop, on the latest day');
-      expect(/Click to see by hour/.test(col(day).querySelector('.tip').textContent), "a day's tooltip says a click shows its hours");
+      expect(/click to see by hour/i.test(col(day).querySelector('.tip').textContent), "a day's tooltip says a click shows its hours");
 
       col(day).click();
       if (await waitFor(() => q('#hours-card .hours-chart'), 'the hours of a clicked day')) {
         expect(hoursAsked.length === 1 && hoursAsked[0].includes(`hours=${day}`), 'one request, for the clicked day');
         expect(q('#hours-card .hours-chart').children.length === 24, 'the card has 24 hours');
-        expect(picked()?.dataset.date === day && picked().getAttribute('aria-pressed') === 'true' && /Click to close/.test(picked().querySelector('.tip').textContent), 'the picked day is marked, and its tooltip says a click closes');
+        expect(picked()?.dataset.date === day && picked().getAttribute('aria-pressed') === 'true' && /click to close/i.test(picked().querySelector('.tip').textContent), 'the picked day is marked, and its tooltip says a click closes');
         expect(localStorage.getItem('puls-hours') === '1', 'an open card is remembered');
         expect(/^By hour \u00b7 .* views$/.test(q('#hours-card .card-subtitle').textContent), `the card counts what the chart tab shows (says "${q('#hours-card .card-subtitle').textContent}")`);
         expect(getComputedStyle(q('#chart-card')).marginBottom === '0px' && getComputedStyle(q('#hours-card')).borderTopStyle === 'none', 'the open card hangs from the chart');
@@ -1094,6 +1175,22 @@ async function main() {
   const hoursShown = await send('Runtime.evaluate', { expression: `(${hoursOnLoad.toString()})()`, awaitPromise: true, returnByValue: true });
   if (hoursShown.result?.value) failures.push(hoursShown.result.value);
 
+  // 9c. Posts turned off stay off across a reload
+  await send('Runtime.evaluate', { expression: `localStorage.setItem('puls-posts', '0')` });
+  const wait6c = loaded();
+  await send('Page.navigate', { url: `${base}/` });
+  await wait6c;
+  const postsOnLoad = async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let t = 0; t < 5000 && !document.querySelector('#chart-card .posts-toggle'); t += 100) await sleep(100);
+    const toggle = document.querySelector('#chart-card .posts-toggle');
+    const off = toggle && toggle.getAttribute('aria-pressed') === 'false' && !document.querySelector('#chart-card .chart-post');
+    localStorage.removeItem('puls-posts');
+    return off ? '' : 'Posts turned off are hidden after a reload';
+  };
+  const postsShown = await send('Runtime.evaluate', { expression: `(${postsOnLoad.toString()})()`, awaitPromise: true, returnByValue: true });
+  if (postsShown.result?.value) failures.push(postsShown.result.value);
+
   // 10. A viewer in another time zone: the footer names the install's, in plain words, and so
   // does an open hours card
   await send('Emulation.setTimezoneOverride', { timezoneId: 'America/New_York' });
@@ -1279,10 +1376,11 @@ async function main() {
   if (result6.exceptionDetails) errors.push(`Tracker steps threw: ${result6.exceptionDetails.exception?.description}`);
   failures.push(...(Array.isArray(result6.result?.value) ? result6.result.value : []));
 
-  // A white-labelled install, on a server of its own: a shared link's tab names the install, not Puls
-  // (the dashboard's tab title, the login page's comes from PHP)
+  // A white-labelled install on a 12-hour clock, on a server of its own: a shared link's tab names
+  // the install, not Puls (the dashboard's tab title, the login page's comes from PHP), and a post's
+  // time reads as the install's other clock times
   const WL_PORT = await freePort();
-  children.push(spawn('php', ['-S', `localhost:${WL_PORT}`, '-t', join(root, 'public')], { env: { ...env, APP_NAME: 'Acme Stats' }, stdio: 'ignore' }));
+  children.push(spawn('php', ['-S', `localhost:${WL_PORT}`, '-t', join(root, 'public')], { env: { ...env, APP_NAME: 'Acme Stats', TIME_FORMAT: '12h' }, stdio: 'ignore' }));
   await waitForHttp(`http://localhost:${WL_PORT}/?health`);
   const wait9 = loaded();
   await send('Page.navigate', { url: `http://localhost:${WL_PORT}/?share=${token}` });
@@ -1293,6 +1391,14 @@ async function main() {
     for (let t = 0; t < 5000 && !document.querySelector('#chart-card'); t += 100) await sleep(100);
     if (!document.querySelector('#chart-card')) return ['timed out waiting for a shared dashboard on a white-labelled install'];
     if (!document.title.endsWith('Acme Stats') || document.title.includes('Puls')) fails.push(`a shared dashboard on a white-labelled install names the install in its tab (says ${document.title})`);
+    const hints = [...document.querySelectorAll('#chart-card .tip-hint-posts')].map((e) => e.textContent).join(', ');
+    if (!hints.includes('Post at 12:00 PM')) fails.push(`a post's time in the tooltip follows TIME_FORMAT=12h (says ${hints})`);
+    const postDay = document.querySelector('#chart-card .chart-col.has-post');
+    if (!postDay) return [...fails, 'no day with posts on the 12-hour install'];
+    postDay.click();
+    for (let t = 0; t < 5000 && !document.querySelector('#hours-card .hours-posts'); t += 100) await sleep(100);
+    const times = [...document.querySelectorAll('#hours-card .hours-post-time')].map((e) => e.textContent).join(', ');
+    if (times !== '8:15 AM, 7:40 PM') fails.push(`a post's time in the hours card follows TIME_FORMAT=12h (says ${times})`);
     return fails;
   };
   const result8 = await send('Runtime.evaluate', { expression: `(${whiteLabelSteps.toString()})()`, awaitPromise: true, returnByValue: true });
@@ -1306,7 +1412,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab, Reduce Motion (no animation repeats forever, no smooth scroll). No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), posts (a dot on their day in the main and event chart, how many in the tooltip\'s hint line, which keeps its height so the tallest day\'s fits, the count in the day\'s label, a Posts button only when the period has one, off remembered across a reload; the day\'s posts in its hours card with a link only to a web address and a dot under their hour), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab, a post\'s time on a 12-hour install, Reduce Motion (no animation repeats forever, no smooth scroll). No JS errors.');
   }
 }
 

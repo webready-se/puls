@@ -1806,6 +1806,27 @@ function get_api_data(array $config, array $user): string
     $stmt->execute(array_merge([$since], $until ? [$until] : [], $siteParams));
     $annotations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Posts a tool on the same server handed over (php puls posts:add), each a dot on its day:
+    // the newest 500, oldest first, and none after today, which has no bar to put a dot on
+    $postsFilter = "at >= ? AND at < ? {$siteFilter}";
+    $postsParams = array_merge([$since, $until ?: date('Y-m-d', strtotime('+1 day'))], $siteParams);
+    $stmt = $db->prepare("SELECT site, at, sources, text, url FROM posts WHERE {$postsFilter} ORDER BY at DESC, id DESC LIMIT 500");
+    $stmt->execute($postsParams);
+    $posts = array_map(fn ($p) => [
+        'date' => substr($p['at'], 0, 10),
+        'time' => substr($p['at'], 11, 5),
+        'site' => $p['site'],
+        'sources' => explode(',', $p['sources']),
+        'text' => $p['text'],
+        'url' => $p['url'],
+    ], array_reverse($stmt->fetchAll(PDO::FETCH_ASSOC)));
+    $postsTotal = count($posts);
+    if ($postsTotal === 500) {
+        $stmt = $db->prepare("SELECT COUNT(*) FROM posts WHERE {$postsFilter}");
+        $stmt->execute($postsParams);
+        $postsTotal = (int) $stmt->fetchColumn();
+    }
+
     // Funnel (?event=a&then=b): of the visitors who did A, how many did B at or
     // after their first A. visitor_hash rotates daily, so a funnel spans one day.
     $funnel = null;
@@ -1874,6 +1895,7 @@ function get_api_data(array $config, array $user): string
             'funnel' => $funnel,
             'versions' => $versions,
             'annotations' => $annotations,
+            'posts' => $posts,
         ], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
@@ -2386,6 +2408,8 @@ function get_api_data(array $config, array $user): string
         'breakdowns' => $breakdowns,
         'versions'  => $versions,
         'annotations' => $annotations,
+        'posts'     => $posts,
+        'postsTotal' => $postsTotal,
         'siteOverview' => $siteOverview ?? [],
         'brokenLinks' => $brokenLinks,
         'events'    => $events,
@@ -2552,6 +2576,9 @@ function report_markdown(array $d): string
     $md .= md_list('Devices', $d['devices'], fn ($x) => md_text($x['name'] ?? '') . ": {$x['pct']}%");
 
     $md .= md_list('Chart notes', $d['annotations'], fn ($a) => $a['date'] . (!empty($a['end_date']) ? " to {$a['end_date']}" : '') . ': ' . md_text($a['label']));
+    // A caption is written by the site's own people, as a note's label is
+    $md .= md_list('Posts', array_slice($d['posts'], -20), fn ($p) => ($d['site'] === 'All sites' ? md_code($p['site']) . ' ' : '') . "{$p['date']} {$p['time']}, " .
+        md_text(implode(' + ', $p['sources'])) . ': ' . md_text($p['text'] ?? '') . ($p['url'] ? ' ' . md_code($p['url']) : ''), $d['postsTotal']);
     $md .= md_list('Releases', array_slice($d['versions'], -5), fn ($v) => md_code($v['version']) . ', first seen ' . substr($v['first_seen'], 0, 10));
 
     if ($d['bots']) {
@@ -3059,7 +3086,7 @@ function site_groups(PDO $db): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 33; // Bump this when adding new migrations
+    $currentVersion = 34; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -3586,6 +3613,24 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
     if ($version < 33) {
         $columns = array_column($db->query('PRAGMA table_info(pageviews)')->fetchAll(PDO::FETCH_ASSOC), 'name');
         if (!in_array('engaged_ms', $columns, true)) $db->exec('ALTER TABLE pageviews ADD COLUMN engaged_ms INTEGER');
+    }
+
+    // v34: posts a tool on the same server hands over (php puls posts:add), shown on their day.
+    // A table of their own: a few a week would bury the chart notes, and a post is not a visit.
+    // The CLI creates the same when the web app has not run this yet (postsDb)
+    if ($version < 34) {
+        $db->exec('CREATE TABLE IF NOT EXISTS posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            post_id TEXT NOT NULL,
+            at TEXT NOT NULL,
+            sources TEXT NOT NULL,
+            text TEXT,
+            url TEXT,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_site_post ON posts (site, post_id)');
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_posts_site_at ON posts (site, at)');
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);

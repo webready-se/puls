@@ -24,6 +24,9 @@
  *   php puls nginx:config                          Generate Nginx config for a site
  *   php puls stats:build                           Sum every finished day for the dashboard at once
  *   php puls bots:unknown [<site>] [--days=30]     The user agents behind visits Puls has no name for
+ *   php puls posts:add --json                      Add a post, as JSON on stdin, to show on its day
+ *   php puls posts:list [<site>] [--days=30]       List the latest posts
+ *   php puls posts:remove [<id>] [--yes]           Remove a post
  */
 
 $config = require __DIR__ . '/config.php';
@@ -55,6 +58,9 @@ match ($command) {
     'nginx:config'  => nginxConfig(),
     'stats:build'   => statsBuild($config['db_path']),
     'bots:unknown'  => botsUnknown($config['db_path'], $argv),
+    'posts:add'     => postsAdd($config, $argv),
+    'posts:list'    => postsList($config, $argv),
+    'posts:remove'  => postsRemove($config, $argv[2] ?? null, $yes),
     default         => printHelp(),
 };
 
@@ -483,7 +489,7 @@ function sitesRename(array $config, array $argv): void
     // Rename in all tables
     $db->beginTransaction();
 
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns', 'annotations', 'excluded_ips', 'site_groups', 'daily', 'bot_days'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns', 'annotations', 'excluded_ips', 'site_groups', 'daily', 'bot_days', 'posts'];
     // Skip tables a not-yet-migrated database does not have
     $existing = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
     foreach (array_intersect($tables, $existing) as $table) {
@@ -538,7 +544,8 @@ function sitesRename(array $config, array $argv): void
  * Moves a site's rows in one table to another name, returning [moved, kept]. Into a site with
  * rows of its own (sites:rename --merge) a row can collide with one of theirs: counts are added
  * (bots per day, broken links), a release keeps the day it was first seen, and a setting (a goal,
- * a card, an excluded IP, the group) stays as the other site has it. Kept counts those dropped.
+ * a card, an excluded IP, the group) stays as the other site has it, as does a post it already
+ * has. Kept counts those dropped.
  */
 function moveSiteRows(PDO $db, string $table, string $old, string $new): array
 {
@@ -591,6 +598,7 @@ function moveSiteRows(PDO $db, string $table, string $old, string $new): array
         case 'goals':
         case 'excluded_ips':
         case 'site_groups':
+        case 'posts':
             $moved = $db->prepare("UPDATE OR IGNORE {$table} SET site = ? WHERE site = ?");
             $moved->execute([$new, $old]);
             $kept = $db->prepare("DELETE FROM {$table} WHERE site = ?");
@@ -1145,7 +1153,7 @@ function sitesRemove(array $config, ?string $siteName, bool $yes = false): void
     }
 
     $db->beginTransaction();
-    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns', 'annotations', 'excluded_ips', 'site_groups', 'daily', 'bot_days'];
+    $tables = ['pageviews', 'bot_visits', 'broken_links', 'events', 'share_tokens', 'goals', 'app_versions', 'breakdowns', 'annotations', 'excluded_ips', 'site_groups', 'daily', 'bot_days', 'posts'];
     // Skip tables a not-yet-migrated database does not have
     $existing = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
     foreach (array_intersect($tables, $existing) as $table) {
@@ -1737,6 +1745,261 @@ function excludeRemove(array $config, ?string $site, ?string $ip): void
 }
 
 // =====================================================================
+// posts:add, posts:list, posts:remove
+// =====================================================================
+
+/** Open the database with the posts table in place, for a database the web app has not migrated yet. */
+function postsDb(string $dbPath): PDO
+{
+    if (!file_exists($dbPath)) {
+        fwrite(STDERR, "No database found. Start tracking to create it.\n");
+        exit(1);
+    }
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // A tracking request can hold the write lock for a moment
+    $db->exec('PRAGMA busy_timeout = 5000');
+    // Same schema as migration v34
+    $db->exec('CREATE TABLE IF NOT EXISTS posts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site TEXT NOT NULL,
+        post_id TEXT NOT NULL,
+        at TEXT NOT NULL,
+        sources TEXT NOT NULL,
+        text TEXT,
+        url TEXT,
+        created_at TEXT NOT NULL
+    )');
+    $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_site_post ON posts (site, post_id)');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_posts_site_at ON posts (site, at)');
+    return $db;
+}
+
+/** A site Puls knows: one with a pageview, or one put in a group before its first visit. */
+function postSiteKnown(PDO $db, string $site): bool
+{
+    $stmt = $db->prepare('SELECT 1 FROM pageviews WHERE site = ? LIMIT 1');
+    $stmt->execute([$site]);
+    if ($stmt->fetchColumn()) return true;
+    if (!$db->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'site_groups'")->fetchColumn()) return false;
+    $stmt = $db->prepare('SELECT 1 FROM site_groups WHERE site = ?');
+    $stmt->execute([$site]);
+    return (bool) $stmt->fetchColumn();
+}
+
+/**
+ * The post on stdin as a row for the posts table, or an InvalidArgumentException holding the one
+ * line a sender shows. at becomes the install's wall clock, as every time Puls stores.
+ */
+function parsePost(string $input): array
+{
+    if (trim($input) === '') throw new InvalidArgumentException('No post on stdin: posts:add --json reads one post as JSON.');
+    try {
+        $post = json_decode($input, true, 16, JSON_THROW_ON_ERROR);
+    } catch (JsonException $e) {
+        throw new InvalidArgumentException("Not a post: the JSON does not parse ({$e->getMessage()}).");
+    }
+    if (!is_array($post) || array_is_list($post)) throw new InvalidArgumentException('Not a post: the JSON is not an object.');
+
+    // A field of the wrong type says so, since "missing" would send the sender looking for the wrong thing
+    foreach (['id', 'site', 'at'] as $field) {
+        if (isset($post[$field]) && !is_string($post[$field])) throw new InvalidArgumentException("Not a post: {$field} must be a string.");
+        if (trim($post[$field] ?? '') === '') throw new InvalidArgumentException("Not a post: {$field} is missing.");
+    }
+    if (!isset($post['sources'])) throw new InvalidArgumentException('Not a post: sources is missing.');
+    if (!is_array($post['sources']) || !array_is_list($post['sources'])) throw new InvalidArgumentException('Not a post: sources must be a list, as ["instagram"].');
+    if (!$post['sources']) throw new InvalidArgumentException('Not a post: sources is empty.');
+    $sources = [];
+    foreach ($post['sources'] as $source) {
+        $name = is_string($source) ? strtolower(trim($source)) : '';
+        if (!preg_match('/^[a-z0-9][a-z0-9-]{0,19}$/', $name)) {
+            throw new InvalidArgumentException('Not a post: ' . json_encode($source, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ' is not a source name (a-z, 0-9 and -).');
+        }
+        $sources[] = $name;
+    }
+
+    // An offset is required: without one the day depends on whose clock wrote it. A date that
+    // does not exist (2026-02-30) would roll over, so it must read back as written
+    $badAt = new InvalidArgumentException('Not a post: at needs a date, a time and an offset, as 2026-11-03T08:15:00+01:00.');
+    if (!preg_match('/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/', $post['at'], $m)) throw $badAt;
+    try {
+        $at = new DateTimeImmutable($post['at']);
+    } catch (Exception) {
+        throw $badAt;
+    }
+    if ($at->format('Y-m-d') !== $m[1]) throw $badAt;
+
+    // One line, as every caption is shown, and at most 280 characters
+    $text = is_string($post['text'] ?? null) ? trim(preg_replace('/[\s\x00-\x1f\x7f]+/u', ' ', $post['text'])) : '';
+    // The dashboard makes the url a link, so nothing but a web address
+    $url = is_string($post['url'] ?? null) ? trim($post['url']) : '';
+    $webAddress = strlen($url) <= 2000 && preg_match('#^https?://[^\s\x00-\x1f\x7f]+$#i', $url);
+
+    return [
+        'site' => normalizeSiteName($post['site']),
+        'post_id' => mb_substr(trim($post['id']), 0, 200),
+        'at' => $at->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('Y-m-d H:i:s'),
+        'sources' => implode(',', array_slice(array_unique($sources), 0, 10)),
+        'text' => $text === '' ? null : mb_substr($text, 0, 280),
+        'url' => $webAddress ? $url : null,
+    ];
+}
+
+/**
+ * php puls posts:add --json: one post from a tool on the same server, shown on its day. Exits 0
+ * when the post is stored or already there (a sender delivers at least once), 1 with one line on
+ * stderr otherwise, so the sender tries again and can show why.
+ */
+function postsAdd(array $config, array $argv): void
+{
+    if (!in_array('--json', $argv, true)) {
+        fwrite(STDERR, <<<'USAGE'
+        Usage: php puls posts:add --json < post.json
+
+        Reads one post as JSON on stdin and shows it on its day in the dashboard:
+          id       the sender's id for the post; the same id again is taken as done
+          site     the site in Puls (its data-site, or the domain)
+          at       when it went out, ISO 8601 with an offset (2026-11-03T08:15:00+01:00)
+          sources  where it went out, a list such as ["instagram", "facebook"]
+          text     the caption (optional; one line, at most 280 characters)
+          url      a link to the post (optional; http or https)
+
+        USAGE);
+        exit(1);
+    }
+
+    // A sender pipes the post; a person who runs it in a terminal is told what it waits for
+    if (stream_isatty(STDIN)) fwrite(STDERR, "Reading one post as JSON from stdin, ended with Ctrl+D.\n");
+    try {
+        $row = parsePost(stream_get_contents(STDIN));
+    } catch (InvalidArgumentException $e) {
+        fwrite(STDERR, $e->getMessage() . "\n");
+        exit(1);
+    }
+
+    try {
+        $db = postsDb($config['db_path']);
+        if (!postSiteKnown($db, $row['site'])) {
+            fwrite(STDERR, "Unknown site: {$row['site']} has no pageview yet. Posts are taken once Puls has seen its first visit (php puls sites:list).\n");
+            exit(1);
+        }
+        $stmt = $db->prepare('INSERT INTO posts (site, post_id, at, sources, text, url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (site, post_id) DO NOTHING');
+        $stmt->execute([$row['site'], $row['post_id'], $row['at'], $row['sources'], $row['text'], $row['url'], date('Y-m-d H:i:s')]);
+    } catch (PDOException $e) {
+        $locked = str_contains($e->getMessage(), 'locked') || str_contains($e->getMessage(), 'busy');
+        fwrite(STDERR, ($locked ? 'Database is locked: try again.' : 'Could not store the post: ' . $e->getMessage()) . "\n");
+        exit(1);
+    }
+
+    echo $stmt->rowCount()
+        ? 'Added ' . terminalSafe($row['post_id']) . ' to ' . terminalSafe($row['site']) . ' on ' . substr($row['at'], 0, 10) . ".\n"
+        : 'Already there: ' . terminalSafe($row['post_id']) . ' on ' . terminalSafe($row['site']) . ".\n";
+}
+
+/** One line per post, newest first: a sender's posts can be checked here, and an id found for posts:remove */
+function postsList(array $config, array $argv): void
+{
+    $site = null;
+    $days = 30;
+    foreach (array_slice($argv, 2) as $arg) {
+        if (preg_match('/^--days=(\d+)$/', $arg, $m)) $days = max(1, (int) $m[1]);
+        elseif (!str_starts_with($arg, '--')) $site = normalizeSiteName($arg);
+    }
+    $db = postsDb($config['db_path']);
+    // Today and the days before it, as the dashboard counts a period
+    $since = date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'));
+    $sql = 'SELECT site, post_id, at, sources, text FROM posts WHERE at >= ?' . ($site !== null ? ' AND site = ?' : '') . ' ORDER BY at DESC, id DESC';
+    $stmt = $db->prepare($sql);
+    $stmt->execute($site !== null ? [$since, $site] : [$since]);
+    $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$posts) {
+        echo 'No posts' . ($site !== null ? " for {$site}" : '') . " in the last {$days} days.\n";
+        return;
+    }
+    $rows = array_map(fn ($p) => [
+        substr($p['at'], 0, 10),
+        substr($p['at'], 11, 5),
+        $p['site'],
+        $p['sources'],
+        postTextStart($p['text'], 40),
+        $p['post_id'],
+    ], $posts);
+    printPostRows(['DAY', 'TIME', 'SITE', 'SOURCES', 'TEXT', 'ID'], $rows);
+}
+
+/** The start of a caption for a line in the terminal */
+function postTextStart(?string $text, int $length): string
+{
+    $text = $text ?? '';
+    return mb_strlen($text) > $length ? mb_substr($text, 0, $length - 1) . '…' : $text;
+}
+
+/** An id, a site or a caption is what a sender wrote: no control character reaches the terminal */
+function terminalSafe(?string $value): string
+{
+    return preg_replace('/[\x00-\x1f\x7f-\x{9f}]/u', '', $value ?? '');
+}
+
+/** Columns as wide as their longest value, two spaces apart */
+function printPostRows(array $header, array $rows): void
+{
+    $rows = array_map(fn ($row) => array_map('terminalSafe', $row), $rows);
+    $widths = array_map(fn ($i) => max(array_map('mb_strlen', array_column([$header, ...$rows], $i))), array_keys($header));
+    foreach ([$header, ...$rows] as $row) {
+        echo rtrim(implode('  ', array_map(fn ($value, $width) => mbPad($value, $width), $row, $widths))) . "\n";
+    }
+}
+
+/**
+ * php puls posts:remove [<id>] [--yes]: takes out a post deleted on the platform, or one sent to the
+ * wrong site. An id removes it from every site that has it; without one, the ten latest are offered.
+ */
+function postsRemove(array $config, ?string $postId, bool $yes): void
+{
+    $db = postsDb($config['db_path']);
+
+    if ($postId === null) {
+        $latest = $db->query('SELECT id, site, post_id, at, sources, text FROM posts ORDER BY at DESC, id DESC LIMIT 10')->fetchAll(PDO::FETCH_ASSOC);
+        if (!$latest) {
+            echo "No posts to remove.\n";
+            return;
+        }
+        foreach ($latest as $i => $p) {
+            echo mbPad(($i + 1) . '.', 4) . substr($p['at'], 0, 16) . '  ' . terminalSafe($p['site']) . "  {$p['sources']}  " . terminalSafe(postTextStart($p['text'], 40)) . '  (' . terminalSafe($p['post_id']) . ")\n";
+        }
+        $answer = prompt("\nWhich post? (number, Enter to cancel): ");
+        $picked = ctype_digit($answer) ? ($latest[(int) $answer - 1] ?? null) : null;
+        if (!$picked) {
+            echo "Aborted.\n";
+            exit(1);
+        }
+        $postId = $picked['post_id'];
+        $rows = [$picked];
+    } else {
+        $stmt = $db->prepare('SELECT id, site FROM posts WHERE post_id = ? ORDER BY site');
+        $stmt->execute([$postId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) {
+            echo "No post with id {$postId}.\n";
+            exit(1);
+        }
+    }
+
+    $sites = array_map('terminalSafe', array_column($rows, 'site'));
+    $from = count($sites) > 1 ? implode(', ', array_slice($sites, 0, -1)) . ' and ' . end($sites) : $sites[0];
+    $shown = terminalSafe($postId);
+    if (!$yes && strtolower(prompt("Remove {$shown} from {$from}? [y/N] ")) !== 'y') {
+        echo "Aborted.\n";
+        exit(1);
+    }
+    $delete = $db->prepare('DELETE FROM posts WHERE id = ?');
+    foreach (array_column($rows, 'id') as $id) $delete->execute([$id]);
+    echo "Removed {$shown} from {$from}.\n";
+}
+
+// =====================================================================
 // nginx:config
 // =====================================================================
 
@@ -1898,6 +2161,10 @@ function printHelp(): void
       php puls nginx:config                    Generate Nginx config for a site
       php puls stats:build                     Sum every finished day for the dashboard at once
       php puls bots:unknown [<site>]           The user agents behind visits Puls has no name for
+      php puls posts:add --json                Add a post, as JSON on stdin, to show on its day
+      php puls posts:list [<site>]             List the latest posts
+                [--days=30]
+      php puls posts:remove [<id>] [--yes]     Remove a post deleted on the platform, or sent to the wrong site
 
     Options:
       --sites    Comma-separated list of sites the user can access.

@@ -128,6 +128,7 @@
     'pick-day': function(el, e) { if (!e.target.closest('.chart-release, .chart-note, .mark-tip')) pickDay(el.dataset.date); },
     'close-hours': function() { closeHours(); },
     'toggle-compare': function(el) { toggleCompareMode(el); },
+    'toggle-posts': function(el) { togglePosts(el); },
     'toggle-note-form': function() { toggleNoteForm(); },
     'note-form-to-settings': function() { toggleNoteForm(); openMenu('notes'); },
     'save-note': function(el, e) { saveNote(e); },
@@ -1360,6 +1361,8 @@
 
   var chartMode = localStorage.getItem('puls-chart') === 'visitors' ? 'visitors' : 'views';
   var compareMode = localStorage.getItem('puls-compare') === '1';
+  // Posts show unless a viewer turned them off: they take no room, and whoever set them up wants them
+  var postsMode = localStorage.getItem('puls-posts') !== '0';
 
   function renderChart(d) {
     if (hourOpen) hourDay = hourDayIn(d);
@@ -1375,6 +1378,8 @@
         '</div>' +
         '<span class="card-subtitle">' + esc(siteName) + ' – ' + periodLabel() +
           (hasCompare ? '<button class="chart-compare-toggle' + (compareMode ? ' active' : '') + '" data-action="toggle-compare">Compare</button>' : '') +
+          // Only when the period has a post, so a site without posts sees nothing new. Its dot says what the chart's dots are
+          (d.posts && d.posts.length ? '<button class="chart-compare-toggle posts-toggle' + (postsMode ? ' active' : '') + '" aria-pressed="' + postsMode + '" data-action="toggle-posts"><span class="post-dot" aria-hidden="true"></span>Posts</button>' : '') +
           (noteSite() ? '<button class="chart-compare-toggle note-toggle" aria-expanded="false" aria-controls="note-form" data-action="toggle-note-form">+ Note</button>' : '') +
         '</span>' +
       '</div>' +
@@ -1420,13 +1425,15 @@
     pinFrame = requestAnimationFrame(function() { pinFrame = 0; placeMonthPin(el); });
   }, { capture: true, passive: true });
 
-  // Chart markers per date: release markers for app versions first seen that day, and
-  // annotations. A range annotation tints every day it covers and is labelled on its first
-  // visible day. Returns { byDate: date -> { cls, html }, stacked } where stacked means
-  // some day has both kinds of label, so the chart needs room for two rows.
-  function chartMarkers(dates, versions, annotations) {
-    var releases = {}, notes = {}, band = {};
+  // Chart markers per date: release markers for app versions first seen that day, annotations
+  // and posts. A range annotation tints every day it covers and is labelled on its first
+  // visible day; a day with posts gets a dot on its date line and the posts in its byDate entry.
+  // Returns { byDate: date -> { cls, html, posts }, stacked } where stacked means some day has
+  // both kinds of label, so the chart needs room for two rows.
+  function chartMarkers(dates, versions, annotations, posts) {
+    var releases = {}, notes = {}, band = {}, dayPosts = {};
     (versions || []).forEach(function(v) { (releases[v.first_seen] = releases[v.first_seen] || []).push(v.version); });
+    (posts || []).forEach(function(p) { (dayPosts[p.date] = dayPosts[p.date] || []).push(p); });
     (annotations || []).forEach(function(a) {
       var end = a.end_date || a.date;
       var covered = dates.filter(function(d) { return d >= a.date && d <= end; });
@@ -1451,7 +1458,11 @@
           markTip(list.length > 1 ? 'Notes' : 'Note', list.map(function(a) { return formatDay(a.date) + (a.end_date ? ' to ' + formatDay(a.end_date) : '') + ': ' + a.label; }));
       }
       if (band[date]) cls += ' in-note';
-      if (cls) byDate[date] = { cls: cls, html: html };
+      if (dayPosts[date]) {
+        cls += ' has-post';
+        html += '<span class="chart-post" aria-hidden="true"></span>';
+      }
+      if (cls) byDate[date] = { cls: cls, html: html, posts: dayPosts[date] || [] };
     });
     return { byDate: byDate, stacked: stacked };
   }
@@ -1462,7 +1473,24 @@
   }
 
   function marksFor(d, dates) {
-    return chartMarkers(dates, d && d.versions, d && d.annotations);
+    return chartMarkers(dates, d && d.versions, d && d.annotations, postsMode && d ? d.posts : null);
+  }
+
+  // Where a post went out: instagram,facebook reads Instagram + Facebook. The names a first
+  // capital gets wrong are spelled out
+  var SOURCE_NAMES = { rss: 'RSS', tiktok: 'TikTok', linkedin: 'LinkedIn', youtube: 'YouTube' };
+  function postSources(p) {
+    return p.sources.map(function(s) { return SOURCE_NAMES[s] || s.charAt(0).toUpperCase() + s.slice(1); }).join(' + ');
+  }
+
+  // A post's link, only to a web address: anything else that reached the table stays text
+  function postLink(p) {
+    return /^https?:\/\//i.test(p.url || '') ? p.url : '';
+  }
+
+  // A post's time as the install's other clock times: 08:15, or 8:15 AM with TIME_FORMAT=12h
+  function postTime(p) {
+    return clock(+p.time.slice(0, 2), +p.time.slice(3, 5));
   }
 
   function buildBars(pageviews, previousPageviews) {
@@ -1482,9 +1510,15 @@
       var h = Math.max(4, (+p[key] / maxVal) * 128);
       var label = formatDay(p.date);
       var picked = hourOpen && p.date === hourDay;
+      var posts = marks[p.date] ? marks[p.date].posts : [];
       var day = ' data-date="' + p.date + '" data-action="pick-day" role="button" tabindex="' + (p.date === stop ? 0 : -1) + '" aria-pressed="' + picked + '"' +
-        ' aria-label="' + esc(label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors. ' + (picked ? 'Close the hours' : 'See by hour')) + '"';
-      var hint = '<div class="tip-hint">' + (picked ? 'Click to close' : 'Click to see by hour') + '</div>';
+        ' aria-label="' + esc(label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors' +
+          (posts.length ? ', ' + posts.length + (posts.length === 1 ? ' post' : ' posts') : '') + '. ' + (picked ? 'Close the hours' : 'See by hour')) + '"';
+      // A day with posts says so in the hint line, so its tooltip keeps two lines over the tallest
+      // bar: the posts themselves, with their text and link, are in the hours a click away
+      var hint = '<div class="tip-hint">' + (posts.length ? '<span class="tip-hint-posts"><span class="post-dot"></span>' +
+        (posts.length === 1 ? 'Post at ' + postTime(posts[0]) : posts.length + ' posts') + '</span> \u00b7 ' + (picked ? 'click to close' : 'click to see by hour') :
+        (picked ? 'Click to close' : 'Click to see by hour')) + '</div>';
       var prev = showCompare && previousPageviews[i] ? previousPageviews[i] : null;
       var prevH = prev ? Math.max(4, (+prev[key] / maxVal) * 128) : 0;
 
@@ -1546,6 +1580,23 @@
     patchHours();
   };
 
+  // Posts off hides them everywhere: the dots, the tooltip lines and the list in the hours card
+  window.togglePosts = function(el) {
+    postsMode = !postsMode;
+    localStorage.setItem('puls-posts', postsMode ? '1' : '0');
+    var card = el.closest('.card');
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = renderChart(lastData);
+    var newCard = wrapper.firstChild;
+    card.replaceWith(newCard);
+    newCard.querySelectorAll('.chart-scroll').forEach(placeMonthPin);
+    // A button that re-rendered under the pointer keeps the focus a keyboard gave it
+    var button = newCard.querySelector('.posts-toggle');
+    if (button && document.activeElement === document.body) button.focus();
+    document.querySelectorAll('.event-detail').forEach(function(d) { if (d._state) renderEventDetail(d); });
+    patchHours();
+  };
+
   window.toggleCompareMode = function(el) {
     compareMode = !compareMode;
     localStorage.setItem('puls-compare', compareMode ? '1' : '0');
@@ -1598,6 +1649,10 @@
     var data = hourData && hourData.key === hoursKey() ? hourData : null;
     // The hours are the install's; when its clock is not the viewer's, the card says whose
     var body = '<div class="hours-loading muted">Loading\u2026</div>', sub = 'By hour' + zoneNote();
+    // The day's posts under its hours: a post at 08:15 beside the visits hour by hour
+    var posts = postsMode && lastData && lastData.posts ? lastData.posts.filter(function(p) { return p.date === hourDay; }) : [];
+    var postHours = {};
+    posts.forEach(function(p) { postHours[+p.time.slice(0, 2)] = true; });
     if (data) {
       // Today's hours still to come have no bar
       var last = data.date === data.today ? data.hourNow : 23;
@@ -1611,14 +1666,14 @@
         data.hours.map(function(r) {
           var h = r.hour;
           // Early and late hours anchor their tooltip inward, so it stays on a phone's screen
-          return '<div class="hour-col' + (h < 6 ? ' tip-start' : h > 17 ? ' tip-end' : '') + '">' +
+          return '<div class="hour-col' + (h < 6 ? ' tip-start' : h > 17 ? ' tip-end' : '') + (postHours[h] ? ' has-post' : '') + '">' +
             // An hour without visits is a faint line without a number, so the night stays quiet
             (h <= last ? (r[key] ? '<span class="chart-val hour-val">' + num(r[key]) + '</span>' : '') +
               '<div class="chart-bar' + (r[key] ? '' : ' hour-zero') + '" data-h="' + Math.max(3, r[key] / max * 90) + '"><div class="tip">' + span(h) + ': ' + num(r.views) + ' views, ' + num(r.visitors) + ' visitors</div></div>' : '') +
             '<span class="hour-label' + (h % 3 ? ' hour-minor' : '') + '">' + clock(h) + '</span>' +
           '</div>';
         }).join('') +
-      '</div>';
+      '</div>' + hourPosts(posts);
     }
     return '<div class="card hours-card" id="hours-card">' +
       '<div class="card-header">' +
@@ -1627,6 +1682,21 @@
         '<button class="card-close" data-action="close-hours" aria-label="Close the hours"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></span>' +
       '</div>' + body +
     '</div>';
+  }
+
+  // A day's posts in its hours card, each with a link only when it goes to a web address
+  function hourPosts(posts) {
+    if (!posts.length) return '';
+    return '<ul class="hours-posts" aria-label="Posts">' + posts.map(function(p) {
+      var link = postLink(p);
+      return '<li><span class="post-dot" aria-hidden="true"></span>' +
+        '<span class="hours-post-time">' + postTime(p) + '</span> ' +
+        '<span class="hours-post-sources">' + esc((currentSite ? '' : p.site + ' \u00b7 ') + postSources(p)) + '</span>' +
+        (p.text ? ' <span class="hours-post-text">' + esc(p.text) + '</span>' : '') +
+        // A screen reader's list of links says which post each one opens
+        (link ? ' <a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc('Open the ' + postTime(p) + ' ' + postSources(p) + ' post') + '">Open post</a>' : '') +
+      '</li>';
+    }).join('') + '</ul>';
   }
 
   // Brings the hours island up to date on its own, as patchIslands would (compared as parsed
