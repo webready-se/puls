@@ -87,7 +87,7 @@ php puls sites:clean-paths my-app --query --ids --tokens --dry-run
 php puls sites:clean-paths my-app --query --ids --tokens
 ```
 
-`--query` drops query strings (`--keep=page,tab` keeps those parameters), `--ids` collapses numeric segments and `--tokens` replaces token segments (16 or more letters and digits containing both, or a UUID) with `:token`. Take a backup of the database first: the rewrite cannot be undone.
+`--query` drops query strings (`--keep=page,tab` keeps those parameters), `--ids` collapses numeric segments and `--tokens` replaces token segments (16 or more letters and digits containing both, or a UUID) with `:token`. Take a [backup](install.md#backups) first (`php puls backup`): the rewrite cannot be undone.
 
 **Event data.** The same rule applies to `puls.track`: send stable ids such as a department or a page type, never names, email addresses, phone numbers or user ids.
 
