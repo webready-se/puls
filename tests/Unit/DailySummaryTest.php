@@ -277,5 +277,5 @@ test('migration v33 adds engaged time, unmeasured on every stored visit, and kee
 
     expect($db->query('SELECT engaged_ms FROM pageviews')->fetchAll(PDO::FETCH_COLUMN))->toBe([null])
         ->and((int) $db->query('SELECT COUNT(*) FROM daily')->fetchColumn())->toBe(1)
-        ->and((int) $db->query('PRAGMA user_version')->fetchColumn())->toBe(33);
+        ->and((int) $db->query('PRAGMA user_version')->fetchColumn())->toBeGreaterThanOrEqual(33);
 });

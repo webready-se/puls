@@ -328,6 +328,21 @@ it('keeps the settings the new name already has, and moves the rest', function (
     expect($db->query("SELECT site FROM annotations")->fetchColumn())->toBe('shop.example');
 });
 
+it('keeps one post where the same post is under both names, and moves the rest', function () {
+    $db = mergeDb($this->dbPath);
+    $db->exec("INSERT INTO posts (site, post_id, at, sources, created_at) VALUES
+        ('shop', 'instagram:1', '2026-11-01 09:00:00', 'instagram', '2026-11-01 09:05:00'),
+        ('shop', 'instagram:2', '2026-11-02 09:00:00', 'instagram', '2026-11-02 09:05:00'),
+        ('shop.example', 'instagram:1', '2026-11-01 09:00:00', 'instagram', '2026-11-01 09:05:00')");
+
+    $result = runCli($this->tmpDir, 'sites:rename', ['shop', 'shop.example', '--merge']);
+
+    expect($result['exit'])->toBe(0)
+        ->and($result['output'])->toContain("posts: 1 rows moved, 1 already in 'shop.example', kept as it is")
+        ->and($db->query('SELECT site, post_id FROM posts ORDER BY post_id')->fetchAll(PDO::FETCH_NUM))
+        ->toBe([['shop.example', 'instagram:1'], ['shop.example', 'instagram:2']]);
+});
+
 it('clears the daily summary of both names, to be summed again', function () {
     $db = mergeDb($this->dbPath);
     $db->exec("INSERT INTO daily (site, date, kind, key) VALUES ('shop', '2026-11-01', 'day', ''), ('shop.example', '2026-11-02', 'day', ''), ('other.example', '2026-11-02', 'day', '')");

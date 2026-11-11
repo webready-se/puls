@@ -3059,7 +3059,7 @@ function site_groups(PDO $db): array
 
 function run_migrations(PDO $db): void
 {
-    $currentVersion = 33; // Bump this when adding new migrations
+    $currentVersion = 34; // Bump this when adding new migrations
 
     // Use SQLite's built-in PRAGMA user_version (per-database, no external file)
     $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
@@ -3586,6 +3586,24 @@ function migrate_schema(PDO $db, int $version, int $currentVersion): void
     if ($version < 33) {
         $columns = array_column($db->query('PRAGMA table_info(pageviews)')->fetchAll(PDO::FETCH_ASSOC), 'name');
         if (!in_array('engaged_ms', $columns, true)) $db->exec('ALTER TABLE pageviews ADD COLUMN engaged_ms INTEGER');
+    }
+
+    // v34: posts a tool on the same server hands over (php puls posts:add), shown on their day.
+    // A table of their own: a few a week would bury the chart notes, and a post is not a visit.
+    // The CLI creates the same when the web app has not run this yet (postsDb)
+    if ($version < 34) {
+        $db->exec('CREATE TABLE IF NOT EXISTS posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            site TEXT NOT NULL,
+            post_id TEXT NOT NULL,
+            at TEXT NOT NULL,
+            sources TEXT NOT NULL,
+            text TEXT,
+            url TEXT,
+            created_at TEXT NOT NULL
+        )');
+        $db->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_site_post ON posts (site, post_id)');
+        $db->exec('CREATE INDEX IF NOT EXISTS idx_posts_site_at ON posts (site, at)');
     }
 
     $db->exec('PRAGMA user_version = ' . $currentVersion);
