@@ -147,4 +147,5 @@ php puls exclude:list                    # List excluded IPs
 php puls exclude:remove <site> <ip>      # Count an excluded IP again
 php puls nginx:config                    # Generate Nginx config for a site
 php puls stats:build                     # Sum every finished day into the dashboard's daily summary at once
+php puls backup [<dir>] [--keep=7]       # A checked, compressed copy of the database, in data/backups/ by default (see install.md#backups)
 ```

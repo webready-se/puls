@@ -27,6 +27,7 @@
  *   php puls posts:add --json                      Add a post, as JSON on stdin, to show on its day
  *   php puls posts:list [<site>] [--days=30]       List the latest posts
  *   php puls posts:remove [<id>] [--yes]           Remove a post
+ *   php puls backup [<dir>] [--keep=7]             A checked, compressed copy of the database
  */
 
 $config = require __DIR__ . '/config.php';
@@ -61,6 +62,7 @@ match ($command) {
     'posts:add'     => postsAdd($config, $argv),
     'posts:list'    => postsList($config, $argv),
     'posts:remove'  => postsRemove($config, $argv[2] ?? null, $yes),
+    'backup'        => backup($config, $argv),
     default         => printHelp(),
 };
 
@@ -2000,6 +2002,119 @@ function postsRemove(array $config, ?string $postId, bool $yes): void
 }
 
 // =====================================================================
+// backup
+// =====================================================================
+
+/**
+ * php puls backup [<dir>] [--keep=N]: a checked, compressed copy of the database, in backups/
+ * next to it by default, for a nightly job that can copy the folder off the server.
+ */
+function backup(array $config, array $argv): void
+{
+    $dbPath = $config['db_path'];
+    if (!file_exists($dbPath)) {
+        echo "No database found. Start tracking to create it.\n";
+        exit(1);
+    }
+    $dir = null;
+    $keep = 7;
+    foreach (array_slice($argv, 2) as $arg) {
+        if (preg_match('/^--keep=(\d+)$/', $arg, $m)) $keep = max(1, (int) $m[1]);
+        elseif (!str_starts_with($arg, '--')) $dir = $arg;
+    }
+    $dir ??= dirname($dbPath) . '/backups';
+
+    try {
+        $db = new PDO('sqlite:' . $dbPath);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $backup = backupDatabase($db, $dir, $keep);
+    } catch (Throwable $e) {
+        echo terminalSafe($e->getMessage()) . "\n";
+        exit(1);
+    }
+    $size = bytesText($backup['bytes']);
+    if ($backup['unpacked'] !== null) $size .= ' compressed from ' . bytesText($backup['unpacked']);
+    echo "Backed up to {$backup['path']} ({$size}, checked).\n";
+    if ($backup['removed'] > 0) {
+        echo "Removed {$backup['removed']} older backup" . ($backup['removed'] === 1 ? '' : 's') . ", kept the newest {$keep}.\n";
+    }
+}
+
+/**
+ * Writes a copy of the database to $dir with VACUUM INTO, which reads one moment while tracking
+ * goes on writing, and leaves the free space out. Only the owner can read it, since it holds every
+ * site's history. The copy is checked, then compressed with gzip where PHP has zlib, and the
+ * compressed file is read back against the copy. Only then are the backups beyond the newest $keep
+ * removed; a copy that fails a check is removed instead.
+ *
+ * It is written under a name that starts with a dot and takes its own name when whole, so a job
+ * that copies puls-* off the server never takes half a backup. What a backup that was stopped left
+ * behind is removed after a day.
+ *
+ * @return array{path: string, bytes: int, unpacked: ?int, removed: int}
+ */
+function backupDatabase(PDO $db, string $dir, int $keep, ?bool $compress = null): array
+{
+    $compress ??= extension_loaded('zlib');
+    $dir = rtrim($dir, '/') ?: '/';
+    if ((!is_dir($dir) && !@mkdir($dir, 0700, true)) || !is_dir($dir) || !is_writable($dir)) {
+        throw new RuntimeException("Cannot write backups to {$dir}.");
+    }
+    $name = 'puls-' . date('Y-m-d-His') . '.sqlite';
+    $path = "{$dir}/{$name}" . ($compress ? '.gz' : '');
+    if (file_exists("{$dir}/{$name}") || file_exists("{$dir}/{$name}.gz")) {
+        throw new RuntimeException("A backup from this second is there already: {$path}");
+    }
+
+    foreach (glob("{$dir}/.puls-*") as $left) {
+        if (filemtime($left) < time() - 86400) unlink($left);
+    }
+
+    $copy = "{$dir}/.{$name}";
+    $packed = "{$copy}.gz";
+    $unpacked = null;
+    $umask = umask(0077);
+    try {
+        $db->prepare('VACUUM INTO ?')->execute([$copy]);
+        $check = (new PDO('sqlite:' . $copy))->query('PRAGMA integrity_check')->fetchColumn();
+        if ($check !== 'ok') {
+            throw new RuntimeException("The copy failed its check ({$check}), so it was removed and older backups kept.");
+        }
+        if ($compress) {
+            if (!copy($copy, "compress.zlib://{$packed}")
+                || hash_file('xxh128', "compress.zlib://{$packed}") !== hash_file('xxh128', $copy)) {
+                throw new RuntimeException('The copy could not be compressed, so it was removed and older backups kept.');
+            }
+            $unpacked = (int) filesize($copy);
+        }
+        rename($compress ? $packed : $copy, $path);
+        chmod($path, 0600);
+    } finally {
+        umask($umask);
+        foreach ([$copy, $packed] as $temp) {
+            if (file_exists($temp)) unlink($temp);
+        }
+    }
+
+    // puls-2026-11-12-030000.sqlite.gz, so the newest sorts last; without zlib it ends in .sqlite
+    $backups = array_values(array_filter(scandir($dir), fn ($file) => preg_match('/^puls-\d{4}-\d{2}-\d{2}-\d{6}\.sqlite(\.gz)?$/', $file)));
+    rsort($backups);
+    $removed = 0;
+    foreach (array_slice($backups, max(1, $keep)) as $old) {
+        if (unlink("{$dir}/{$old}")) $removed++;
+    }
+    return ['path' => $path, 'bytes' => (int) filesize($path), 'unpacked' => $unpacked, 'removed' => $removed];
+}
+
+/** A file's size in the words people use: 512 bytes, 48 KB, 12.5 MB */
+function bytesText(int $bytes): string
+{
+    if ($bytes < 1024) return "{$bytes} bytes";
+    if ($bytes < 1048576) return round($bytes / 1024) . ' KB';
+    return round($bytes / 1048576, 1) . ' MB';
+}
+
+// =====================================================================
 // nginx:config
 // =====================================================================
 
@@ -2165,13 +2280,15 @@ function printHelp(): void
       php puls posts:list [<site>]             List the latest posts
                 [--days=30]
       php puls posts:remove [<id>] [--yes]     Remove a post deleted on the platform, or sent to the wrong site
+      php puls backup [<dir>] [--keep=7]       A checked, compressed copy of the database, in data/backups/
+                                               by default, keeping the newest 7 (for a nightly job)
 
     Options:
       --sites    Comma-separated list of sites the user can access.
       --label    Label for a share token ("Client report Q1") or an excluded IP ("Office").
       --expires  Expiry date for share token (YYYY-MM-DD).
       --query    Strip query strings from stored paths.
-      --keep     Like --query, but keep these parameters (e.g. page,tab).
+      --keep     Like --query, but keep these parameters (e.g. page,tab); for backup, how many to keep.
       --ids      Collapse numeric path segments to :id (/lead/1234 -> /lead/:id).
       --tokens   Replace token segments (16+ letters and digits, or a UUID) with :token.
       --dry-run  Show what would change without writing.
