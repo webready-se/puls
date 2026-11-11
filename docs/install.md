@@ -138,6 +138,15 @@ location / {
 }
 ```
 
+**Who can read the data.** `data/` holds every site's history, the share tokens and the addresses of failed logins. Puls creates the folder so that other users on the server cannot read it, but one made by hand or by an older version may be open to all of them, which matters where other sites run as users of their own (Forge's site isolation): a site broken into could read it. Close it as the user that owns it, the one PHP runs as for the site (forge, unless the site is isolated):
+
+```bash
+cd /home/forge/puls.example.com
+chmod 700 data && chmod 600 data/puls.sqlite*
+```
+
+SQLite gives its `-wal` and `-shm` files the database's own mode, so they stay closed. Then check that PHP still opens the database: `curl -s -o /dev/null -w '%{http_code}\n' 'https://puls.example.com/?health'` answers 200, and 503 if it cannot.
+
 **Forge's frame header.** Forge's default Nginx configuration adds `X-Frame-Options "SAMEORIGIN"`, `X-XSS-Protection` and `X-Content-Type-Options "nosniff"` to every answer, on top of what Puls sends, so `X-Frame-Options` goes out as both `DENY` (Puls) and `SAMEORIGIN` (Forge). It does no harm, since `frame-ancestors 'none'` in Puls's CSP overrules both, but a header check flags it, and nobody can tell from the answer who adds which.
 
 In the site's `…` menu, choose **Edit Nginx configuration** and the file **General site configuration**. Remove the lines for `X-Frame-Options` and `X-XSS-Protection`, which is obsolete, and keep `X-Content-Type-Options`: it is where the files Nginx serves itself get theirs. On the server that file is `/etc/nginx/forge-conf/<site id>/site.conf`. `sites-available/<site>` holds only `include` lines, so searching there finds nothing.
