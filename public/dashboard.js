@@ -3777,7 +3777,8 @@
     }
     currentPath = item.getAttribute('data-path');
     load(currentDays);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // A smooth scroll from script ignores the CSS reset, so Reduce Motion is asked here
+    window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   });
 
   // --- Pull to refresh (PWA standalone) ---

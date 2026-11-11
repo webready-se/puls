@@ -1049,7 +1049,8 @@ body[data-first-load] .load-status { animation-delay: .3s; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  /* One iteration too: a cycle of 0.01 ms that repeats forever strobes (the live dot did) */
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
 /* --- Classes that replace inline styles, so style-src can be 'self' --- */

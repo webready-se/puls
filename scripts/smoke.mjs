@@ -1215,6 +1215,45 @@ async function main() {
   if (!/^By hour, Stockholm time \u00b7 /.test(hoursSub)) failures.push(`the hours card names the install's zone for a viewer elsewhere (shows "${hoursSub}")`);
   await send('Emulation.setTimezoneOverride', { timezoneId: TIMEZONE });
 
+  // 10b. Reduce Motion: no animation repeats forever, since the reset cuts a cycle to 0.01 ms and
+  // one that never ends strobes (the live dot did), and picking a page in search jumps to the top
+  // instead of scrolling there smoothly
+  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  const waitMotion = loaded();
+  await send('Page.navigate', { url: `${base}/` });
+  await waitMotion;
+  const motionSteps = async () => {
+    const fails = [];
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let t = 0; t < 5000 && !document.querySelector('#chart-card'); t += 100) await sleep(100);
+    if (!document.querySelector('.live-dot')) fails.push('no live dot to check');
+    // The pull-to-refresh spinner and the loading bar run only for a moment: shown while counting
+    const ptr = document.getElementById('ptr');
+    ptr.classList.add('refreshing');
+    document.body.setAttribute('data-loading', '');
+    await sleep(50);
+    const endless = document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations === Infinity);
+    if (endless.length) fails.push(`no animation repeats forever with Reduce Motion (found ${endless.map((a) => a.animationName + ' on ' + a.effect.target?.className).join(', ')})`);
+    ptr.classList.remove('refreshing');
+    document.body.removeAttribute('data-loading');
+    const scrolls = [];
+    const realScrollTo = window.scrollTo;
+    window.scrollTo = (...args) => scrolls.push(args[0]);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
+    const input = document.querySelector('#cmd-input');
+    input.value = '/pri';
+    input.dispatchEvent(new Event('input'));
+    for (let t = 0; t < 3000 && !document.querySelector('#cmd-results .cmd-item[data-path]'); t += 100) await sleep(100);
+    document.querySelector('#cmd-results .cmd-item[data-path]')?.click();
+    window.scrollTo = realScrollTo;
+    if (scrolls.length !== 1 || scrolls[0]?.behavior === 'smooth') fails.push(`picking a page in search jumps to the top without a smooth scroll (scrolled ${JSON.stringify(scrolls)})`);
+    return fails;
+  };
+  const resultMotion = await send('Runtime.evaluate', { expression: `(${motionSteps.toString()})()`, awaitPromise: true, returnByValue: true });
+  if (resultMotion.exceptionDetails) errors.push(`Reduce Motion steps threw: ${resultMotion.exceptionDetails.exception?.description}`);
+  failures.push(...(Array.isArray(resultMotion.result?.value) ? resultMotion.result.value : []));
+  await send('Emulation.setEmulatedMedia', { features: [] });
+
   // 11. The tracking script on a page: sendBeacon is recorded instead of sent, so what the script
   // would send is checked without a row in the database. puls.page() counts the current URL or a
   // path through the same rules as a pageview (data-query, data-collapse-ids), once per URL, never
@@ -1373,7 +1412,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), posts (a dot on their day in the main and event chart, how many in the tooltip\'s hint line, which keeps its height so the tallest day\'s fits, the count in the day\'s label, a Posts button only when the period has one, off remembered across a reload; the day\'s posts in its hours card with a link only to a web address and a dot under their hour), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab, a post\'s time on a 12-hour install. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), posts (a dot on their day in the main and event chart, how many in the tooltip\'s hint line, which keeps its height so the tallest day\'s fits, the count in the day\'s label, a Posts button only when the period has one, off remembered across a reload; the day\'s posts in its hours card with a link only to a web address and a dot under their hour), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab, a post\'s time on a 12-hour install, Reduce Motion (no animation repeats forever, no smooth scroll). No JS errors.');
   }
 }
 
