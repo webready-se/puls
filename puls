@@ -25,6 +25,8 @@
  *   php puls stats:build                           Sum every finished day for the dashboard at once
  *   php puls bots:unknown [<site>] [--days=30]     The user agents behind visits Puls has no name for
  *   php puls posts:add --json                      Add a post, as JSON on stdin, to show on its day
+ *   php puls posts:list [<site>] [--days=30]       List the latest posts
+ *   php puls posts:remove [<id>] [--yes]           Remove a post
  */
 
 $config = require __DIR__ . '/config.php';
@@ -57,6 +59,8 @@ match ($command) {
     'stats:build'   => statsBuild($config['db_path']),
     'bots:unknown'  => botsUnknown($config['db_path'], $argv),
     'posts:add'     => postsAdd($config, $argv),
+    'posts:list'    => postsList($config, isset($argv[2]) && !str_starts_with($argv[2], '--') ? $argv[2] : null, $argv),
+    'posts:remove'  => postsRemove($config, $argv[2] ?? null, $yes),
     default         => printHelp(),
 };
 
@@ -1741,7 +1745,7 @@ function excludeRemove(array $config, ?string $site, ?string $ip): void
 }
 
 // =====================================================================
-// posts:add
+// posts:add, posts:list, posts:remove
 // =====================================================================
 
 /** Open the database with the posts table in place, for a database the web app has not migrated yet. */
@@ -1885,6 +1889,98 @@ function postsAdd(array $config, array $argv): void
     echo $stmt->rowCount()
         ? "Added {$row['post_id']} to {$row['site']} on " . substr($row['at'], 0, 10) . ".\n"
         : "Already there: {$row['post_id']} on {$row['site']}.\n";
+}
+
+/** One line per post, newest first: a sender's posts can be checked here, and an id found for posts:remove */
+function postsList(array $config, ?string $site, array $argv): void
+{
+    $days = 30;
+    foreach ($argv as $arg) {
+        if (preg_match('/^--days=(\d+)$/', $arg, $m)) $days = max(1, (int) $m[1]);
+    }
+    $db = postsDb($config['db_path']);
+    // Today and the days before it, as the dashboard counts a period
+    $since = date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'));
+    $sql = 'SELECT site, post_id, at, sources, text FROM posts WHERE at >= ?' . ($site !== null ? ' AND site = ?' : '') . ' ORDER BY at DESC, id DESC';
+    $stmt = $db->prepare($sql);
+    $stmt->execute($site !== null ? [$since, $site] : [$since]);
+    $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$posts) {
+        echo 'No posts' . ($site !== null ? " for {$site}" : '') . " in the last {$days} days.\n";
+        return;
+    }
+    $rows = array_map(fn ($p) => [
+        substr($p['at'], 0, 10),
+        substr($p['at'], 11, 5),
+        $p['site'],
+        $p['sources'],
+        postTextStart($p['text'], 40),
+        $p['post_id'],
+    ], $posts);
+    printPostRows(['DAY', 'TIME', 'SITE', 'SOURCES', 'TEXT', 'ID'], $rows);
+}
+
+/** The start of a caption for a line in the terminal */
+function postTextStart(?string $text, int $length): string
+{
+    $text = $text ?? '';
+    return mb_strlen($text) > $length ? mb_substr($text, 0, $length - 1) . '…' : $text;
+}
+
+/** Columns as wide as their longest value, two spaces apart */
+function printPostRows(array $header, array $rows): void
+{
+    $widths = array_map(fn ($i) => max(array_map('mb_strlen', array_column([$header, ...$rows], $i))), array_keys($header));
+    foreach ([$header, ...$rows] as $row) {
+        echo rtrim(implode('  ', array_map(fn ($value, $width) => mbPad($value, $width), $row, $widths))) . "\n";
+    }
+}
+
+/**
+ * php puls posts:remove [<id>] [--yes]: takes out a post deleted on the platform, or one sent to the
+ * wrong site. An id removes it from every site that has it; without one, the ten latest are offered.
+ */
+function postsRemove(array $config, ?string $postId, bool $yes): void
+{
+    $db = postsDb($config['db_path']);
+
+    if ($postId === null) {
+        $latest = $db->query('SELECT id, site, post_id, at, sources, text FROM posts ORDER BY at DESC, id DESC LIMIT 10')->fetchAll(PDO::FETCH_ASSOC);
+        if (!$latest) {
+            echo "No posts to remove.\n";
+            return;
+        }
+        foreach ($latest as $i => $p) {
+            echo mbPad(($i + 1) . '.', 4) . substr($p['at'], 0, 16) . "  {$p['site']}  {$p['sources']}  " . postTextStart($p['text'], 40) . "  ({$p['post_id']})\n";
+        }
+        $answer = prompt("\nWhich post? (number, Enter to cancel): ");
+        $picked = ctype_digit($answer) ? ($latest[(int) $answer - 1] ?? null) : null;
+        if (!$picked) {
+            echo "Aborted.\n";
+            exit(1);
+        }
+        $postId = $picked['post_id'];
+        $rows = [$picked];
+    } else {
+        $stmt = $db->prepare('SELECT id, site FROM posts WHERE post_id = ? ORDER BY site');
+        $stmt->execute([$postId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) {
+            echo "No post with id {$postId}.\n";
+            exit(1);
+        }
+    }
+
+    $sites = array_column($rows, 'site');
+    $from = count($sites) > 1 ? implode(', ', array_slice($sites, 0, -1)) . ' and ' . end($sites) : $sites[0];
+    if (!$yes && strtolower(prompt("Remove {$postId} from {$from}? [y/N] ")) !== 'y') {
+        echo "Aborted.\n";
+        exit(1);
+    }
+    $delete = $db->prepare('DELETE FROM posts WHERE id = ?');
+    foreach (array_column($rows, 'id') as $id) $delete->execute([$id]);
+    echo "Removed {$postId} from {$from}.\n";
 }
 
 // =====================================================================
@@ -2050,6 +2146,9 @@ function printHelp(): void
       php puls stats:build                     Sum every finished day for the dashboard at once
       php puls bots:unknown [<site>]           The user agents behind visits Puls has no name for
       php puls posts:add --json                Add a post, as JSON on stdin, to show on its day
+      php puls posts:list [<site>]             List the latest posts
+                [--days=30]
+      php puls posts:remove [<id>] [--yes]     Remove a post deleted on the platform, or sent to the wrong site
 
     Options:
       --sites    Comma-separated list of sites the user can access.

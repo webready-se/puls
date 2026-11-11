@@ -146,6 +146,85 @@ it('removes the posts with a removed site', function () {
         ->and(postRows($this->dbPath))->toBe([]);
 });
 
+/** An ISO 8601 time with an offset, some days back */
+function daysAgo(int $days, string $time = '09:15'): string
+{
+    return date('Y-m-d', strtotime("-{$days} days")) . "T{$time}:00+01:00";
+}
+
+it('lists the latest posts, newest first, for the last 30 days', function () {
+    addPost($this->tmpDir, aPost(['id' => 'instagram:old', 'at' => daysAgo(40)]));
+    addPost($this->tmpDir, aPost(['id' => 'instagram:1', 'at' => daysAgo(5), 'text' => 'Short']));
+    addPost($this->tmpDir, aPost(['id' => 'facebook:2', 'at' => daysAgo(1), 'sources' => ['facebook'], 'text' => str_repeat('Long caption ', 10)]));
+
+    $result = runCli($this->tmpDir, 'posts:list', [], null, ['TIMEZONE' => 'Europe/Stockholm']);
+    $lines = explode("\n", $result['output']);
+    expect($result['exit'])->toBe(0)
+        ->and($lines[0])->toMatch('/^DAY\s+TIME\s+SITE\s+SOURCES\s+TEXT\s+ID$/')
+        ->and($lines[1])->toContain(date('Y-m-d', strtotime('-1 day')), 'facebook', '…', 'facebook:2')
+        ->and($lines[2])->toContain('instagram,facebook', 'Short', 'instagram:1')
+        ->and($result['output'])->not->toContain('instagram:old');
+});
+
+it('lists fewer days with --days, and one site when named', function () {
+    addPost($this->tmpDir, aPost(['id' => 'instagram:1', 'at' => daysAgo(5)]));
+    addPost($this->tmpDir, aPost(['id' => 'instagram:2', 'at' => daysAgo(1)]));
+    $db = new PDO('sqlite:' . $this->dbPath);
+    $db->exec("INSERT INTO posts (site, post_id, at, sources, created_at) VALUES ('other.example', 'instagram:9', '" . date('Y-m-d H:i:s') . "', 'instagram', '" . date('Y-m-d H:i:s') . "')");
+
+    $recent = runCli($this->tmpDir, 'posts:list', ['--days=2']);
+    $one = runCli($this->tmpDir, 'posts:list', ['other.example']);
+    expect($recent['output'])->toContain('instagram:2', 'instagram:9')->not->toContain('instagram:1')
+        ->and($one['output'])->toContain('instagram:9')->not->toContain('instagram:2');
+});
+
+it('says when there are no posts', function () {
+    $result = runCli($this->tmpDir, 'posts:list');
+    expect($result['exit'])->toBe(0)
+        ->and($result['output'])->toBe('No posts in the last 30 days.');
+});
+
+it('removes a post by its id without asking with --yes', function () {
+    addPost($this->tmpDir, aPost());
+    $result = runCli($this->tmpDir, 'posts:remove', ['instagram:1', '--yes']);
+    expect($result['exit'])->toBe(0)
+        ->and($result['output'])->toBe('Removed instagram:1 from shop.example.')
+        ->and(postRows($this->dbPath))->toBe([]);
+});
+
+it('removes a post that two sites have, and names both', function () {
+    addPost($this->tmpDir, aPost());
+    $db = new PDO('sqlite:' . $this->dbPath);
+    $db->exec("INSERT INTO posts (site, post_id, at, sources, created_at) VALUES ('other.example', 'instagram:1', '2026-11-03 09:15:00', 'instagram', '2026-11-03 09:16:00')");
+    $result = runCli($this->tmpDir, 'posts:remove', ['instagram:1', '--yes']);
+    expect($result['output'])->toBe('Removed instagram:1 from other.example and shop.example.')
+        ->and(postRows($this->dbPath))->toBe([]);
+});
+
+it('says when no post has the id', function () {
+    $result = runCli($this->tmpDir, 'posts:remove', ['nope', '--yes']);
+    expect($result['exit'])->toBe(1)
+        ->and($result['output'])->toBe('No post with id nope.');
+});
+
+it('asks before it removes, and keeps the post on no', function () {
+    addPost($this->tmpDir, aPost());
+    $result = runCli($this->tmpDir, 'posts:remove', ['instagram:1'], 'n');
+    // readline shows its question on a terminal only, so a pipe sees the answer's result
+    expect($result['exit'])->toBe(1)
+        ->and($result['output'])->toContain('Aborted.')
+        ->and(postRows($this->dbPath))->toHaveCount(1);
+});
+
+it('offers the ten latest to pick from without an id', function () {
+    foreach (range(1, 12) as $n) addPost($this->tmpDir, aPost(['id' => "instagram:{$n}", 'at' => daysAgo(13 - $n)]));
+    $result = runCli($this->tmpDir, 'posts:remove', [], "1\ny");
+    expect($result['output'])->toContain('1. ', '10. ', 'instagram:12', 'instagram:3', 'Removed instagram:12 from shop.example.')
+        ->not->toContain('11. ')
+        ->and(array_column(postRows($this->dbPath), 'post_id'))->not->toContain('instagram:12')
+        ->and(postRows($this->dbPath))->toHaveCount(11);
+});
+
 function postRowsIfAny(string $dbPath): array
 {
     $db = new PDO('sqlite:' . $dbPath);
