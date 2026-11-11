@@ -128,6 +128,7 @@
     'pick-day': function(el, e) { if (!e.target.closest('.chart-release, .chart-note, .mark-tip')) pickDay(el.dataset.date); },
     'close-hours': function() { closeHours(); },
     'toggle-compare': function(el) { toggleCompareMode(el); },
+    'toggle-posts': function(el) { togglePosts(el); },
     'toggle-note-form': function() { toggleNoteForm(); },
     'note-form-to-settings': function() { toggleNoteForm(); openMenu('notes'); },
     'save-note': function(el, e) { saveNote(e); },
@@ -1360,6 +1361,8 @@
 
   var chartMode = localStorage.getItem('puls-chart') === 'visitors' ? 'visitors' : 'views';
   var compareMode = localStorage.getItem('puls-compare') === '1';
+  // Posts show unless a viewer turned them off: they take no room, and whoever set them up wants them
+  var postsMode = localStorage.getItem('puls-posts') !== '0';
 
   function renderChart(d) {
     if (hourOpen) hourDay = hourDayIn(d);
@@ -1375,6 +1378,8 @@
         '</div>' +
         '<span class="card-subtitle">' + esc(siteName) + ' – ' + periodLabel() +
           (hasCompare ? '<button class="chart-compare-toggle' + (compareMode ? ' active' : '') + '" data-action="toggle-compare">Compare</button>' : '') +
+          // Only when the period has a post, so a site without posts sees nothing new. Its dot says what the chart's dots are
+          (d.posts && d.posts.length ? '<button class="chart-compare-toggle posts-toggle' + (postsMode ? ' active' : '') + '" aria-pressed="' + postsMode + '" data-action="toggle-posts"><span class="post-dot" aria-hidden="true"></span>Posts</button>' : '') +
           (noteSite() ? '<button class="chart-compare-toggle note-toggle" aria-expanded="false" aria-controls="note-form" data-action="toggle-note-form">+ Note</button>' : '') +
         '</span>' +
       '</div>' +
@@ -1420,13 +1425,15 @@
     pinFrame = requestAnimationFrame(function() { pinFrame = 0; placeMonthPin(el); });
   }, { capture: true, passive: true });
 
-  // Chart markers per date: release markers for app versions first seen that day, and
-  // annotations. A range annotation tints every day it covers and is labelled on its first
-  // visible day. Returns { byDate: date -> { cls, html }, stacked } where stacked means
-  // some day has both kinds of label, so the chart needs room for two rows.
-  function chartMarkers(dates, versions, annotations) {
-    var releases = {}, notes = {}, band = {};
+  // Chart markers per date: release markers for app versions first seen that day, annotations
+  // and posts. A range annotation tints every day it covers and is labelled on its first
+  // visible day; a day with posts gets a dot on its date line and the posts in its byDate entry.
+  // Returns { byDate: date -> { cls, html, posts }, stacked } where stacked means some day has
+  // both kinds of label, so the chart needs room for two rows.
+  function chartMarkers(dates, versions, annotations, posts) {
+    var releases = {}, notes = {}, band = {}, dayPosts = {};
     (versions || []).forEach(function(v) { (releases[v.first_seen] = releases[v.first_seen] || []).push(v.version); });
+    (posts || []).forEach(function(p) { (dayPosts[p.date] = dayPosts[p.date] || []).push(p); });
     (annotations || []).forEach(function(a) {
       var end = a.end_date || a.date;
       var covered = dates.filter(function(d) { return d >= a.date && d <= end; });
@@ -1451,7 +1458,11 @@
           markTip(list.length > 1 ? 'Notes' : 'Note', list.map(function(a) { return formatDay(a.date) + (a.end_date ? ' to ' + formatDay(a.end_date) : '') + ': ' + a.label; }));
       }
       if (band[date]) cls += ' in-note';
-      if (cls) byDate[date] = { cls: cls, html: html };
+      if (dayPosts[date]) {
+        cls += ' has-post';
+        html += '<span class="chart-post" aria-hidden="true"></span>';
+      }
+      if (cls) byDate[date] = { cls: cls, html: html, posts: dayPosts[date] || [] };
     });
     return { byDate: byDate, stacked: stacked };
   }
@@ -1462,7 +1473,29 @@
   }
 
   function marksFor(d, dates) {
-    return chartMarkers(dates, d && d.versions, d && d.annotations);
+    return chartMarkers(dates, d && d.versions, d && d.annotations, postsMode && d ? d.posts : null);
+  }
+
+  // Where a post went out: instagram,facebook reads Instagram + Facebook
+  function postSources(p) {
+    return p.sources.map(function(s) { return s === 'rss' ? 'RSS' : s.charAt(0).toUpperCase() + s.slice(1); }).join(' + ');
+  }
+
+  // A post's link, only to a web address: anything else that reached the table stays text
+  function postLink(p) {
+    return /^https?:\/\//i.test(p.url || '') ? p.url : '';
+  }
+
+  // A day's posts in its bar's tooltip, three and then how many more
+  function postTip(posts) {
+    if (!posts || !posts.length) return '';
+    var lines = posts.slice(0, 3).map(function(p) {
+      var text = p.text || '';
+      if (text.length > 60) text = text.slice(0, 59) + '\u2026';
+      return '<span>' + esc((currentSite ? '' : p.site + ' \u00b7 ') + p.time + ' ' + postSources(p) + (text ? ': ' + text : '')) + '</span>';
+    });
+    if (posts.length > 3) lines.push('<span>+' + (posts.length - 3) + ' more</span>');
+    return '<div class="tip-posts">' + lines.join('') + '</div>';
   }
 
   function buildBars(pageviews, previousPageviews) {
@@ -1482,8 +1515,10 @@
       var h = Math.max(4, (+p[key] / maxVal) * 128);
       var label = formatDay(p.date);
       var picked = hourOpen && p.date === hourDay;
+      var posts = marks[p.date] ? marks[p.date].posts : [];
       var day = ' data-date="' + p.date + '" data-action="pick-day" role="button" tabindex="' + (p.date === stop ? 0 : -1) + '" aria-pressed="' + picked + '"' +
-        ' aria-label="' + esc(label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors. ' + (picked ? 'Close the hours' : 'See by hour')) + '"';
+        ' aria-label="' + esc(label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors' +
+          (posts.length ? ', ' + posts.length + (posts.length === 1 ? ' post' : ' posts') : '') + '. ' + (picked ? 'Close the hours' : 'See by hour')) + '"';
       var hint = '<div class="tip-hint">' + (picked ? 'Click to close' : 'Click to see by hour') + '</div>';
       var prev = showCompare && previousPageviews[i] ? previousPageviews[i] : null;
       var prevH = prev ? Math.max(4, (+prev[key] / maxVal) * 128) : 0;
@@ -1501,6 +1536,7 @@
           '<div class="tip-head">' + label + '<span class="tip-delta" data-color="' + deltaColor + '">' + deltaStr + '</span></div>' +
           '<div>' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors</div>' +
           (prev ? '<div class="tip-prev">vs ' + prevLabel + ': ' + num(prev.views) + ' / ' + num(prev.visitors) + '</div>' : '') +
+          postTip(posts) +
           hint +
         '</div>';
 
@@ -1524,7 +1560,7 @@
           (marks[p.date] ? marks[p.date].html : '') +
           '<span class="chart-val">' + num(p[key]) + '</span>' +
           '<div class="chart-bar" data-h="' + h + '">' +
-            '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors' + hint + '</div>' +
+            '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors' + postTip(posts) + hint + '</div>' +
           '</div>' +
           axisDate(p.date) +
         '</div>';
@@ -1543,6 +1579,23 @@
     chartEl.innerHTML = buildBars(lastData.pageviews, lastData.previousPageviews);
     placeMonthPin(chartEl.parentNode);
     // The hours follow the tab
+    patchHours();
+  };
+
+  // Posts off hides them everywhere: the dots, the tooltip lines and the list in the hours card
+  window.togglePosts = function(el) {
+    postsMode = !postsMode;
+    localStorage.setItem('puls-posts', postsMode ? '1' : '0');
+    var card = el.closest('.card');
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = renderChart(lastData);
+    var newCard = wrapper.firstChild;
+    card.replaceWith(newCard);
+    newCard.querySelectorAll('.chart-scroll').forEach(placeMonthPin);
+    // A button that re-rendered under the pointer keeps the focus a keyboard gave it
+    var button = newCard.querySelector('.posts-toggle');
+    if (button && document.activeElement === document.body) button.focus();
+    document.querySelectorAll('.event-detail').forEach(function(d) { if (d._state) renderEventDetail(d); });
     patchHours();
   };
 

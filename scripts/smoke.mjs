@@ -119,6 +119,13 @@ async function main() {
     $note->execute([date('Y-m-d', strtotime('-6 days')), date('Y-m-d', strtotime('-4 days')), 'Smoke campaign']);
     $note->execute([date('Y-m-d', strtotime('-2 days')), null, 'Say "hi" <b>bold</b>']);
     $note->execute([date('Y-m-d'), null, 'Smoke film']);
+    // Posts: two on one day (one with markup and a script link, which must stay text), one on
+    // another day and one before the period. Inserted as rows, so the dashboard's own guard is tested
+    $postRow = $db->prepare("INSERT INTO posts (site, post_id, at, sources, text, url, created_at) VALUES ('demo.example.com', ?, ?, ?, ?, ?, '$now')");
+    $postRow->execute(['instagram:smoke-1', date('Y-m-d', strtotime('-3 days')) . ' 08:15:00', 'instagram,facebook', 'Smoke autumn post', 'https://example.com/p/1']);
+    $postRow->execute(['facebook:smoke-2', date('Y-m-d', strtotime('-3 days')) . ' 19:40:00', 'facebook', 'Say "hi" <b>bold</b>', 'javascript:alert(1)']);
+    $postRow->execute(['instagram:smoke-3', date('Y-m-d', strtotime('-1 day')) . ' 12:00:00', 'instagram', 'Smoke spring post', 'https://example.com/p/3']);
+    $postRow->execute(['instagram:smoke-old', date('Y-m-d', strtotime('-40 days')) . ' 09:00:00', 'instagram', 'Before the period', null]);
     // A version that sorts first as text but is the newest by number (9.10.0 after 9.9.2)
     $db->prepare("INSERT OR IGNORE INTO app_versions (site, version, first_seen) VALUES ('demo.example.com', '9.10.0', ?)")->execute([date('Y-m-d')]);
   `, dbPath]);
@@ -300,6 +307,26 @@ async function main() {
     expect(notes.some((n) => n.textContent === 'Say "hi" <b>bold</b>') && !q('#chart-card .chart-note b'), 'annotation label is escaped');
     expect(q('#chart-card .chart-note.stacked') && q('#chart-card .chart-scroll.stacked-marks'), 'annotation and release on one day stack');
     expect(!q('.note-toggle'), 'no + Note button on a shared dashboard');
+
+    // Posts: a dot on each day with posts, the day's posts in its tooltip as text, a Posts button that hides them
+    const postCols = () => [...document.querySelectorAll('#chart-card .chart-col.has-post')];
+    expect(postCols().length === 2, `a dot on the two days with posts (found ${postCols().length})`);
+    expect(postCols().every((c) => c.querySelectorAll('.chart-post[aria-hidden="true"]').length === 1), 'one hidden-from-readers dot per day');
+    const twoPosts = postCols().find((c) => c.querySelectorAll('.tip-posts > span').length === 2);
+    expect(twoPosts, 'the day with two posts lists both in its tooltip');
+    if (twoPosts) {
+      expect(/Smoke autumn post/.test(twoPosts.textContent) && /Say "hi" <b>bold<\/b>/.test(twoPosts.querySelector('.tip-posts').textContent) && !twoPosts.querySelector('.tip-posts b'), 'a post\'s text in the tooltip is escaped');
+      expect(/, 2 posts\. See by hour$/.test(twoPosts.getAttribute('aria-label')), `the day's label says how many posts (${twoPosts.getAttribute('aria-label')})`);
+    }
+    const postsToggle = () => q('#chart-card .posts-toggle');
+    expect(postsToggle() && postsToggle().textContent.trim() === 'Posts' && postsToggle().querySelector('.post-dot') && postsToggle().getAttribute('aria-pressed') === 'true', 'a Posts button with its dot, on');
+    if (postsToggle()) {
+      postsToggle().click();
+      expect(postsToggle()?.getAttribute('aria-pressed') === 'false' && !q('#chart-card .chart-post') && !q('#chart-card .tip-posts'), 'Posts off hides the dots and the tooltip lines');
+      expect(localStorage.getItem('puls-posts') === '0', 'Posts off is remembered');
+      postsToggle().click();
+      expect(postsToggle()?.getAttribute('aria-pressed') === 'true' && postCols().length === 2 && localStorage.getItem('puls-posts') === '1', 'Posts on again');
+    }
     expect(!q('.breakdown-grip'), 'no card grip on a shared dashboard');
 
     // Accessibility: tabs pattern, dialog focus handling
@@ -345,6 +372,7 @@ async function main() {
     if (!await waitFor(() => q('.event-detail') && q('.event-detail')._state, 'event drill-down opened with Enter')) return fails;
     expect(q('.event-detail .event-summary'), 'drill-down summary');
     expect(q('.event-detail .event-chart .chart-bar'), 'drill-down trend bars');
+    expect(document.querySelectorAll('.event-detail .event-chart .chart-post').length === 2, 'the event chart has the posts\' dots too');
     expect(q('.event-detail .event-chip[data-key="@version"]'), 'version group chip');
     expect(q('.event-detail .event-csv'), 'CSV link');
 
@@ -466,6 +494,7 @@ async function main() {
     if (await waitFor(() => /, today:/.test(q('#sr-status').textContent), 'screen reader status says today')) {
       const sub = q('#chart-card .card-subtitle')?.textContent || '';
       expect(/today/.test(sub) && !/last 1 days/.test(sub), 'chart subtitle says today');
+      expect(!q('#chart-card .posts-toggle'), 'no Posts button on a period without posts');
     }
 
     // A slow answer for an earlier choice never replaces the view chosen after it
@@ -1094,6 +1123,22 @@ async function main() {
   const hoursShown = await send('Runtime.evaluate', { expression: `(${hoursOnLoad.toString()})()`, awaitPromise: true, returnByValue: true });
   if (hoursShown.result?.value) failures.push(hoursShown.result.value);
 
+  // 9c. Posts turned off stay off across a reload
+  await send('Runtime.evaluate', { expression: `localStorage.setItem('puls-posts', '0')` });
+  const wait6c = loaded();
+  await send('Page.navigate', { url: `${base}/` });
+  await wait6c;
+  const postsOnLoad = async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let t = 0; t < 5000 && !document.querySelector('#chart-card .posts-toggle'); t += 100) await sleep(100);
+    const toggle = document.querySelector('#chart-card .posts-toggle');
+    const off = toggle && toggle.getAttribute('aria-pressed') === 'false' && !document.querySelector('#chart-card .chart-post');
+    localStorage.removeItem('puls-posts');
+    return off ? '' : 'Posts turned off are hidden after a reload';
+  };
+  const postsShown = await send('Runtime.evaluate', { expression: `(${postsOnLoad.toString()})()`, awaitPromise: true, returnByValue: true });
+  if (postsShown.result?.value) failures.push(postsShown.result.value);
+
   // 10. A viewer in another time zone: the footer names the install's, in plain words, and so
   // does an open hours card
   await send('Emulation.setTimezoneOverride', { timezoneId: 'America/New_York' });
@@ -1267,7 +1312,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), posts (a dot on their day in the main and event chart, escaped in the tooltip, the count in the day\'s label, a Posts button only when the period has one, off remembered across a reload), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab. No JS errors.');
   }
 }
 

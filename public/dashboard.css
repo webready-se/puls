@@ -141,9 +141,9 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --accent: var(--brand-text-dark, #fb7185); --accent-soft: rgb(251 113 133 / 0.12); } }
 
 /* Puls's own: chart notes in teal */
-:root { --note: #0e7490; --note-band: rgba(25,172,202,0.10); }
-:root[data-theme="dark"] { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); } }
+:root { --note: #0e7490; --note-band: rgba(25,172,202,0.10); --post: #4f46e5; }
+:root[data-theme="dark"] { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); --post: #a5b4fc; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); --post: #a5b4fc; } }
 /* Figtree, self-hosted (the kit's docs/type.md): one variable file, SIL Open Font License in fonts/OFL.txt */
 @font-face {
   font-family: "Figtree";
@@ -495,6 +495,10 @@ body {
 }
 .chart-col-compare:hover > .tip { display: block; }
 .chart-date { font-size: 10px; color: var(--text-3); white-space: nowrap; }
+/* A day with posts: a dot where the bar meets the date line, ringed so it stands off the bar.
+   Indigo, as releases are coral and notes teal */
+.chart-post { position: absolute; left: 50%; bottom: 15px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%; background: var(--post); box-shadow: 0 0 0 2px var(--surface); z-index: 2; pointer-events: none; }
+.post-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--post); margin-right: 6px; vertical-align: 1px; }
 /* The months on a line under the dates: each starts at a tick between the 31st and the 1st,
    and the month in view stays at the left edge (the pin) until the next one reaches it. The
    chart is 12px lower for that line, so the card keeps its height */
@@ -1094,6 +1098,8 @@ body[data-first-load] .load-status { animation-delay: .3s; }
 .tip-delta { font-weight: 500; }
 .tip-prev { color: var(--text-3); margin-top: 2px; }
 .tip-hint { color: var(--text-3); margin-top: 2px; }
+.tip-posts { margin-top: 4px; }
+.tip-posts > span { display: block; }
 .bot-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .bot-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
 .bl-row { padding: 8px 0; border-bottom: 1px solid var(--line); }
