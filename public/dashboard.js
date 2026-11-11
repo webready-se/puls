@@ -1651,6 +1651,10 @@
     var data = hourData && hourData.key === hoursKey() ? hourData : null;
     // The hours are the install's; when its clock is not the viewer's, the card says whose
     var body = '<div class="hours-loading muted">Loading\u2026</div>', sub = 'By hour' + zoneNote();
+    // The day's posts under its hours: a post at 08:15 beside the visits hour by hour
+    var posts = postsMode && lastData && lastData.posts ? lastData.posts.filter(function(p) { return p.date === hourDay; }) : [];
+    var postHours = {};
+    posts.forEach(function(p) { postHours[+p.time.slice(0, 2)] = true; });
     if (data) {
       // Today's hours still to come have no bar
       var last = data.date === data.today ? data.hourNow : 23;
@@ -1664,14 +1668,14 @@
         data.hours.map(function(r) {
           var h = r.hour;
           // Early and late hours anchor their tooltip inward, so it stays on a phone's screen
-          return '<div class="hour-col' + (h < 6 ? ' tip-start' : h > 17 ? ' tip-end' : '') + '">' +
+          return '<div class="hour-col' + (h < 6 ? ' tip-start' : h > 17 ? ' tip-end' : '') + (postHours[h] ? ' has-post' : '') + '">' +
             // An hour without visits is a faint line without a number, so the night stays quiet
             (h <= last ? (r[key] ? '<span class="chart-val hour-val">' + num(r[key]) + '</span>' : '') +
               '<div class="chart-bar' + (r[key] ? '' : ' hour-zero') + '" data-h="' + Math.max(3, r[key] / max * 90) + '"><div class="tip">' + span(h) + ': ' + num(r.views) + ' views, ' + num(r.visitors) + ' visitors</div></div>' : '') +
             '<span class="hour-label' + (h % 3 ? ' hour-minor' : '') + '">' + clock(h) + '</span>' +
           '</div>';
         }).join('') +
-      '</div>';
+      '</div>' + hourPosts(posts);
     }
     return '<div class="card hours-card" id="hours-card">' +
       '<div class="card-header">' +
@@ -1680,6 +1684,20 @@
         '<button class="card-close" data-action="close-hours" aria-label="Close the hours"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></span>' +
       '</div>' + body +
     '</div>';
+  }
+
+  // A day's posts in its hours card, each with a link only when it goes to a web address
+  function hourPosts(posts) {
+    if (!posts.length) return '';
+    return '<ul class="hours-posts" aria-label="Posts">' + posts.map(function(p) {
+      var link = postLink(p);
+      return '<li><span class="post-dot" aria-hidden="true"></span>' +
+        '<span class="hours-post-time">' + esc(p.time) + '</span> ' +
+        '<span class="hours-post-sources">' + esc((currentSite ? '' : p.site + ' \u00b7 ') + postSources(p)) + '</span>' +
+        (p.text ? ' <span class="hours-post-text">' + esc(p.text) + '</span>' : '') +
+        (link ? ' <a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer">Open post</a>' : '') +
+      '</li>';
+    }).join('') + '</ul>';
   }
 
   // Brings the hours island up to date on its own, as patchIslands would (compared as parsed

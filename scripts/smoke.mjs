@@ -327,6 +327,41 @@ async function main() {
       postsToggle().click();
       expect(postsToggle()?.getAttribute('aria-pressed') === 'true' && postCols().length === 2 && localStorage.getItem('puls-posts') === '1', 'Posts on again');
     }
+
+    // The day's posts in its hours card, a link only to a web address, a dot under each post's hour
+    const postDay = postCols().find((c) => c.querySelectorAll('.tip-posts > span').length === 2);
+    if (postDay) {
+      postDay.click();
+      if (await waitFor(() => q('#hours-card .hours-chart'), 'hours card for the day with posts')) {
+        const items = [...document.querySelectorAll('#hours-card .hours-posts > li')];
+        expect(items.length === 2, `the hours card lists the day's two posts (found ${items.length})`);
+        const link = items[0]?.querySelector('a');
+        expect(link && link.textContent === 'Open post' && link.getAttribute('href') === 'https://example.com/p/1' && link.target === '_blank' && link.rel === 'noopener noreferrer', 'a post links to itself in a new tab');
+        const accent = document.createElement('span');
+        accent.className = 'hours-post-time';
+        accent.style.color = 'var(--accent)';
+        document.body.append(accent);
+        expect(link && getComputedStyle(link).color === getComputedStyle(accent).color, 'the post link in the accent colour, as the dashboard\'s other text links');
+        accent.remove();
+        expect(items[1] && !items[1].querySelector('a') && /Say "hi" <b>bold<\/b>/.test(items[1].textContent) && !items[1].querySelector('b'), 'a script link is no link, and the text stays text');
+        const postHours = [...document.querySelectorAll('#hours-card .hour-col.has-post')].map((c) => [...c.parentNode.children].indexOf(c));
+        expect(postHours.join() === '8,19', `a dot under each post's hour (found ${postHours.join()})`);
+        const hourDot = (c) => getComputedStyle(c, '::after');
+        expect([...document.querySelectorAll('#hours-card .hour-col.has-post')].every((c) => hourDot(c).content !== 'none' && hourDot(c).visibility === 'visible' && hourDot(c).position === 'absolute'),
+          'the hour dot shows, also on an hour without a label, and leaves the bars where they are');
+        postsToggle().click();
+        expect(!q('#hours-card .hours-posts') && !q('#hours-card .hour-col.has-post'), 'Posts off takes them out of the hours card');
+        postsToggle().click();
+        expect(document.querySelectorAll('#hours-card .hours-posts > li').length === 2, 'Posts on brings them back to the hours card');
+      }
+      const quietDay = [...document.querySelectorAll('#chart-card .chart-col[data-date]:not(.has-post)')].at(-1);
+      quietDay?.click();
+      if (await waitFor(() => q('#hours-card .hours-chart') && q('#chart-card .chart-col.selected')?.dataset.date === quietDay?.dataset.date, 'hours card for a day without posts')) {
+        expect(!q('#hours-card .hours-posts'), 'no post list on a day without posts');
+      }
+      q('#hours-card .card-close')?.click();
+      localStorage.removeItem('puls-hours');
+    }
     expect(!q('.breakdown-grip'), 'no card grip on a shared dashboard');
 
     // Accessibility: tabs pattern, dialog focus handling
@@ -1312,7 +1347,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), posts (a dot on their day in the main and event chart, escaped in the tooltip, the count in the day\'s label, a Posts button only when the period has one, off remembered across a reload), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab. No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), posts (a dot on their day in the main and event chart, escaped in the tooltip, the count in the day\'s label, a Posts button only when the period has one, off remembered across a reload; the day\'s posts in its hours card with a link only to a web address and a dot under their hour), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab. No JS errors.');
   }
 }
 
