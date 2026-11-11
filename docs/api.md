@@ -99,6 +99,7 @@ Every response compares with the previous period of the same length, in the `pre
 | `summary` | `{bestDay, bestDayViews, peakHour, peakHourStart, peakHourViews, topPage, topPageViews, topSource, topSourceVisitors}`. `peakHourStart` is the hour (0 to 23) that `peakHour` starts |
 | `versions` | `[{version, first_seen}]` from `data-version` |
 | `annotations` | Chart notes overlapping the period: `[{id, site, date, end_date, label}]` |
+| `posts` | Posts in the period, handed over by a tool on the same server (`php puls posts:add`): `[{date, time, site, sources, text, url}]`, oldest first. `sources` is a list (`["instagram", "facebook"]`); `text` and `url` may be null |
 | `brokenLinks` | 404s and redirects logged by Nginx: `[{site, path, status, hits, referrers, first_seen, last_seen}]` |
 | `bots`, `botCategories`, `botPages`, `botActivity` | Crawler and AI bot visits |
 | `version`, `timezone`, `now` | The Puls version, the install's time zone, and its clock at the answer. Stored times are in that zone, without an offset |

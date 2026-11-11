@@ -2243,6 +2243,61 @@ test('api returns annotations that overlap the period, scoped to the site', func
     expect(array_column($data['annotations'], 'label'))->toBe(['campaign into the period']);
 });
 
+function insertTestPost(string $site, string $postId, string $at, string $sources = 'instagram', ?string $text = null, ?string $url = null): void
+{
+    getTestDb()->prepare('INSERT INTO posts (site, post_id, at, sources, text, url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        ->execute([$site, $postId, $at, $sources, $text, $url, date('Y-m-d H:i:s')]);
+}
+
+test('api returns the posts in the period, scoped to the token\'s site', function () {
+    $site = 'posts-' . uniqid() . '.example';
+    $day = fn (int $ago) => date('Y-m-d', strtotime("-{$ago} days"));
+    insertTestPost($site, 'instagram:1', $day(3) . ' 09:15:00', 'instagram,facebook', 'The autumn collection is in', 'https://example.com/p/1');
+    insertTestPost($site, 'instagram:2', $day(1) . ' 18:40:00');
+    insertTestPost($site, 'instagram:old', $day(20) . ' 09:00:00');
+    insertTestPost($site . '-other', 'instagram:3', $day(2) . ' 10:00:00');
+
+    try {
+        $data = json_decode(http('GET', '/?api&days=7&share=' . createTestShareToken($site))['body'], true);
+        expect($data['posts'])->toBe([
+            ['date' => $day(3), 'time' => '09:15', 'site' => $site, 'sources' => ['instagram', 'facebook'], 'text' => 'The autumn collection is in', 'url' => 'https://example.com/p/1'],
+            ['date' => $day(1), 'time' => '18:40', 'site' => $site, 'sources' => ['instagram'], 'text' => null, 'url' => null],
+        ]);
+    } finally {
+        getTestDb()->prepare('DELETE FROM posts WHERE site LIKE ?')->execute([$site . '%']);
+    }
+});
+
+test('a token for groups sees the posts of its sites only', function () {
+    $id = uniqid('seed');
+    [$a, $other] = ["a-{$id}", "other-{$id}"];
+    seedGroupedSite($a, "one-{$id}");
+    seedGroupedSite($other, "two-{$id}");
+    insertTestPost($a, 'instagram:1', date('Y-m-d H:i:s'));
+    insertTestPost($other, 'instagram:2', date('Y-m-d H:i:s'));
+
+    try {
+        $data = json_decode(http('GET', '/?api&days=7&share=' . createTestGroupToken(["one-{$id}"]))['body'], true);
+        expect(array_column($data['posts'], 'site'))->toBe([$a]);
+    } finally {
+        clearGroupSeeds();
+        getTestDb()->prepare('DELETE FROM posts WHERE site LIKE ?')->execute(["%-{$id}"]);
+    }
+});
+
+test('the Markdown report lists the posts, the text escaped and the link in a code span', function () {
+    $site = 'report-posts-' . uniqid() . '.example';
+    seedReportSite($site);
+    insertTestPost($site, 'instagram:1', date('Y-m-d') . ' 09:15:00', 'instagram,facebook', 'New *autumn* `range` <b>in</b>', 'https://example.com/p/1');
+
+    try {
+        $body = http('GET', '/?api&days=7&format=md&share=' . createTestShareToken($site))['body'];
+        expect($body)->toContain("## Posts\n\n- " . date('Y-m-d') . " 09:15, instagram + facebook: New \\*autumn\\* \\`range\\` \\<b\\>in\\</b\\> `https://example.com/p/1`\n");
+    } finally {
+        getTestDb()->prepare('DELETE FROM posts WHERE site = ?')->execute([$site]);
+    }
+});
+
 test('share API with path filter does not crash on events table', function () {
     // Regression: events table has page_path, not path — using $pathFilter caused SQL error
     $token = createTestShareToken('test');
