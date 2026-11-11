@@ -388,6 +388,7 @@ One word everywhere: posts (`posts:add`, `posts` in the API, Posts in the dashbo
   - Off the server: rclone in the same scheduled job, to storage the install already pays for (`docs/install.md`). For the production installs that is an app folder in an existing Dropbox account, so no new monthly cost, which is what held this back before. Not encrypted: Puls stores nothing personal about visitors (the addresses in the login log and the excluded IPs are the install's own people), and a key kept only on the server is lost with it, which leaves the copies useless the day they are needed
   - Restoring is documented, not a command: Puls writes on every tracking request, so PHP for the site has to stop before the copy goes in and `-wal`/`-shm` are removed, and a CLI cannot do that safely for every way Puls runs
   - The docs say to take a backup before `sites:clean-paths`; they now say how
+- [ ] **An unknown option is refused** - every command drops an option it does not know without a word. `posts:list <site> --from=2026-10-01` lists the last 30 days and exits 0, so the weeks before read as missing posts, and a typo is worse: `sites:clean-paths <site> --query --dry_run` rewrites the paths it was asked only to show, since a command with its site named runs without asking. Each command names the options it takes, and anything else exits 1 with the option and that list, as the kit's `docs/cli.md` asks. `--yes` stays allowed anywhere, as now
 
 ---
 
