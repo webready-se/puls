@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **An option a command does not take stops it, before it does anything.** Every command dropped an unknown option without a word, so `posts:list <site> --from=2026-10-01` listed the last 30 days as if nothing came before, and `sites:clean-paths <site> --query --dry_run` rewrote the paths it was asked only to show. Now it exits with 1 and names the options the command takes, with the closest one when it looks like a typo (`--dry_run`, `--expire`), and a value option without its value (`--keep 3`) says how to write it. A script that passed an option by mistake now stops instead of running; `--yes` may still stand anywhere.
+- **A misspelt command exits with 1.** `php puls stats:biuld` showed the help and exited 0, so a script or a nightly job looked like it had run. It now ends with what was wrong and the closest command ("Unknown command sites:lst. Did you mean sites:list?"); `php puls`, `help` and `--help` still exit 0.
 - **Each tracked visit costs the server less.** The database now syncs to disk at checkpoints instead of on every write (`synchronous=NORMAL` in WAL mode), and a pageview's write went from about 1 ms to 0.1 ms on a server with one vCPU. On a crash of the server or a power loss the last writes before it can be lost; the database itself stays intact, and a PHP error or a stopped process loses nothing.
 
 ### Fixed

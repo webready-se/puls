@@ -38,6 +38,40 @@ $command = $argv[1] ?? 'help';
 
 if ($warning = old_release_warning(__DIR__)) fwrite(STDERR, $warning);
 
+// The options each command takes, as the help writes them. Anything else stops the command before
+// it does a thing: dropped, an option answers a question nobody asked, and a typo in --dry-run writes
+// for real. --yes may stand anywhere, and is named where it answers a question
+const COMMAND_OPTIONS = [
+    'user:add'      => ['--sites=a,b'],
+    'user:edit'     => [],
+    'user:remove'   => ['--yes'],
+    'user:list'     => [],
+    'sites:list'    => [],
+    'sites:rename'  => ['--merge'],
+    'sites:remove'  => ['--yes'],
+    'sites:group'   => ['--new'],
+    'sites:ungroup' => [],
+    'sites:clean-paths' => ['--query', '--keep=a,b', '--ids', '--tokens', '--dry-run'],
+    'share:create'  => ['--groups=a,b', '--label=...', '--expires=YYYY-MM-DD|never'],
+    'share:list'    => [],
+    'share:edit'    => ['--label=...|none', '--expires=YYYY-MM-DD|never', '--groups=a,b'],
+    'share:revoke'  => ['--yes'],
+    'exclude:add'   => ['--label=...'],
+    'exclude:list'  => [],
+    'exclude:remove' => [],
+    'nginx:config'  => [],
+    'stats:build'   => [],
+    'bots:unknown'  => ['--days=30'],
+    'posts:add'     => ['--json'],
+    'posts:list'    => ['--days=30'],
+    'posts:remove'  => ['--yes'],
+    'backup'        => ['--keep=7'],
+];
+if (isset(COMMAND_OPTIONS[$command]) && $problem = optionProblem($command, array_slice($argv, 2), COMMAND_OPTIONS[$command])) {
+    fwrite(STDERR, "{$problem}\n");
+    exit(1);
+}
+
 match ($command) {
     'user:add'      => userAdd($config, $argv[2] ?? null, $argv),
     'user:edit'     => userEdit($config, $argv[2] ?? null),
@@ -63,12 +97,62 @@ match ($command) {
     'posts:list'    => postsList($config, $argv),
     'posts:remove'  => postsRemove($config, $argv[2] ?? null, $yes),
     'backup'        => backup($config, $argv),
-    default         => printHelp(),
+    'help', '--help', '-h' => printHelp(),
+    default         => unknownCommand($command),
 };
 
 // =====================================================================
 // Helpers
 // =====================================================================
+
+/**
+ * What is wrong with a command's options, or null. An option is any argument that starts with a
+ * dash; $takes is the command's list from COMMAND_OPTIONS, where a value is written after '='.
+ */
+function optionProblem(string $command, array $args, array $takes): ?string
+{
+    $known = [];
+    foreach ($takes as $option) $known[explode('=', $option, 2)[0]] = $option;
+
+    foreach ($args as $arg) {
+        if (!str_starts_with($arg, '-') || $arg === '-') continue;
+        $name = explode('=', $arg, 2)[0];
+        if (isset($known[$name])) {
+            $wantsValue = str_contains($known[$name], '=');
+            if ($wantsValue && !str_contains($arg, '=')) return "{$name} needs a value, as in {$known[$name]}.";
+            if (!$wantsValue && str_contains($arg, '=')) return "{$name} takes no value.";
+            continue;
+        }
+        if (!$known) return "{$name}: {$command} takes no options.";
+
+        $problem = "{$command} does not take {$name}. It takes " . implode(' ', $takes) . '.';
+        if (count($takes) === 1) return $problem;
+        // A typo, an underscore or --expire for --expires
+        $closest = closestName('--' . str_replace('_', '-', strtolower(ltrim($name, '-'))), array_keys($known));
+        return $problem . ($closest ? "\nDid you mean {$closest}?" : '');
+    }
+    return null;
+}
+
+/** The name closest to what was typed, if it is within two letters */
+function closestName(string $typed, array $names): ?string
+{
+    $closest = null;
+    foreach ($names as $name) {
+        $distance = levenshtein($typed, $name);
+        if ($distance <= 2 && ($closest === null || $distance < $closest[1])) $closest = [$name, $distance];
+    }
+    return $closest[0] ?? null;
+}
+
+/** The help, then what was wrong, last, where the eye is; exit 1, so a script with a misspelt command stops */
+function unknownCommand(string $command): never
+{
+    printHelp();
+    $closest = closestName(strtolower($command), array_keys(COMMAND_OPTIONS));
+    fwrite(STDERR, "Unknown command {$command}." . ($closest ? " Did you mean {$closest}?" : '') . "\n");
+    exit(1);
+}
 
 function prompt(string $label = ''): string
 {
