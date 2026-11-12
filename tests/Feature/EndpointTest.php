@@ -1152,6 +1152,19 @@ test('format=md keeps a value from outside on one line in a code span, where it 
         ->toContain('\*\*Bold\*\* \<b\>goal\</b\> \# heading');
 });
 
+test('format=md lists the pages a broken link was reached from, each in its own code span', function () {
+    $site = 'report-broken-' . uniqid() . '.example';
+    seedReportSite($site);
+    $now = date('Y-m-d H:i:s');
+    getTestDb()->prepare('INSERT INTO broken_links (site, path, status, referrers, hits, first_seen, last_seen) VALUES (?, ?, 404, ?, 7, ?, ?)')
+        ->execute([$site, '/gone', "blog.example/post,news.example/a`b,c.example/,d.example/,e.example/", $now, $now]);
+    $r = http('GET', '/?api&days=7&format=md&share=' . createTestShareToken($site));
+
+    expect($r['status'])->toBe(200)
+        ->and($r['body'])->toContain('## Pages to fix')
+        ->toContain("`/gone`: status 404, 7 hits, last " . date('Y-m-d') . ", linked from `blog.example/post`, `news.example/a'b`, `c.example/` and 2 more");
+});
+
 test('format=md ends a long list with how many more, and the guide says where they are', function () {
     $site = 'report-long-' . uniqid() . '.example';
     seedReportSite($site);
