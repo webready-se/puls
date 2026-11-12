@@ -2,7 +2,8 @@
 
 /**
  * An option a command does not take stops it, with the option and the ones it takes: dropped
- * without a word, it answers a question nobody asked or writes where a dry run was meant.
+ * without a word, it answers a question nobody asked or writes where a dry run was meant. An
+ * unknown command exits with 1 too, so a script with a misspelt one does not look like it ran.
  */
 
 require_once __DIR__ . '/../Support/helpers.php';
@@ -68,6 +69,22 @@ it('suggests the closest option when a command takes several', function () {
     $result = runCli($this->tmpDir, 'share:create', ['shop.example', '--expire=never']);
 
     expect($result['exit'])->toBe(1)->and($result['output'])->toContain('Did you mean --expires?');
+});
+
+it('stops an unknown command with the help, and the closest command last', function () {
+    $result = runCli($this->tmpDir, 'sites:lst');
+
+    expect($result['exit'])->toBe(1)
+        ->and($result['output'])->toContain('Usage:')
+        ->toEndWith('Unknown command sites:lst. Did you mean sites:list?');
+    expect(runCli($this->tmpDir, 'nothing-like-it')['output'])->toEndWith('Unknown command nothing-like-it.');
+});
+
+it('shows the help without an error when it is asked for', function () {
+    foreach (['help', '--help', '-h'] as $asked) {
+        $result = runCli($this->tmpDir, $asked);
+        expect($result['exit'])->toBe(0)->and($result['output'])->toContain('Usage:')->not->toContain('Unknown command');
+    }
 });
 
 it('lets --yes stand anywhere, and runs with the options a command takes', function () {

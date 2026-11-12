@@ -97,7 +97,8 @@ match ($command) {
     'posts:list'    => postsList($config, $argv),
     'posts:remove'  => postsRemove($config, $argv[2] ?? null, $yes),
     'backup'        => backup($config, $argv),
-    default         => printHelp(),
+    'help', '--help', '-h' => printHelp(),
+    default         => unknownCommand($command),
 };
 
 // =====================================================================
@@ -126,16 +127,31 @@ function optionProblem(string $command, array $args, array $takes): ?string
 
         $problem = "{$command} does not take {$name}. It takes " . implode(' ', $takes) . '.';
         if (count($takes) === 1) return $problem;
-        // A typo, an underscore or --expire for --expires: the closest the command takes, if it is close
-        $typed = str_replace('_', '-', strtolower(ltrim($name, '-')));
-        $closest = null;
-        foreach (array_keys($known) as $option) {
-            $distance = levenshtein($typed, ltrim($option, '-'));
-            if ($distance <= 2 && ($closest === null || $distance < $closest[1])) $closest = [$option, $distance];
-        }
-        return $problem . ($closest ? "\nDid you mean {$closest[0]}?" : '');
+        // A typo, an underscore or --expire for --expires
+        $closest = closestName('--' . str_replace('_', '-', strtolower(ltrim($name, '-'))), array_keys($known));
+        return $problem . ($closest ? "\nDid you mean {$closest}?" : '');
     }
     return null;
+}
+
+/** The name closest to what was typed, if it is within two letters */
+function closestName(string $typed, array $names): ?string
+{
+    $closest = null;
+    foreach ($names as $name) {
+        $distance = levenshtein($typed, $name);
+        if ($distance <= 2 && ($closest === null || $distance < $closest[1])) $closest = [$name, $distance];
+    }
+    return $closest[0] ?? null;
+}
+
+/** The help, then what was wrong, last, where the eye is; exit 1, so a script with a misspelt command stops */
+function unknownCommand(string $command): never
+{
+    printHelp();
+    $closest = closestName(strtolower($command), array_keys(COMMAND_OPTIONS));
+    fwrite(STDERR, "Unknown command {$command}." . ($closest ? " Did you mean {$closest}?" : '') . "\n");
+    exit(1);
 }
 
 function prompt(string $label = ''): string
