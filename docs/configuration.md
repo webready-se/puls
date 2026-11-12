@@ -119,7 +119,7 @@ This changes the login page, dashboard header, PWA manifest and favicon. `APP_AC
 
 ## CLI reference
 
-All management goes through `php puls`. Every command also works without arguments: pickers and prompts guide you through. A command that removes or revokes something asks first; `--yes` skips that question, for a script.
+All management goes through `php puls`. Every command also works without arguments: pickers and prompts guide you through. A command that removes or revokes something asks first; `--yes` skips that question, for a script. An option a command does not take stops it before it does anything, with the options it takes (exit code 1), so a typo such as `--dry_run` never writes for real.
 
 ```bash
 php puls user:add [<name>]               # Add user with full access

@@ -38,6 +38,40 @@ $command = $argv[1] ?? 'help';
 
 if ($warning = old_release_warning(__DIR__)) fwrite(STDERR, $warning);
 
+// The options each command takes, as the help writes them. Anything else stops the command before
+// it does a thing: dropped, an option answers a question nobody asked, and a typo in --dry-run writes
+// for real. --yes may stand anywhere, and is named where it answers a question
+const COMMAND_OPTIONS = [
+    'user:add'      => ['--sites=a,b'],
+    'user:edit'     => [],
+    'user:remove'   => ['--yes'],
+    'user:list'     => [],
+    'sites:list'    => [],
+    'sites:rename'  => ['--merge'],
+    'sites:remove'  => ['--yes'],
+    'sites:group'   => ['--new'],
+    'sites:ungroup' => [],
+    'sites:clean-paths' => ['--query', '--keep=a,b', '--ids', '--tokens', '--dry-run'],
+    'share:create'  => ['--groups=a,b', '--label=...', '--expires=YYYY-MM-DD|never'],
+    'share:list'    => [],
+    'share:edit'    => ['--label=...|none', '--expires=YYYY-MM-DD|never', '--groups=a,b'],
+    'share:revoke'  => ['--yes'],
+    'exclude:add'   => ['--label=...'],
+    'exclude:list'  => [],
+    'exclude:remove' => [],
+    'nginx:config'  => [],
+    'stats:build'   => [],
+    'bots:unknown'  => ['--days=30'],
+    'posts:add'     => ['--json'],
+    'posts:list'    => ['--days=30'],
+    'posts:remove'  => ['--yes'],
+    'backup'        => ['--keep=7'],
+];
+if (isset(COMMAND_OPTIONS[$command]) && $problem = optionProblem($command, array_slice($argv, 2), COMMAND_OPTIONS[$command])) {
+    fwrite(STDERR, "{$problem}\n");
+    exit(1);
+}
+
 match ($command) {
     'user:add'      => userAdd($config, $argv[2] ?? null, $argv),
     'user:edit'     => userEdit($config, $argv[2] ?? null),
@@ -69,6 +103,40 @@ match ($command) {
 // =====================================================================
 // Helpers
 // =====================================================================
+
+/**
+ * What is wrong with a command's options, or null. An option is any argument that starts with a
+ * dash; $takes is the command's list from COMMAND_OPTIONS, where a value is written after '='.
+ */
+function optionProblem(string $command, array $args, array $takes): ?string
+{
+    $known = [];
+    foreach ($takes as $option) $known[explode('=', $option, 2)[0]] = $option;
+
+    foreach ($args as $arg) {
+        if (!str_starts_with($arg, '-') || $arg === '-') continue;
+        $name = explode('=', $arg, 2)[0];
+        if (isset($known[$name])) {
+            $wantsValue = str_contains($known[$name], '=');
+            if ($wantsValue && !str_contains($arg, '=')) return "{$name} needs a value, as in {$known[$name]}.";
+            if (!$wantsValue && str_contains($arg, '=')) return "{$name} takes no value.";
+            continue;
+        }
+        if (!$known) return "{$name}: {$command} takes no options.";
+
+        $problem = "{$command} does not take {$name}. It takes " . implode(' ', $takes) . '.';
+        if (count($takes) === 1) return $problem;
+        // A typo, an underscore or --expire for --expires: the closest the command takes, if it is close
+        $typed = str_replace('_', '-', strtolower(ltrim($name, '-')));
+        $closest = null;
+        foreach (array_keys($known) as $option) {
+            $distance = levenshtein($typed, ltrim($option, '-'));
+            if ($distance <= 2 && ($closest === null || $distance < $closest[1])) $closest = [$option, $distance];
+        }
+        return $problem . ($closest ? "\nDid you mean {$closest[0]}?" : '');
+    }
+    return null;
+}
 
 function prompt(string $label = ''): string
 {
