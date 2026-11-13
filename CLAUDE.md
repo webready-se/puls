@@ -69,7 +69,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (535 tests, unit + feature)
+tests/                  — Pest test suite (553 tests, unit + feature)
 docs/integrations.md    - Tracking setup: script attributes, events, keeping personal data out of URLs, excluding own visits, reverse proxies
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading
@@ -80,7 +80,7 @@ scripts/hooks/real-names - Shared by the name hooks: prints lines that match .pr
 scripts/build-release.sh — Builds release zip with runtime files only
 scripts/readme-media.mjs - Generates every README image, the drill-down GIF and the social preview (headless Chrome over DevTools protocol + demo DB, ffmpeg)
 scripts/smoke.mjs       — Dashboard smoke test: headless Chrome over DevTools protocol, fails on JS errors (no npm deps)
-scripts/seed-demo.php   — Seeds a demo SQLite database with realistic fake data
+scripts/seed-demo.php   — Seeds a demo SQLite database with realistic fake data; for the live demo `--token`, `--group`, `--refresh` (reseed in place) and `--top-up`
 scripts/seed-benchmark.php - Seeds a benchmark database: 2M pageviews over a year, the same every run (schema from index.php)
 scripts/benchmark.php   - Times the dashboard API on a database as the dashboard asks for it, with query plans (`--explain`)
 Dockerfile              — Alpine + PHP built-in server (~93MB image)
