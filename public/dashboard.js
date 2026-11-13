@@ -2257,13 +2257,16 @@
     items.forEach(function(l) {
       var time = formatTime(l.last_seen);
       var refs = (l.referrers || []).filter(function(r) { return r; });
+      // Nginx keeps one running count per link, so its hits are since it was first seen, not the period's
+      var first = l.first_seen ? new Date(l.first_seen.slice(0, 10) + 'T00:00:00') : null;
+      var since = first ? '<span class="bl-since"> since ' + first.toLocaleDateString('en-US', yearIfOther(first, { month: 'short', day: 'numeric' })) + '</span>' : '';
       html += '<div class="bl-row">' +
         '<div class="bl-line">' +
           '<span class="dot" data-bg="' + color + '"></span>' +
           (l.site ? '<span class="faint fs-11 min-w-0">' + esc(l.site) + '</span>' : '') +
           '<span class="bl-path" title="' + esc(l.path) + '">' + esc(l.path) + '</span>' +
           (showStatus ? '<span class="fs-11 fw-600" data-color="' + color + '">' + l.status + '</span>' : '') +
-          '<span class="muted nowrap fs-12">' + num(l.hits) + ' hits</span>' +
+          '<span class="muted nowrap fs-12">' + num(l.hits) + ' hits' + since + '</span>' +
           '<span class="faint nowrap fs-12">' + time + '</span>' +
         '</div>';
       if (refs.length) {
@@ -2309,7 +2312,7 @@
     if (links404.length) counts.push(links404.length + ' not found');
     if (links301.length) counts.push(links301.length + ' redirect' + (links301.length === 1 ? '' : 's'));
     if (linksOther.length) counts.push(linksOther.length + ' other error' + (linksOther.length === 1 ? '' : 's'));
-    return foldSection('broken', 'Pages to fix', counts.join(', ') + ' in the last 30 days', html);
+    return foldSection('broken', 'Pages to fix', counts.join(', ') + ' seen in the last 30 days', html);
   }
 
   function renderTools(site) {

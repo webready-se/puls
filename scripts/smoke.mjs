@@ -252,7 +252,10 @@ async function main() {
     const foldSummary = (k) => fold(k)?.querySelector('.fold-summary').textContent;
     expect(folded('bots') && folded('broken'), 'bots and pages to fix start folded');
     expect(/^[\d,]+ visits from \d+ bots$/.test(foldSummary('bots') || ''), `folded bots say what is inside (say ${foldSummary('bots')})`);
-    expect(foldSummary('broken') === '2 not found, 3 redirects in the last 30 days', `folded pages to fix say what is inside (say ${foldSummary('broken')})`);
+    expect(foldSummary('broken') === '2 not found, 3 redirects seen in the last 30 days', `folded pages to fix say what is inside (say ${foldSummary('broken')})`);
+    // A link's hits are a running count, so they say since when
+    const blHits = fold('broken')?.querySelector('.bl-row .muted')?.textContent || '';
+    expect(/^\d+ hits since [A-Z][a-z]{2} \d+/.test(blHits), `a broken link's hits say since when (say ${blHits})`);
     // Their crawled pages and activity read the rows, so they are not asked for until opened
     const asked = [], fetched = window.fetch;
     window.fetch = (url, ...rest) => { asked.push(String(url)); return fetched(url, ...rest); };
