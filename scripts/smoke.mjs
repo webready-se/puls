@@ -897,6 +897,19 @@ async function main() {
         await waitFor(() => !q('.path-filter'), 'the page filter cleared');
       }
     }
+    // The channel filtered on is marked and the other channels step back, so the list says where
+    // the filter is set; a second click clears it
+    const channelRows = () => [...document.querySelectorAll('.trow[data-action="filter-channel"]')];
+    const chosen = channelRows()[1]?.dataset.channel;
+    if (chosen) {
+      channelRows()[1].click();
+      if (await waitFor(() => q('[data-island="filter-channel"]') && channelRows().some((r) => r.getAttribute('aria-pressed') === 'true'), 'a channel filter')) {
+        const rows = channelRows();
+        expect(rows.find((r) => r.dataset.channel === chosen)?.getAttribute('aria-pressed') === 'true' && rows.filter((r) => r.dataset.channel !== chosen).every((r) => r.classList.contains('is-other') && r.getAttribute('aria-pressed') === 'false'), 'the channel filtered on is marked and the others step back');
+        rows.find((r) => r.dataset.channel === chosen).click();
+        await waitFor(() => !q('[data-island="filter-channel"]') && !q('.trow.is-other'), 'a second click on the channel clears its filter and the list');
+      }
+    }
 
     if (!await waitFor(() => q('#chart-card') && q('#goal-search'), 'logged-in dashboard')) return fails;
     const search = q('#goal-search');

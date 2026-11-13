@@ -2078,7 +2078,7 @@
       var pct = (+c.visitors / maxVisitors) * 100;
       var color = channelColors[c.channel] || 'var(--accent-tile)';
       var slug = channelSlugs[c.channel] || '';
-      html += '<div class="trow trow-clickable" role="button" tabindex="0" data-action="filter-channel" data-channel="' + slug + '">' +
+      html += '<div class="trow trow-clickable' + pickClass(currentChannel, slug) + '" role="button" tabindex="0" aria-pressed="' + (currentChannel === slug) + '" data-action="filter-channel" data-channel="' + slug + '">' +
         '<span class="trow-label">' + esc(c.channel) +
           ' <span class="faint fs-11">' + c.pages_per_visitor + ' p/v</span>' +
         '</span>' +
@@ -2104,6 +2104,13 @@
     load(currentDays);
     window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   };
+
+  // A row of the channels, which stay in view under their filter: the one filtered on stays as it is
+  // and the others step back, so the list says where the filter is set, as the chart does for a
+  // picked day
+  function pickClass(picked, value) {
+    return picked ? (picked === value ? ' is-picked' : ' is-other') : '';
+  }
 
   // A campaign's source in words: Meta's ads fill utm_source with its own codes, and a cost per
   // click from Google is Google Ads. Only the label: the API and the exports keep what was sent,
