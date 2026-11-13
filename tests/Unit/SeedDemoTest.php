@@ -105,3 +105,17 @@ it('refuses an unknown option and a token too short to keep private', function (
         ->and($short['exit'])->toBe(1)
         ->and($short['output'])->toContain('--token');
 });
+
+it('makes its folder, closed to others, and a new file leaves no old WAL behind', function () use ($seed) {
+    $db = $this->dir . '/data/demo.sqlite';
+    $result = $seed($db);
+    expect($result['exit'])->toBe(0)
+        ->and(substr(sprintf('%o', fileperms(dirname($db))), -3))->toBe('700');
+
+    // A WAL that is not the new file's own would be replayed into it
+    file_put_contents($db . '-wal', 'not this database');
+    $again = $seed($db);
+    expect($again['exit'])->toBe(0)
+        ->and(file_exists($db . '-wal') ? file_get_contents($db . '-wal') : '')->not->toBe('not this database')
+        ->and((new PDO('sqlite:' . $db))->query('PRAGMA integrity_check')->fetchColumn())->toBe('ok');
+});
