@@ -1,88 +1,138 @@
 <?php
 /**
- * Seed a demo database with realistic-looking fake data for screenshots.
- * Usage: php scripts/seed-demo.php [db_path]
+ * Seed a demo database with realistic-looking fake data, for the README images, the smoke test and
+ * the live demo.
+ * Usage: php scripts/seed-demo.php [db_path] [--token=<token>] [--group=<name>] [--refresh | --top-up]
+ *
+ *   --token=<token>  the share token to make, so a link stays the same from one reseed to the next
+ *   --group=<name>   the three sites in a group, and the token reads the group (site picker, All sites)
+ *   --refresh        reseed an existing database in place, in one transaction, rather than a new file:
+ *                    a file replaced under an open WAL database can be broken by the old one's WAL, and
+ *                    in place a reader sees the old demo or the new one, never half of either
+ *   --top-up         add the visits, events and bot visits since the latest visit, up to now (at most a
+ *                    day back), so today looks like a site in use between two reseeds
  */
 
-$dbPath = $argv[1] ?? 'data/demo.sqlite';
-if (file_exists($dbPath)) unlink($dbPath);
+$opts = ['token' => null, 'group' => null, 'refresh' => false, 'top-up' => false];
+$dbPath = 'data/demo.sqlite';
+foreach (array_slice($argv, 1) as $arg) {
+    if (!str_starts_with($arg, '-')) {
+        $dbPath = $arg;
+        continue;
+    }
+    [$name, $value] = array_pad(explode('=', ltrim($arg, '-'), 2), 2, null);
+    $takesValue = in_array($name, ['token', 'group'], true);
+    if (!array_key_exists($name, $opts) || $takesValue !== ($value !== null)) {
+        fwrite(STDERR, "Unknown option {$arg}. The seed takes --token=<token>, --group=<name>, --refresh and --top-up\n");
+        exit(1);
+    }
+    $opts[$name] = $value ?? true;
+}
+// The token is the demo's whole lock: a short one could be guessed
+if ($opts['token'] !== null && !preg_match('/^[A-Za-z0-9_]{16,}$/', $opts['token'])) {
+    fwrite(STDERR, "--token needs at least 16 letters, digits or _\n");
+    exit(1);
+}
+if ($opts['refresh'] && $opts['top-up']) {
+    fwrite(STDERR, "--refresh and --top-up are separate runs: reseed at night, top up through the day\n");
+    exit(1);
+}
+if ($opts['top-up'] && !file_exists($dbPath)) {
+    fwrite(STDERR, "Nothing to top up: {$dbPath} does not exist. Seed it first\n");
+    exit(1);
+}
+
+$fresh = !($opts['refresh'] || $opts['top-up']) || !file_exists($dbPath);
+if ($fresh && file_exists($dbPath)) unlink($dbPath);
 
 $db = new PDO('sqlite:' . $dbPath);
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $db->exec('PRAGMA journal_mode=WAL');
+// A live demo is read while it is topped up or reseeded: wait for a reader rather than fail
+$db->exec('PRAGMA busy_timeout = 5000');
 
-// Create schema (copy from index.php run_migrations end-state)
-$db->exec('CREATE TABLE pageviews (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    site TEXT NOT NULL,
-    path TEXT NOT NULL,
-    referrer TEXT,
-    browser TEXT,
-    device TEXT,
-    visitor_hash TEXT NOT NULL,
-    utm_source TEXT,
-    utm_medium TEXT,
-    utm_campaign TEXT,
-    utm_term TEXT,
-    utm_content TEXT,
-    language TEXT,
-    country TEXT,
-    created_at TEXT NOT NULL,
-    engaged_ms INTEGER
-)');
-$db->exec('CREATE INDEX idx_site_date ON pageviews (site, created_at)');
-$db->exec('CREATE TABLE bot_visits (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    site TEXT NOT NULL,
-    path TEXT NOT NULL,
-    bot_name TEXT NOT NULL,
-    bot_category TEXT NOT NULL,
-    user_agent TEXT,
-    created_at TEXT NOT NULL
-)');
-$db->exec('CREATE TABLE broken_links (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    site TEXT NOT NULL,
-    path TEXT NOT NULL,
-    status INTEGER NOT NULL,
-    referrers TEXT,
-    hits INTEGER DEFAULT 1,
-    first_seen TEXT NOT NULL,
-    last_seen TEXT NOT NULL
-)');
-$db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status)');
-$db->exec('CREATE TABLE events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    site TEXT NOT NULL,
-    event_name TEXT NOT NULL,
-    event_data TEXT,
-    page_path TEXT,
-    visitor_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL
-)');
-$db->exec('CREATE TABLE share_tokens (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    token TEXT NOT NULL UNIQUE,
-    site TEXT NOT NULL,
-    label TEXT,
-    expires_at TEXT,
-    created_at TEXT NOT NULL
-)');
-$db->exec('CREATE TABLE audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL,
-    action TEXT NOT NULL,
-    ip TEXT,
-    created_at TEXT NOT NULL
-)');
-$db->exec('CREATE TABLE goals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    site TEXT NOT NULL,
-    path TEXT NOT NULL,
-    label TEXT,
-    created_at TEXT NOT NULL
-)');
-$db->exec('PRAGMA user_version = 15');
+// Create schema (copy from index.php run_migrations end-state), on a new file only: Puls migrates
+// it on the first request, and a database it has migrated keeps its own
+if ($fresh) {
+    $db->exec('CREATE TABLE pageviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site TEXT NOT NULL,
+        path TEXT NOT NULL,
+        referrer TEXT,
+        browser TEXT,
+        device TEXT,
+        visitor_hash TEXT NOT NULL,
+        utm_source TEXT,
+        utm_medium TEXT,
+        utm_campaign TEXT,
+        utm_term TEXT,
+        utm_content TEXT,
+        language TEXT,
+        country TEXT,
+        created_at TEXT NOT NULL,
+        engaged_ms INTEGER
+    )');
+    $db->exec('CREATE INDEX idx_site_date ON pageviews (site, created_at)');
+    $db->exec('CREATE TABLE bot_visits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site TEXT NOT NULL,
+        path TEXT NOT NULL,
+        bot_name TEXT NOT NULL,
+        bot_category TEXT NOT NULL,
+        user_agent TEXT,
+        created_at TEXT NOT NULL
+    )');
+    $db->exec('CREATE TABLE broken_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site TEXT NOT NULL,
+        path TEXT NOT NULL,
+        status INTEGER NOT NULL,
+        referrers TEXT,
+        hits INTEGER DEFAULT 1,
+        first_seen TEXT NOT NULL,
+        last_seen TEXT NOT NULL
+    )');
+    $db->exec('CREATE UNIQUE INDEX idx_broken_unique ON broken_links (site, path, status)');
+    $db->exec('CREATE TABLE events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site TEXT NOT NULL,
+        event_name TEXT NOT NULL,
+        event_data TEXT,
+        page_path TEXT,
+        visitor_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )');
+    $db->exec('CREATE TABLE share_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        site TEXT NOT NULL,
+        label TEXT,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        group_names TEXT,
+        last_used_at TEXT
+    )');
+    // Groups, as migration v27 makes the table, for a token that reads one
+    $db->exec('CREATE TABLE IF NOT EXISTS site_groups (
+        site TEXT PRIMARY KEY,
+        group_name TEXT NOT NULL
+    )');
+    $db->exec('CREATE TABLE audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        action TEXT NOT NULL,
+        ip TEXT,
+        created_at TEXT NOT NULL
+    )');
+    $db->exec('CREATE TABLE goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site TEXT NOT NULL,
+        path TEXT NOT NULL,
+        label TEXT,
+        created_at TEXT NOT NULL
+    )');
+    $db->exec('PRAGMA user_version = 15');
+}
 
 // --- Generate realistic demo data ---
 $site = 'demo.example.com';
@@ -213,6 +263,84 @@ $trafficSites = [
     ['shop.example.com', $shopPaths, 70, 0.5, 1],
     ['blog.example.com', $blogPaths, 25, -0.3, 0],
 ];
+$bots = [
+    ['Googlebot', 'Search engine', 150],
+    ['ClaudeBot', 'AI', 80],
+    ['GPTBot', 'AI', 60],
+    ['Bingbot', 'Search engine', 45],
+    ['PerplexityBot', 'AI', 30],
+    ['Facebookexternalhit', 'Social', 25],
+    ['LinkedInBot', 'Social', 18],
+    ['UptimeRobot', 'Monitor', 720],  // every 2 min for a month
+];
+$botStmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+$eventTypes = [
+    ['cta_click', '{"location":"hero"}', 45],
+    ['cta_click', '{"location":"pricing"}', 26],
+    ['cta_click', '{"location":"footer"}', 12],
+    ['cta_click', '{"location":"blog"}', 7],
+    ['signup', '{"plan":"pro"}', 18],
+    ['signup', '{"plan":"starter"}', 11],
+    ['download', '{"file":"guide.pdf"}', 32],
+    ['phone_click', '{"number":"+46701234567"}', 12],
+    ['outbound_click', '{"url":"https://github.com/webready-se/puls"}', 67],
+    ['outbound_click', '{"url":"https://twitter.com/puls"}', 28],
+];
+$evStmt = $db->prepare('INSERT INTO events (site, event_name, event_data, page_path, visitor_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+$someone = fn () => substr(hash('sha256', random_bytes(8)), 0, 16);
+// When the demo was last seeded or topped up, so the next top-up starts there
+$toppedUp = $dbPath . '.topped-up';
+
+// One transaction: a reader of the live demo sees it before or after, and a seed is quick
+$db->exec('BEGIN IMMEDIATE');
+
+if ($opts['top-up']) {
+    // From the last top-up (or seed), at most a day back, to now, a minute at a time: a minute holds
+    // as many visits as the site's last day of the seed would give it at that hour, events and bots
+    // alike. Not from the latest visit, which can be minutes before the last run in a quiet hour:
+    // those minutes would be drawn again, and the day would fill up faster than it should
+    $last = is_file($toppedUp) ? (int) file_get_contents($toppedUp) : (strtotime((string) $db->query('SELECT MAX(created_at) FROM pageviews')->fetchColumn()) ?: 0);
+    $from = max($last + 1, $now - 86400);
+    $hourWeights = array_column($startHours, 1, 0);
+    $weightSum = array_sum($hourWeights);
+    $chance = fn (float $expected) => (int) floor($expected) + (mt_rand() / mt_getrandmax() < fmod($expected, 1) ? 1 : 0);
+    $eventsPerMinute = array_sum(array_column($eventTypes, 2)) / 30 / 1440;
+    $botsPerMinute = array_sum(array_column($bots, 2)) / 30 / 1440;
+    $events = $botVisits = 0;
+    for ($t = $from; $t <= $now; $t += 60) {
+        $weekend = in_array((int) date('w', $t), [0, 6], true) ? 0.5 : 1.0;
+        $hourShare = ($hourWeights[(int) date('G', $t)] ?? 0) / $weightSum;
+        foreach ($trafficSites as [$name, $sitePaths, $perDay, $growth]) {
+            for ($n = $chance($perDay * (1 + $growth) * $weekend / 2 * $hourShare / 60); $n > 0; $n--) {
+                $addVisit($name, $sitePaths, $someone(), min($now, $t + mt_rand(0, 59)));
+            }
+        }
+        for ($n = $chance($eventsPerMinute); $n > 0; $n--) {
+            [$name, $data] = $eventTypes[array_rand($eventTypes)];
+            $evStmt->execute([$site, $name, $data, pickWeighted($paths), $someone(), date('Y-m-d H:i:s', $t)]);
+            $events++;
+        }
+        for ($n = $chance($botsPerMinute); $n > 0; $n--) {
+            [$name, $cat] = pickWeighted(array_map(fn ($b) => [$b, $b[2]], $bots));
+            $botStmt->execute([$site, pickWeighted($paths), $name, $cat, "Mozilla/5.0 $name", date('Y-m-d H:i:s', $t)]);
+            $botVisits++;
+        }
+    }
+    $db->exec('COMMIT');
+    file_put_contents($toppedUp, (string) $now);
+    echo "Topped up $totalInserted pageviews, $events events and $botVisits bot visits since " . date('Y-m-d H:i:s', $from) . " in $dbPath\n";
+    exit(0);
+}
+
+if (!$fresh) {
+    // Reseed in place: what the seed makes goes, and so does the summary summed from it, which
+    // Puls sums again as it is read. Share tokens, groups and the rest stay
+    $tables = $db->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
+    foreach (['pageviews', 'bot_visits', 'bot_days', 'events', 'broken_links', 'posts', 'goals', 'daily'] as $table) {
+        if (in_array($table, $tables, true)) $db->exec("DELETE FROM {$table}");
+    }
+}
+
 foreach ($trafficSites as [$name, $sitePaths, $perDay, $growth, $online]) {
     for ($daysAgo = 29; $daysAgo >= 0; $daysAgo--) {
         // Weekends lower
@@ -235,17 +363,6 @@ foreach ($trafficSites as [$name, $sitePaths, $perDay, $growth, $online]) {
 }
 
 // Add some bot visits
-$bots = [
-    ['Googlebot', 'Search engine', 150],
-    ['ClaudeBot', 'AI', 80],
-    ['GPTBot', 'AI', 60],
-    ['Bingbot', 'Search engine', 45],
-    ['PerplexityBot', 'AI', 30],
-    ['Facebookexternalhit', 'Social', 25],
-    ['LinkedInBot', 'Social', 18],
-    ['UptimeRobot', 'Monitor', 720],  // every 2 min for a month
-];
-$botStmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
 foreach ($bots as [$name, $cat, $count]) {
     for ($i = 0; $i < $count; $i++) {
         // Any moment in the last 30 days, never after now
@@ -268,19 +385,6 @@ foreach ($brokenLinks as [$path, $status, $hits]) {
 }
 
 // Add some events
-$eventTypes = [
-    ['cta_click', '{"location":"hero"}', 45],
-    ['cta_click', '{"location":"pricing"}', 26],
-    ['cta_click', '{"location":"footer"}', 12],
-    ['cta_click', '{"location":"blog"}', 7],
-    ['signup', '{"plan":"pro"}', 18],
-    ['signup', '{"plan":"starter"}', 11],
-    ['download', '{"file":"guide.pdf"}', 32],
-    ['phone_click', '{"number":"+46701234567"}', 12],
-    ['outbound_click', '{"url":"https://github.com/webready-se/puls"}', 67],
-    ['outbound_click', '{"url":"https://twitter.com/puls"}', 28],
-];
-$evStmt = $db->prepare('INSERT INTO events (site, event_name, event_data, page_path, visitor_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)');
 foreach ($eventTypes as [$name, $data, $count]) {
     for ($i = 0; $i < $count; $i++) {
         $daysAgo = mt_rand(0, 29);
@@ -319,11 +423,25 @@ foreach ([
     $postStmt->execute([$site, "demo:{$n}", $at, $sources, $text, "https://example.com/p/{$n}", $at]);
 }
 
-// Create a share token for this demo site
-$token = bin2hex(random_bytes(16));
-$db->prepare('INSERT INTO share_tokens (token, site, label, created_at) VALUES (?, ?, ?, ?)')
-   ->execute([$token, $site, 'Demo', date('Y-m-d H:i:s')]);
+// The three sites in a group, for a token that reads it
+if ($opts['group'] !== null) {
+    $groupStmt = $db->prepare('INSERT OR REPLACE INTO site_groups (site, group_name) VALUES (?, ?)');
+    foreach ($trafficSites as [$name]) $groupStmt->execute([$name, $opts['group']]);
+}
 
-echo "Seeded $totalInserted pageviews on " . count($trafficSites) . " sites to $dbPath\n";
+// A share token: the one given, kept across reseeds, or a new one for the demo site. A token that
+// reads a group has no site of its own
+$token = $opts['token'] ?? bin2hex(random_bytes(16));
+$existing = $db->prepare('SELECT COUNT(*) FROM share_tokens WHERE token = ?');
+$existing->execute([$token]);
+if (!$existing->fetchColumn()) {
+    $db->prepare('INSERT INTO share_tokens (token, site, label, created_at, group_names) VALUES (?, ?, ?, ?, ?)')
+       ->execute([$token, $opts['group'] !== null ? '' : $site, 'Demo', date('Y-m-d H:i:s'), $opts['group'] !== null ? json_encode([$opts['group']]) : null]);
+}
+
+$db->exec('COMMIT');
+file_put_contents($toppedUp, (string) $now);
+
+echo ($fresh ? 'Seeded' : 'Reseeded') . " $totalInserted pageviews on " . count($trafficSites) . " sites to $dbPath\n";
 echo "Share token: $token\n";
 echo "URL: http://localhost:8081/?share=$token\n";
