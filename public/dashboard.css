@@ -141,9 +141,11 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --accent: var(--brand-text-dark, #fb7185); --accent-soft: rgb(251 113 133 / 0.12); } }
 
 /* Puls's own: chart notes in teal */
-:root { --note: #0e7490; --note-band: rgba(25,172,202,0.10); --post: #4f46e5; }
-:root[data-theme="dark"] { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); --post: #a5b4fc; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); --post: #a5b4fc; } }
+/* Posts in the accent, as the bars: a post is told from a release (a framed label at the top) by its
+   shape and place, and a month of posts stays calm. Set once: --accent follows the theme */
+:root { --note: #0e7490; --note-band: rgba(25,172,202,0.10); --post: var(--accent); }
+:root[data-theme="dark"] { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); } }
 /* Figtree, self-hosted (the kit's docs/type.md): one variable file, SIL Open Font License in fonts/OFL.txt */
 @font-face {
   font-family: "Figtree";
@@ -495,9 +497,9 @@ body {
 }
 .chart-col-compare:hover > .tip { display: block; }
 .chart-date { font-size: 10px; color: var(--text-3); white-space: nowrap; }
-/* A day with posts: a dot where the bar meets the date line, ringed so it stands off the bar.
-   Indigo, as releases are coral and notes teal */
-.chart-post { position: absolute; left: 50%; bottom: 15px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%; background: var(--post); box-shadow: 0 0 0 2px var(--surface); z-index: 2; pointer-events: none; }
+/* A day with posts: a small dot in the gap between its bar and the date (the bar starts 21.5px up,
+   the date's letters end about 12.5px up), so it marks the day without cutting into either */
+.chart-post { position: absolute; left: 50%; bottom: 15px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--post); z-index: 2; pointer-events: none; }
 .post-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--post); margin-right: 6px; vertical-align: 1px; }
 /* The months on a line under the dates: each starts at a tick between the 31st and the 1st,
    and the month in view stays at the left edge (the pin) until the next one reaches it. The
@@ -665,6 +667,8 @@ body {
 .event-chart.dense .chart-col { min-width: 0; padding: 0; gap: 3px; }
 .event-chart.dense .chart-bars { gap: 1px; }
 .event-chart.dense .chart-bar { border-radius: 2px 2px 0 0; }
+/* The bars start 18.5px up here, so the posts' dot is smaller and lower to stay off them */
+.event-chart.dense .chart-post { bottom: 13px; width: 4px; height: 4px; margin-left: -2px; }
 .event-detail .trow { padding: 4px 0; }
 .event-detail .trow-bar { background: var(--line); }
 .event-detail .show-all { margin-top: 6px; }
@@ -1101,18 +1105,20 @@ body[data-first-load] .load-status { animation-delay: .3s; }
 .tip-delta { font-weight: 500; }
 .tip-prev { color: var(--text-3); margin-top: 2px; }
 .tip-hint { color: var(--text-3); margin-top: 2px; }
-/* A day's posts in its hint line, in the tooltip's own colour, the dot ringed so it stands off it */
+/* A day's posts in its hint line, in the tooltip's own colour; the dot in the bars' colour, which
+   reads on the tooltip in both themes where --accent is too dark in light mode */
 .tip-hint-posts { color: var(--bg); }
-.tip-hint-posts .post-dot { box-shadow: 0 0 0 1.5px var(--bg); margin-right: 5px; }
+.tip-hint-posts .post-dot { background: var(--accent-tile); margin-right: 5px; }
 .hours-posts { list-style: none; margin: 14px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
 .hours-posts .post-dot { margin-right: 8px; }
 .hours-post-time { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
 .hours-post-sources { color: var(--text-3); }
 .hours-post-text { color: var(--text); overflow-wrap: anywhere; }
 .hours-posts a { color: var(--accent); text-underline-offset: 2px; white-space: nowrap; }
-/* As on the day chart: the dot where the bar meets the label line, so the bars keep their baseline,
-   on the column and not the label, which an hour that is not a multiple of three hides */
-.hour-col.has-post::after { content: ''; position: absolute; left: 50%; bottom: 13px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--post); box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
+/* As on the day chart: a dot between the bar and the label, so the bars keep their baseline, on the
+   column and not the label, which an hour that is not a multiple of three hides. Smaller, as the gap
+   is (the bar starts 19.5px up) */
+.hour-col.has-post::after { content: ''; position: absolute; left: 50%; bottom: 14px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--post); pointer-events: none; }
 .bot-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .bot-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
 .bl-row { padding: 8px 0; border-bottom: 1px solid var(--line); }
