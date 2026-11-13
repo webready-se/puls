@@ -2135,7 +2135,7 @@ function get_api_data(array $config, array $user): string
             $bl['hits'] = (int) $bl['hits'];
             $bl['status'] = (int) $bl['status'];
             $bl['referrers'] = $bl['referrers']
-                ? array_values(array_filter(explode(',', $bl['referrers'])))
+                ? array_values(array_filter(explode(',', $bl['referrers']), fn ($r) => $r !== '' && is_linking_page($r, $bl['path'])))
                 : [];
             if (function_exists('idn_to_utf8')) {
                 $decoded = idn_to_utf8($bl['site'], 0, INTL_IDNA_VARIANT_UTS46);
@@ -3700,6 +3700,22 @@ function cleanup_broken_links(PDO $db): void
     $stmt = $db->prepare('DELETE FROM broken_links WHERE last_seen < ?');
     $stmt->execute([date('Y-m-d H:i:s', strtotime('-30 days'))]);
     file_put_contents($marker, date('Y-m-d'));
+}
+
+/**
+ * Whether a stored referrer (host and path) is a page that links to the broken path. Scanners send
+ * the address they probe as the referrer, on the site's host, with or without www and on its IP, so
+ * a referrer with the broken link's own path is not one, on any host (a site's name need not be its
+ * host). Nor is a bare IP: there is no page there for anyone to fix. Read rather than stored, so the
+ * referrers kept before this are cleaned too
+ */
+function is_linking_page(string $referrer, string $path): bool
+{
+    $slash = strpos($referrer, '/');
+    $host = $slash === false ? $referrer : substr($referrer, 0, $slash);
+    $refPath = $slash === false ? '/' : substr($referrer, $slash);
+    if (filter_var(trim($host, '[]'), FILTER_VALIDATE_IP) !== false) return false;
+    return $refPath !== explode('?', $path, 2)[0];
 }
 
 function cleanup_bot_visits(PDO $db, int $days): void

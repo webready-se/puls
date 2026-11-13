@@ -1165,6 +1165,18 @@ test('format=md lists the pages a broken link was reached from, each in its own 
         ->toContain("`/gone`: status 404, 7 hits, last " . date('Y-m-d') . ", linked from `blog.example/post`, `news.example/a'b`, `c.example/` and 2 more");
 });
 
+test('a broken link is not linked from itself or from a bare IP', function () {
+    $site = 'self-ref-' . uniqid() . '.example';
+    seedReportSite($site);
+    $now = date('Y-m-d H:i:s');
+    // Scanners send the address they probe as the referrer, on the site's host, with www and on its IP
+    getTestDb()->prepare('INSERT INTO broken_links (site, path, status, referrers, hits, first_seen, last_seen) VALUES (?, ?, 404, ?, 7, ?, ?)')
+        ->execute([$site, '/gone', "{$site}/gone,www.{$site}/gone,203.0.113.10/gone,203.0.113.10/,[2001:db8::1]/gone,blog.example/post,{$site}/about,mirror.example/gone", $now, $now]);
+    $data = json_decode(http('GET', '/?api&days=7&share=' . createTestShareToken($site))['body'], true);
+
+    expect($data['brokenLinks'][0]['referrers'])->toBe(['blog.example/post', "{$site}/about"]);
+});
+
 test('format=md ends a long list with how many more, and the guide says where they are', function () {
     $site = 'report-long-' . uniqid() . '.example';
     seedReportSite($site);
