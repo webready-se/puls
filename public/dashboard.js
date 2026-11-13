@@ -1273,6 +1273,7 @@
   function toggleSiteGroup(btn) {
     var body = document.getElementById(btn.getAttribute('aria-controls'));
     body.hidden = !body.hidden;
+    if (!body.hidden) opening(body);
     btn.setAttribute('aria-expanded', String(!body.hidden));
     var name = btn.getAttribute('data-group');
     var folded = foldedSiteGroups().filter(function(g) { return g !== name; });
@@ -1699,6 +1700,18 @@
     }).join('') + '</ul>';
   }
 
+  // A part opened in place eases in once (.opening in dashboard.css), and the class goes when it
+  // is done, so a part redrawn or moved later never plays it again
+  function opening(el) {
+    if (!el) return;
+    el.classList.add('opening');
+    el.addEventListener('animationend', function done(e) {
+      if (e.target !== el) return;
+      el.classList.remove('opening');
+      el.removeEventListener('animationend', done);
+    });
+  }
+
   // Brings the hours island up to date on its own, as patchIslands would (compared as parsed
   // HTML), so new hours or the chart tab leave the chart, its scroll and focus alone
   function patchHours() {
@@ -1709,18 +1722,31 @@
     var next = tpl.content.firstElementChild, html = next ? next.outerHTML : undefined;
     if (islandHtml.hours === html) return;
     var cur = app.querySelector(':scope > [data-island="hours"]');
+    // The hours often arrive while the card is still easing in: the new card takes over the motion
+    // where it was, rather than start again or stop short. Read before the old card goes, which
+    // cancels its animation
+    var easing = cur && cur.classList.contains('opening') ? cur.getAnimations()[0] : null;
+    var easedFor = easing && easing.playState === 'running' ? easing.currentTime : null;
     if (cur) cur.remove();
     if (next) chart.after(next);
+    if (next && easedFor !== null) {
+      opening(next);
+      var motion = next.getAnimations()[0];
+      if (motion) motion.currentTime = easedFor;
+    }
     if (html) islandHtml.hours = html; else delete islandHtml.hours;
   }
 
   function pickDay(date) {
     if (hourOpen && hourDay === date) { closeHours(); return; }
     var refocus = document.activeElement && document.activeElement.getAttribute('data-date') === date;
+    var wasOpen = hourOpen;
     hourOpen = true;
     hourDay = date;
     localStorage.setItem('puls-hours', '1');
     render(lastData);
+    // Opened, not switched to another day: the card eases in under the chart
+    if (!wasOpen) opening(app.querySelector(':scope > [data-island="hours"]'));
     fetchHours();
     announce('By hour, ' + formatDay(date));
     if (refocus) focusDay(date);
@@ -2200,6 +2226,7 @@
     if (!btn) return;
     var body = document.getElementById(btn.getAttribute('aria-controls'));
     body.hidden = !body.hidden;
+    if (!body.hidden) opening(body);
     btn.setAttribute('aria-expanded', String(!body.hidden));
     // The dashboard's sections remember the choice; the menu's fold again each time it opens
     var fold = btn.closest('[data-fold]');
@@ -2783,6 +2810,7 @@
     detail.className = 'event-detail';
     detail.innerHTML = '<span class="muted">Loading\u2026</span>';
     row.after(detail);
+    opening(detail);
     fetchEventDetail(detail, eventName, group, showAll, then, quiet);
   }
 

@@ -849,7 +849,7 @@ body {
   border-left: 1px solid var(--line);
   box-shadow: -8px 0 30px rgba(0,0,0,0.1);
   padding: 20px; display: none; flex-direction: column; gap: 20px;
-  animation: menu-in 0.2s ease;
+  animation: menu-in 0.2s ease-out;
 }
 .menu-panel.open { display: flex; }
 @keyframes menu-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
@@ -978,9 +978,8 @@ body {
   background: var(--surface); border-radius: 16px;
   width: 90%; max-width: 520px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 0 0 1px var(--line);
-  overflow: hidden; animation: cmd-in 0.15s ease;
+  overflow: hidden; animation: rise-in 0.15s ease-out;
 }
-@keyframes cmd-in { from { opacity: 0; transform: scale(0.96) translateY(-8px); } }
 .cmd-input-wrap {
   display: flex; align-items: center; gap: 10px;
   padding: 14px 18px; border-bottom: 1px solid var(--line);
@@ -1067,6 +1066,22 @@ body[data-first-load] .load-status { animation-delay: .3s; }
 .skip-link:focus { left: 0; }
 /* Keyboard-only focus indicator. Mouse clicks don't trigger :focus-visible. */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Opening, in the ranges Google's Material uses: what opens over the page fades in and rises over
+   0.15 s, what opens in place fades in and drops 4px over 0.2 s, ease-out both, and closing is at
+   once. Each plays once on open: the parts that are redrawn (the hours card, a section, an event's
+   details) get it as .opening from dashboard.js, so a refresh never plays it again. The reset below
+   ends it at the start for Reduce Motion */
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; transform: scale(0.96) translateY(-8px); } }
+@keyframes drop-in { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+.overlay.open, .cmd-overlay.open { animation: fade-in 0.15s ease-out; }
+.menu-overlay.open { animation: fade-in 0.2s ease-out; }
+.overlay.open .overlay-panel { animation: rise-in 0.15s ease-out; }
+.site-menu:not([hidden]), .date-picker.open { animation: drop-in 0.15s ease-out; }
+.toast:not([hidden]) { animation: toast-in 0.2s ease-out; }
+.opening { animation: drop-in 0.2s ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
   /* One iteration too: a cycle of 0.01 ms that repeats forever strobes (the live dot did) */

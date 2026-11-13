@@ -264,6 +264,7 @@ async function main() {
     toggle?.focus();
     toggle?.click();
     expect(!folded('bots') && localStorage.getItem('puls-bots-open') === '1' && asked.some((u) => /[?&]botDetail/.test(u)), 'a click opens the bots, remembers it and asks for their lists');
+    expect(fold('bots').querySelector('.fold-body').getAnimations().some((a) => a.animationName === 'drop-in'), 'an opened section eases in');
     expect(/Loading/.test(q('#bot-pages')?.textContent || ''), 'the crawled pages say they are loading until they arrive');
     await waitFor(() => q('.bot-row-time')?.offsetParent, 'the bots\' latest activity');
     expect(!/Loading/.test(q('#bot-pages')?.textContent || '') && document.activeElement?.classList.contains('fold-toggle'), 'the lists arrive and the button keeps its focus');
@@ -664,6 +665,7 @@ async function main() {
       expect(/click to see by hour/i.test(col(day).querySelector('.tip').textContent), "a day's tooltip says a click shows its hours");
 
       col(day).click();
+      expect(q('[data-island="hours"]')?.getAnimations().some((a) => a.animationName === 'drop-in'), 'the hours card eases in under the chart');
       if (await waitFor(() => q('#hours-card .hours-chart'), 'the hours of a clicked day')) {
         expect(hoursAsked.length === 1 && hoursAsked[0].includes(`hours=${day}`), 'one request, for the clicked day');
         expect(q('#hours-card .hours-chart').children.length === 24, 'the card has 24 hours');
