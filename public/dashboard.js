@@ -108,6 +108,7 @@
     'close-overlay-outside': function(el, e) { if (e.target === el) closeOverlay(); },
     'clear-path-filter': function() { clearPathFilter(); },
     'filter-channel': function(el) { filterChannel(el.dataset.channel || ''); },
+    'filter-path': function(el) { filterPath(el.dataset.path || ''); },
     'blur-on-enter': function(el, e) { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } },
     'rename-breakdown': function(el) { renameBreakdown(el); },
     'card-drag': function(el, e) { startCardDrag(e, el); },
@@ -1771,7 +1772,9 @@
     if (el) el.focus({ preventScroll: true });
   }
 
-  function renderTableContent(rows, labelKey, valKey, color) {
+  // filterable: a row is a page that a click filters on (the pages card and its entry and exit
+  // lists), not a list of what bots read
+  function renderTableContent(rows, labelKey, valKey, color, filterable) {
     if (!rows || !rows.length) {
       return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
@@ -1799,7 +1802,9 @@
       var stripped = prefix ? full.substring(prefix.length) : '';
       var label = prefix ? (stripped ? '/' + stripped : '/') : full;
       var bounce = r.bounceRate !== undefined ? ' <span class="trow-bounce faint fs-11" title="Share of visitors who entered here and saw only this page">' + r.bounceRate + '% bounce</span>' : '';
-      html += '<div class="trow">' +
+      html += (filterable
+        ? '<div class="trow trow-clickable" role="button" tabindex="0" data-action="filter-path" data-path="' + esc(r[labelKey]) + '">'
+        : '<div class="trow">') +
         '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + bounce + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="' + color + '"></div></div>' +
         '<span class="trow-val">' + num(r[valKey]) + '</span>' +
@@ -1831,8 +1836,8 @@
 
   var expandRenderers = {
     pages: function(d) { return renderPagesContent(d.pages); },
-    entryPages: function(d) { return renderTableContent(d.entryPages, 'path', 'entries', '#059669'); },
-    exitPages: function(d) { return renderTableContent(d.exitPages, 'path', 'exits', '#d97706'); },
+    entryPages: function(d) { return renderTableContent(d.entryPages, 'path', 'entries', '#059669', true); },
+    exitPages: function(d) { return renderTableContent(d.exitPages, 'path', 'exits', '#d97706', true); },
     referrers: function(d) { return renderTableContent(d.referrers, 'source', 'visitors', '#19acca'); },
     utm: function(d) { return renderUtmContent(d.utm); },
     events: function(d) { return renderEventsContent(d.events); },
@@ -1863,7 +1868,7 @@
 
     tabs.forEach(function(t, i) {
       html += '<div class="tab-panel" data-panel="' + t.id + '"' + (i !== 0 ? ' hidden' : '') + '>' +
-        renderTableContent(t.rows, 'path', t.valKey, t.color) +
+        renderTableContent(t.rows, 'path', t.valKey, t.color, true) +
         showAllBtn(t.total, t.expand, t.label + ' pages') +
       '</div>';
     });
@@ -2087,6 +2092,17 @@
   window.filterChannel = function(slug) {
     currentChannel = currentChannel === slug ? '' : slug;
     load(currentDays);
+  };
+
+  // A page in a list filters on it, as a page picked in search does. A page filter leaves the pages
+  // and channels out (one row would be left), so the view goes to the top, where the filter and the
+  // page's figures are, rather than leave the reader where the list was. From Show all too, which
+  // closes. A smooth scroll from script ignores the CSS reset, so Reduce Motion is asked here
+  window.filterPath = function(path) {
+    currentPath = path;
+    if (document.getElementById('overlay').classList.contains('open')) closeOverlay();
+    load(currentDays);
+    window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   };
 
   // A campaign's source in words: Meta's ads fill utm_source with its own codes, and a cost per

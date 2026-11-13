@@ -885,6 +885,19 @@ async function main() {
       }
     }
 
+    // A page in the pages card filters on it too, as a page picked in search does: the view goes to
+    // the top, where the filter shows, since the pages card is left out under it
+    const pricingRow = q('.tab-panel[data-panel="popular"] [data-action="filter-path"][data-path="/pricing"]');
+    expect(pricingRow && pricingRow.getAttribute('role') === 'button' && pricingRow.tabIndex === 0, 'a page in the pages card is a button that filters');
+    if (pricingRow) {
+      pricingRow.scrollIntoView();
+      pricingRow.click();
+      if (await waitFor(() => q('.path-filter-path')?.textContent === '/pricing' && scrollY === 0, 'a page filter from the pages card, the view at the top')) {
+        q('.path-filter-clear').click();
+        await waitFor(() => !q('.path-filter'), 'the page filter cleared');
+      }
+    }
+
     if (!await waitFor(() => q('#chart-card') && q('#goal-search'), 'logged-in dashboard')) return fails;
     const search = q('#goal-search');
     search.value = 'pwa_install';
