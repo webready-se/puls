@@ -572,6 +572,8 @@ body {
 .chart-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: flex-end; height: 100%; min-width: 0; }
 .chart-bar-wrap .chart-bar { width: 100%; }
 .chart-bar-prev { background: var(--line); opacity: 0.7; }
+/* Brighter turns this light grey white in light mode, and the bar seemed to go: fuller instead */
+.chart-bar-prev:hover { filter: none; opacity: 1; }
 .chart-val-prev { font-size: 9px; color: var(--text-3); font-weight: 500; white-space: nowrap; }
 .chart-legend { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--text-2); }
 .chart-legend-item { display: flex; align-items: center; gap: 5px; }
