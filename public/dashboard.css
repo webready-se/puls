@@ -1139,5 +1139,7 @@ body[data-first-load] .load-status { animation-delay: .3s; }
 .bl-line { display: flex; align-items: center; gap: 10px; font-size: 13px; overflow: hidden; }
 .bl-path { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bl-refs { margin-left: 18px; margin-top: 4px; font-size: 12px; color: var(--text-3); }
+/* On a phone the path needs the room; the header still says which links are listed */
+@media (max-width: 600px) { .bl-since { display: none; } }
 .more-note { padding: 4px 0; color: var(--text-2); font-size: 11px; }
 .utm-ch-other { display: inline-block; width: auto; padding: 6px 16px; font-size: 11px; }

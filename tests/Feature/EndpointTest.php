@@ -1162,7 +1162,19 @@ test('format=md lists the pages a broken link was reached from, each in its own 
 
     expect($r['status'])->toBe(200)
         ->and($r['body'])->toContain('## Pages to fix')
-        ->toContain("`/gone`: status 404, 7 hits, last " . date('Y-m-d') . ", linked from `blog.example/post`, `news.example/a'b`, `c.example/` and 2 more");
+        ->toContain("`/gone`: status 404, 7 hits since " . date('Y-m-d') . ", last " . date('Y-m-d') . ", linked from `blog.example/post`, `news.example/a'b`, `c.example/` and 2 more");
+});
+
+test('format=md says a broken link counts its hits since it was first seen, not in the period', function () {
+    $site = 'report-since-' . uniqid() . '.example';
+    seedReportSite($site);
+    $first = date('Y-m-d', strtotime('-60 days'));
+    getTestDb()->prepare('INSERT INTO broken_links (site, path, status, hits, first_seen, last_seen) VALUES (?, ?, 404, 716, ?, ?)')
+        ->execute([$site, '/old', "{$first} 10:00:00", date('Y-m-d H:i:s')]);
+    $body = http('GET', '/?api&days=7&format=md&share=' . createTestShareToken($site))['body'];
+
+    expect($body)->toContain("`/old`: status 404, 716 hits since {$first}, last " . date('Y-m-d'))
+        ->toContain('seen in the last 30 days, whatever the period');
 });
 
 test('a broken link is not linked from itself or from a bare IP', function () {

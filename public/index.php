@@ -2587,7 +2587,9 @@ function report_markdown(array $d): string
     }
     // A page can be linked from many places: the first three, and how many more
     $linkedFrom = fn (array $refs) => ', linked from ' . implode(', ', array_map('md_code', array_slice($refs, 0, 3))) . (count($refs) > 3 ? ' and ' . md_number(count($refs) - 3) . ' more' : '');
-    $md .= md_list('Pages to fix', array_slice($d['brokenLinks'], 0, 10), fn ($b) => md_code($b['path']) . (isset($b['site']) && $d['site'] === 'All sites' ? ' on ' . md_code($b['site']) : '') . ': status ' . (int) $b['status'] . ', ' . md_number($b['hits']) . ' hits, last ' . substr($b['last_seen'], 0, 10) . ($b['referrers'] ? $linkedFrom($b['referrers']) : ''), count($d['brokenLinks']));
+    $md .= md_list('Pages to fix', array_slice($d['brokenLinks'], 0, 10), fn ($b) => md_code($b['path']) . (isset($b['site']) && $d['site'] === 'All sites' ? ' on ' . md_code($b['site']) : '') . ': status ' . (int) $b['status'] . ', ' . md_number($b['hits']) . ' hits since ' . substr($b['first_seen'], 0, 10) . ', last ' . substr($b['last_seen'], 0, 10) . ($b['referrers'] ? $linkedFrom($b['referrers']) : ''), count($d['brokenLinks']));
+    // Nginx logs a broken link as one row with a running count, so it has no figures per period
+    if ($d['brokenLinks']) $md .= "These are the pages seen in the last 30 days, whatever the period above, each with its hits since it was first seen.\n\n";
 
     return rtrim($md) . "\n";
 }
