@@ -43,7 +43,14 @@ if ($opts['top-up'] && !file_exists($dbPath)) {
 }
 
 $fresh = !($opts['refresh'] || $opts['top-up']) || !file_exists($dbPath);
-if ($fresh && file_exists($dbPath)) unlink($dbPath);
+// A new file goes with the old one's WAL and shared memory: SQLite would replay an old WAL into it
+if ($fresh) {
+    foreach (['', '-wal', '-shm'] as $part) {
+        if (file_exists($dbPath . $part)) unlink($dbPath . $part);
+    }
+}
+// Its folder as Puls makes it, closed to other users on the server: it holds every site's history
+if (!is_dir(dirname($dbPath))) mkdir(dirname($dbPath), 0700, true);
 
 $db = new PDO('sqlite:' . $dbPath);
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

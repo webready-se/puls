@@ -101,7 +101,7 @@ Make sure `mod_rewrite` is enabled (`a2enmod rewrite`) and that the virtual host
 
 ## Laravel Forge
 
-Puls detects Forge's release directories (zero-downtime deploys) and keeps `data/` and `users.json` in the site root, so they survive every deploy. No symlinks needed.
+Puls detects Forge's release directories (zero-downtime deploys) and keeps `data/` and `users.json` in the site root, so they survive every deploy. No symlinks needed. That holds for a site with a user of its own too (Forge's website isolation), which keeps the other sites on the server from reading Puls's data.
 
 **First-time setup (SSH):**
 

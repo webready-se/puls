@@ -25,13 +25,15 @@ if ($timezone !== '' && !@date_default_timezone_set($timezone)) {
     error_log("Puls: unknown TIMEZONE '{$timezone}', using " . date_default_timezone_get());
 }
 
-function resolve_path(string $path): string
+function resolve_path(string $path, string $dir = __DIR__): string
 {
     if ($path[0] === '/') return $path;
 
-    // Detect Forge zero-deploy: __DIR__ is inside releases/, resolve to site root
-    $dir = __DIR__;
-    if (preg_match('#(/home/forge/[^/]+)/releases/\d+#', $dir, $m)) {
+    // Forge's zero-downtime deploys: the code is in releases/<id> with a current link beside it,
+    // and data/ and users.json belong in the site root, so they outlive the release. Under any
+    // user's home, not only forge's: a site with a user of its own (website isolation) kept its
+    // database in the release and lost it on the next deploy
+    if (preg_match('#^(.*)/releases/[^/]+$#', $dir, $m) && is_link($m[1] . '/current')) {
         return $m[1] . '/' . $path;
     }
 
