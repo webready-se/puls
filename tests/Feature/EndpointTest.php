@@ -1084,6 +1084,21 @@ test('the shared page of a token for groups gets its sites, and of a token for a
         ->and($site['sites'])->toBe(["x-{$id}"]);
 })->after(fn () => clearGroupSeeds());
 
+test('the shared page knows the last day its link works, for its menu to say', function () {
+    $config = function (string $token) {
+        preg_match('/<script type="application\/json" id="puls-config">(.*?)<\/script>/s', http('GET', '/?share=' . $token)['body'], $m);
+        return json_decode($m[1], true)['share'];
+    };
+    $lasting = createTestShareToken('until-' . uniqid());
+    $ending = createTestShareToken('until-' . uniqid());
+    $lastDay = date('Y-m-d', strtotime('+30 days'));
+    getTestDb()->prepare('UPDATE share_tokens SET expires_at = ? WHERE token = ?')->execute(["{$lastDay} 23:59:59", $ending]);
+
+    expect($config($ending)['expires'])->toBe($lastDay)
+        ->and($config($lasting))->toHaveKey('expires')
+        ->and($config($lasting)['expires'])->toBeNull();
+});
+
 // A site of its own with what a report shows, some of it hostile: visitors' browsers send these values
 function seedReportSite(string $site): void
 {

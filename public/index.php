@@ -178,6 +178,8 @@ if ($shareToken !== null) {
             'site' => $share['site'],
             'groups' => share_token_groups($share),
             'sites' => $shareSites,
+            // The last day the link works, for its menu to say; null when it has none
+            'expires' => $share['expires_at'] ? substr($share['expires_at'], 0, 10) : null,
         ]) . agent_hint($config));
         respond($html, 200, 'text/html', security_headers());
     }

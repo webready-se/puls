@@ -311,6 +311,14 @@ async function main() {
     expect(notes.some((n) => n.textContent === 'Say "hi" <b>bold</b>') && !q('#chart-card .chart-note b'), 'annotation label is escaped');
     expect(q('#chart-card .chart-note.stacked') && q('#chart-card .chart-scroll.stacked-marks'), 'annotation and release on one day stack');
     expect(!q('.note-toggle'), 'no + Note button on a shared dashboard');
+    // The menu holds what works without a login and says what the link is; what needs a login is
+    // left out, not shown disabled
+    q('#menu-btn').click();
+    const inMenu = (sel) => !!q(sel) && q(sel).offsetParent !== null;
+    expect(q('#menu-panel').classList.contains('open') && inMenu('#theme-toggle') && inMenu('#export-section') && inMenu('#link-section')
+      && !inMenu('#goals-section') && !inMenu('#notes-section') && !inMenu('#excluded-section') && !inMenu('.menu-logout'), 'a shared dashboard has the menu: appearance, export and the link, nothing that needs a login');
+    expect(/^Shows demo\.example\.com\. Anyone with the link/.test(q('#link-shows').textContent) && /^Works until/.test(q('#link-until').textContent), `the menu says what the link shows and until when (says "${q('#link-shows').textContent} ${q('#link-until').textContent}")`);
+    q('.menu-close').click();
 
     // Posts: a dot on each day with posts, how many in the tooltip's hint line, a Posts button that hides them
     const postCols = () => [...document.querySelectorAll('#chart-card .chart-col.has-post')];
@@ -1291,7 +1299,7 @@ async function main() {
     if (read.slice().sort().join() !== 'demo.example.com,shop.example.com') fails.push(`a token for a group reads its sites and no others (reads ${read})`);
     if (q('#site-picker').hidden) fails.push('the dashboard of a token for a group has the site picker');
     if (q('#site-btn-label').textContent !== 'All sites') fails.push('the dashboard of a token for a group opens on its sites together');
-    if (q('#menu-btn').offsetParent) fails.push('the dashboard of a token for a group hides the menu');
+    if (!q('#menu-btn').offsetParent || !/^Shows the group .+: 2 sites\. /.test(q('#link-shows').textContent)) fails.push(`the dashboard of a token for a group has the menu, which names its group and sites (says "${q('#link-shows').textContent}")`);
     q('#site-btn').click();
     const option = await waitFor(() => q('#site-menu [data-site="shop.example.com"]'), 'a site of the group in the picker') && q('#site-menu [data-site="shop.example.com"]');
     if (option) {
