@@ -487,10 +487,20 @@
     }, 1000);
   }
 
-  // Shared mode: hide admin UI
+  // Shared mode: the menu holds what works without a login (appearance, export) and says what the
+  // link is. What needs a login is left out rather than shown disabled, which says "not for you"
+  // without saying why
   if (isShared) {
-    document.getElementById('menu-btn').style.display = 'none';
     document.title = (shareSite || (pulsConfig.share.groups || []).join(', ')) + ' – ' + appName;
+    document.querySelector('.menu-logout').hidden = true;
+    var linkGroups = pulsConfig.share.groups || [];
+    document.getElementById('link-shows').textContent = linkGroups.length
+      ? 'Shows ' + (linkGroups.length > 1 ? 'the groups ' : 'the group ') + linkGroups.join(', ') + ': ' + shareSites.length + (shareSites.length === 1 ? ' site' : ' sites') + '. Anyone with the link sees these figures, and nothing can be changed here.'
+      : 'Shows ' + shareSite + '. Anyone with the link sees these figures, and nothing can be changed here.';
+    document.getElementById('link-until').textContent = pulsConfig.share.expires
+      ? 'Works until ' + formatDay(pulsConfig.share.expires) + '.'
+      : 'Works until whoever shared it turns it off.';
+    document.getElementById('link-section').hidden = false;
   }
 
   // Load sites, then data
@@ -3440,11 +3450,8 @@
   };
 
   // --- Export ---
-  if (isShared) {
-    var exportSection = document.getElementById('export-section');
-    if (exportSection) exportSection.style.display = 'none';
-    if (goalSection) goalSection.hidden = true;
-  }
+  // A shared link exports too: the same figures its token already reads from the API
+  if (isShared && goalSection) goalSection.hidden = true;
 
   window.exportData = function(format) {
     if (!lastData) return;
