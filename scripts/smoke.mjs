@@ -687,6 +687,7 @@ async function main() {
       await waitFor(() => picked()?.dataset.date === latest && hoursAsked.at(-1).includes(`hours=${latest}`) && q('#hours-card .hours-chart'), 'another day switches the card');
       col(latest).click();
       expect(!q('#hours-card') && !picked() && localStorage.getItem('puls-hours') === '0', 'a click on the picked day closes the card, and closed is remembered');
+      expect(col(latest).classList.contains('unpick') && document.querySelectorAll('#chart-card .chart-col.undim').length > 0, 'closed, the chart eases back: the other days come forward and the picked one lets go of its colour');
       // The keyboard: the arrows move between days, Enter opens, the card's x closes and focus goes back to the day
       col(latest).focus();
       col(latest).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));

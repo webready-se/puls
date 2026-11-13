@@ -133,7 +133,7 @@ Puls's copy of the kit's tokens is at the top of `public/dashboard.css`, with th
 - **Strict CSP, as the kit asks:** `script-src 'self'; style-src 'self'` on every page Puls serves. No inline script, style or handler anywhere: an element names its action in `data-action` (click) or `data-on-<event>` and carries its arguments in `data-*` attributes, one listener per event type dispatches (`actions` in dashboard.js); a bar's width, height or colour travels as `data-w` (percent), `data-h` (pixels), `data-bg` or `data-color` and is applied through the CSSOM by a MutationObserver; fixed values are classes at the end of dashboard.css; the branding and the share reach the page as a JSON data block (`#puls-config`), which the policy does not govern. The smoke test fails on any violation, so a new inline bit never ships
 - **White-label.** `APP_ACCENT` sets `--accent-tile` (logo, bars, charts), and `--accent` (text, links, buttons) only where `accent_text_colours()` finds it readable, through `--brand-text` and `--brand-text-dark`
 - **`--on-accent`** is Puls's own token for text on a filled `--accent` button: white in light mode, dark in dark mode, since the dark accent is light
-- **Chart markers.** Releases are coral, notes teal and posts an indigo dot, so the three can be told apart (the kit draws releases and notes as slate lines)
+- **Chart markers.** Releases are a coral label and notes teal, so the two can be told apart (the kit draws both as slate lines). Posts are a small dot in the accent between the bar and its date: told from a release by shape and place rather than colour, so a month of posts stays calm beside the bars
 
 ## Development
 

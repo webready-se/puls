@@ -1732,6 +1732,10 @@
     hourOpen = false;
     localStorage.setItem('puls-hours', '0');
     render(lastData);
+    // The redrawn chart eases back: the other days come forward, the picked one lets go of its colour
+    document.querySelectorAll('#chart-card .chart-col[data-date]').forEach(function(c) {
+      c.classList.add(c.getAttribute('data-date') === day ? 'unpick' : 'undim');
+    });
     announce('Hours closed');
     focusDay(day);
   }
