@@ -100,7 +100,7 @@ Every response compares with the previous period of the same length, in the `pre
 | `versions` | `[{version, first_seen}]` from `data-version` |
 | `annotations` | Chart notes overlapping the period: `[{id, site, date, end_date, label}]` |
 | `posts`, `postsTotal` | Posts in the period, handed over by a tool on the same server (`php puls posts:add`): `[{date, time, site, sources, text, url}]`, the newest 500, oldest first, and the number in the period. `sources` is a list (`["instagram", "facebook"]`); `text` and `url` may be null |
-| `brokenLinks` | 404s and redirects logged by Nginx: `[{site, path, status, hits, referrers, first_seen, last_seen}]` |
+| `brokenLinks` | 404s and redirects logged by Nginx: `[{site, path, status, hits, referrers, first_seen, last_seen}]`. `referrers` are the pages that linked to it, as host and path; a referrer with the link's own path (scanners send the address they probe) or on a bare IP is left out |
 | `bots`, `botCategories`, `botPages`, `botActivity` | Crawler and AI bot visits |
 | `version`, `timezone`, `now` | The Puls version, the install's time zone, and its clock at the answer. Stored times are in that zone, without an offset |
 | `completeThrough` | The latest day whose figures will not change: today goes on until midnight |
