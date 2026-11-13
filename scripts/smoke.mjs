@@ -455,6 +455,13 @@ async function main() {
     if (cmp) {
       cmp.click();
       await waitFor(() => q('.event-detail .event-chart.compare') || !q('.chart-compare-toggle.active'), 'compare overlay in drill-down');
+      // A tooltip rises over its bar, and with Compare over the whole day, inside a box that scrolls
+      // sideways and so clips upward too: every tooltip shown at once, none may rise above its box
+      const sheet = [...document.styleSheets].find((s) => s.href && s.href.includes('dashboard.css'));
+      const shown = sheet.insertRule('.tip { display: block !important; }', sheet.cssRules.length);
+      const clipped = [...document.querySelectorAll('.chart-scroll')].filter((box) => [...box.querySelectorAll('.tip')].some((t) => t.getBoundingClientRect().top < box.getBoundingClientRect().top)).map((box) => box.className);
+      sheet.deleteRule(shown);
+      expect(q('.event-detail .event-chart.compare') && !clipped.length, `no tooltip rises above its chart, the drill-down's with Compare too (clipped in ${clipped.join('; ') || 'none'})`);
     }
 
     // Long period: panel survives the reload and the chart turns dense
