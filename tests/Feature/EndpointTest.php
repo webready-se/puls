@@ -883,6 +883,36 @@ test('api median engaged time is per visitor, counts visits of one page, leaves 
         ->and($read('&path=%2Fpricing')['medianEngagedSeconds'])->toBe(90);
 });
 
+test('a page filter leaves the pages lists whole, as a channel filter leaves the channels, and the rest follows it', function () {
+    $site = 'whole-' . uniqid();
+    $db = getTestDb();
+    $stmt = $db->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash, referrer) VALUES (?, ?, ?, ?, ?)');
+    $start = max(time() - 3600, strtotime('today'));
+    $at = fn (int $minutes) => date('Y-m-d H:i:s', $start + $minutes * 60);
+    $stmt->execute([$at(0), $site, '/', 'a', 'Google']);
+    $stmt->execute([$at(1), $site, '/pricing', 'a', 'Google']);
+    $stmt->execute([$at(0), $site, '/pricing', 'b', null]);
+    $stmt->execute([$at(0), $site, '/about', 'c', null]);
+    $token = createTestShareToken($site);
+
+    $data = json_decode(http('GET', '/?api&days=1&path=' . urlencode('/pricing') . '&share=' . $token)['body'], true);
+
+    // The lists stay whole, so the reader can switch pages from them
+    expect(array_column($data['pages'], 'views', 'path'))->toBe(['/pricing' => 2, '/' => 1, '/about' => 1])
+        ->and(array_column($data['entryPages'], 'entries', 'path'))->toBe(['/' => 1, '/about' => 1, '/pricing' => 1])
+        // The rest is the page's: its own figures, and the channels of its visitors
+        ->and($data['totals'])->toBe(['views' => 2, 'visitors' => 2])
+        ->and(array_column($data['channels'], 'visitors', 'channel'))->toEqualCanonicalizing(['Organic search' => 1, 'Direct' => 1]);
+
+
+    // The report is about the one page, which it says at the top: the pages to switch to are the
+    // dashboard's, not the report's
+    $md = http('GET', '/?api&days=1&format=md&path=' . urlencode('/pricing') . '&share=' . $token)['body'];
+    expect($md)->toContain('Only pageviews of `/pricing`')
+        ->not->toContain('`/about`')
+        ->not->toContain('## Pages');
+});
+
 test('api counts beyond the limit, exit pages and the summary come from the same passes as the tables', function () {
     $site = 'passes-' . uniqid();
     $db = getTestDb();

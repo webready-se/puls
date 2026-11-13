@@ -643,7 +643,10 @@ body {
 .trow-bar { flex: 1; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
 .trow-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
 .trow-val { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: var(--text-2); }
-/* A list that filters, with a filter set: the other rows step back until pointed at or focused */
+/* A list that filters, with a filter set: the row filtered on is marked as a picked row in a list
+   is (a tint and its name in weight), and the others step back until pointed at or focused */
+.trow.is-picked { background: var(--accent-soft); }
+.trow.is-picked .trow-label { font-weight: 600; color: var(--text); }
 .trow.is-other { opacity: 0.45; }
 .trow.is-other:hover, .trow.is-other:focus-visible { opacity: 1; }
 .trow-clickable { cursor: pointer; border-radius: 6px; padding: 7px 6px; margin: 0 -6px; transition: background 0.15s; }

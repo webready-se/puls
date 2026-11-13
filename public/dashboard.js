@@ -738,12 +738,11 @@
       island('summary', renderSummary(d.summary)) +
       renderGoals(d.goals);
 
-    if (!filtered) {
-      html += island('pages', '<div class="grid-2">' +
-        renderTabbedPages(d.pages, d.entryPages, d.exitPages, d.pagesTotal) +
-        renderChannels(d.channels) +
-      '</div>');
-    }
+    // Under a page filter too: the pages stay whole, to switch from, and the channels are the page's
+    html += island('pages', '<div class="grid-2">' +
+      renderTabbedPages(d.pages, d.entryPages, d.exitPages, d.pagesTotal) +
+      renderChannels(d.channels) +
+    '</div>');
     html += island('traffic', '<div class="grid-2">' +
       renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal, d.events, d.eventsTotal, d.outbound, d.outboundTotal) +
       renderTabbedVisitors(d.browsers, d.devices, d.languages, d.countries) +
@@ -1803,7 +1802,7 @@
       var label = prefix ? (stripped ? '/' + stripped : '/') : full;
       var bounce = r.bounceRate !== undefined ? ' <span class="trow-bounce faint fs-11" title="Share of visitors who entered here and saw only this page">' + r.bounceRate + '% bounce</span>' : '';
       html += (filterable
-        ? '<div class="trow trow-clickable" role="button" tabindex="0" data-action="filter-path" data-path="' + esc(r[labelKey]) + '">'
+        ? '<div class="trow trow-clickable' + pickClass(currentPath, r[labelKey]) + '" role="button" tabindex="0" aria-pressed="' + (currentPath === r[labelKey]) + '" data-action="filter-path" data-path="' + esc(r[labelKey]) + '">'
         : '<div class="trow">') +
         '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + bounce + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="' + color + '"></div></div>' +
@@ -2094,20 +2093,18 @@
     load(currentDays);
   };
 
-  // A page in a list filters on it, as a page picked in search does. A page filter leaves the pages
-  // and channels out (one row would be left), so the view goes to the top, where the filter and the
-  // page's figures are, rather than leave the reader where the list was. From Show all too, which
-  // closes. A smooth scroll from script ignores the CSS reset, so Reduce Motion is asked here
+  // A page in a list filters on it, as a channel does, and again clears it. The list stays whole,
+  // marked where the filter is set, so the reader stays where they clicked. From Show all too,
+  // which closes
   window.filterPath = function(path) {
-    currentPath = path;
+    currentPath = currentPath === path ? '' : path;
     if (document.getElementById('overlay').classList.contains('open')) closeOverlay();
     load(currentDays);
-    window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   };
 
-  // A row of the channels, which stay in view under their filter: the one filtered on stays as it is
-  // and the others step back, so the list says where the filter is set, as the chart does for a
-  // picked day
+  // A row of a list that filters, which stays whole under its own filter: the one filtered on is
+  // marked and the others step back, so the list says where the filter is set, as the chart does
+  // for a picked day
   function pickClass(picked, value) {
     return picked ? (picked === value ? ' is-picked' : ' is-other') : '';
   }

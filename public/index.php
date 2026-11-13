@@ -1640,14 +1640,19 @@ function get_api_data(array $config, array $user): string
     // Without a path or a channel filter, the pageview figures come from the daily summary
     // (summary_figures); with one, from the rows, as below
     $fig = null;
-    if (!$path && !$channel && !$language && ($config['daily_summary'] ?? true)) {
+    // The pages lists leave the page filter out, as the channels leave the channel filter out: a
+    // list stays whole under its own filter, so the reader can switch. Under a page filter alone
+    // they are the summary's lists, so they come from it rather than from the rows
+    $listFig = null;
+    if (!$channel && !$language && ($config['daily_summary'] ?? true)) {
         $scope = $site ? [$site] : (!empty($allowedSites) ? $allowedSites : tracked_sites($db));
         $limits = [
             'pages' => $expand === 'pages' ? 1000 : 10,
             'referrers' => $expand === 'referrers' ? 1000 : 10,
             'utm' => $expand === 'utm' ? 1000 : 10,
         ];
-        if ($scope) $fig = summary_figures($db, $scope, $since, $until ?: date('Y-m-d', strtotime('+1 day')), $prevSince, $limits);
+        if ($scope) $listFig = summary_figures($db, $scope, $since, $until ?: date('Y-m-d', strtotime('+1 day')), $prevSince, $limits);
+        if (!$path) $fig = $listFig;
     }
 
     if ($fig) {
@@ -1658,13 +1663,13 @@ function get_api_data(array $config, array $user): string
         $byDay = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // Pages table (skip when filtered to a single path)
+    // Pages table, whole under a page filter too (see $listFig)
     $pages = [];
     $pagesTotal = 0;
-    if ($fig) {
-        $pages = $fig['pages'];
-        $pagesTotal = $fig['pagesTotal'];
-    } elseif (!$path) {
+    if ($listFig) {
+        $pages = $listFig['pages'];
+        $pagesTotal = $listFig['pagesTotal'];
+    } else {
         $limit = $expand === 'pages' ? 1000 : 10;
         // The number of pages beyond the limit rides along as a window over the groups, so
         // the rows are read once; the same for sources and campaigns below
@@ -1958,36 +1963,34 @@ function get_api_data(array $config, array $user): string
         $previousMedianEngaged = $median !== false ? (int) $median : null;
     }
 
-    // Entry/exit pages (skip when filtered to a single path)
+    // Entry/exit pages, whole under a page filter too (see $listFig)
     $entryPages = [];
     $exitPages = [];
-    if (!$path) {
-        $entryLimit = $expand === 'entryPages' ? 1000 : 10;
-        $exitLimit = $expand === 'exitPages' ? 1000 : 10;
-        // Each visitor's first and last page in one pass over the period's rows (the two
-        // window orderings still sort twice, but the rows are read once). Bounces per entry
-        // page use the same definition as the site bounce rate: one pageview per visitor_hash
-        if ($fig) {
-            $firstLast = $fig['firstLast'];
-        } else {
-            $stmt = $db->prepare("SELECT path, SUM(is_entry) as entries, SUM(is_entry AND cnt = 1) as bounces, SUM(is_exit) as exits FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at, id) = 1 as is_entry, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at DESC, id DESC) = 1 as is_exit, COUNT(*) OVER (PARTITION BY visitor_hash) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$channelFilter}) WHERE is_entry OR is_exit GROUP BY path");
-            $stmt->execute(array_merge($dateParams, $siteParams, $channelParams));
-            $firstLast = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        }
-
-        $entries = array_values(array_filter($firstLast, fn($r) => $r['entries'] > 0));
-        usort($entries, fn($a, $b) => ($b['entries'] <=> $a['entries']) ?: strcmp($a['path'], $b['path']));
-        $entryPages = array_map(fn($e) => [
-            'path' => $e['path'],
-            'entries' => (int) $e['entries'],
-            'bounces' => (int) $e['bounces'],
-            'bounceRate' => round(100 * $e['bounces'] / $e['entries'], 1),
-        ], array_slice($entries, 0, $entryLimit));
-
-        $exits = array_values(array_filter($firstLast, fn($r) => $r['exits'] > 0));
-        usort($exits, fn($a, $b) => ($b['exits'] <=> $a['exits']) ?: strcmp($a['path'], $b['path']));
-        $exitPages = array_map(fn($e) => ['path' => $e['path'], 'exits' => (int) $e['exits']], array_slice($exits, 0, $exitLimit));
+    $entryLimit = $expand === 'entryPages' ? 1000 : 10;
+    $exitLimit = $expand === 'exitPages' ? 1000 : 10;
+    // Each visitor's first and last page in one pass over the period's rows (the two
+    // window orderings still sort twice, but the rows are read once). Bounces per entry
+    // page use the same definition as the site bounce rate: one pageview per visitor_hash
+    if ($listFig) {
+        $firstLast = $listFig['firstLast'];
+    } else {
+        $stmt = $db->prepare("SELECT path, SUM(is_entry) as entries, SUM(is_entry AND cnt = 1) as bounces, SUM(is_exit) as exits FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at, id) = 1 as is_entry, ROW_NUMBER() OVER (PARTITION BY visitor_hash ORDER BY created_at DESC, id DESC) = 1 as is_exit, COUNT(*) OVER (PARTITION BY visitor_hash) as cnt FROM pageviews WHERE {$dateFilter} {$siteFilter} {$channelFilter}) WHERE is_entry OR is_exit GROUP BY path");
+        $stmt->execute(array_merge($dateParams, $siteParams, $channelParams));
+        $firstLast = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    $entries = array_values(array_filter($firstLast, fn($r) => $r['entries'] > 0));
+    usort($entries, fn($a, $b) => ($b['entries'] <=> $a['entries']) ?: strcmp($a['path'], $b['path']));
+    $entryPages = array_map(fn($e) => [
+        'path' => $e['path'],
+        'entries' => (int) $e['entries'],
+        'bounces' => (int) $e['bounces'],
+        'bounceRate' => round(100 * $e['bounces'] / $e['entries'], 1),
+    ], array_slice($entries, 0, $entryLimit));
+
+    $exits = array_values(array_filter($firstLast, fn($r) => $r['exits'] > 0));
+    usort($exits, fn($a, $b) => ($b['exits'] <=> $a['exits']) ?: strcmp($a['path'], $b['path']));
+    $exitPages = array_map(fn($e) => ['path' => $e['path'], 'exits' => (int) $e['exits']], array_slice($exits, 0, $exitLimit));
 
     if ($fig) {
         $browsers = $fig['browsers'];
@@ -2561,8 +2564,12 @@ function report_markdown(array $d): string
         return $name . ($g['type'] === 'event' ? ' (event)' : ' (page)') . ': ' . md_number($g['conversions']) . " conversions, {$g['rate']}% of visitors" . md_change($g['conversions'], $g['previousConversions'] ?? null);
     });
 
-    $md .= md_list('Pages', $d['pages'], fn ($p) => md_code($p['path']) . ': ' . md_number($p['views']) . ' pageviews, ' . md_number($p['visitors']) . ' visitors', $d['pagesTotal']);
-    $md .= md_list('Where visits start', $d['entryPages'], fn ($p) => md_code($p['path']) . ': ' . md_number($p['entries']) . " entries, {$p['bounceRate']}% left from there");
+    // Under a page filter the report is about that page, as it says at the top: the pages lists stay
+    // whole for the dashboard to switch from, not for the report
+    if (!$d['path']) {
+        $md .= md_list('Pages', $d['pages'], fn ($p) => md_code($p['path']) . ': ' . md_number($p['views']) . ' pageviews, ' . md_number($p['visitors']) . ' visitors', $d['pagesTotal']);
+        $md .= md_list('Where visits start', $d['entryPages'], fn ($p) => md_code($p['path']) . ': ' . md_number($p['entries']) . " entries, {$p['bounceRate']}% left from there");
+    }
 
     if ($d['channels'] || $d['referrers']) {
         $md .= md_list('Sources', $d['channels'], fn ($c) => md_text($c['channel']) . ': ' . md_number($c['visitors']) . ' visitors, ' . $c['pages_per_visitor'] . ' pages each');
