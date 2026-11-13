@@ -1197,8 +1197,9 @@ function summary_figures(PDO $db, array $sites, string $since, string $end, stri
         'previousBounceRate' => $prevDay['visitors'] > 0 ? round(100 * $prevDay['bounces'] / $prevDay['visitors'], 1) : null,
         'medianSession' => $median($cur['duration'] ?? []) ?? 0,
         'previousMedianSession' => $median($prev['duration'] ?? []),
-        'medianEngaged' => $median($cur['engaged'] ?? []),
-        'previousMedianEngaged' => $median($prev['engaged'] ?? []),
+        // Not the visitors at 0 s, as the query over the rows leaves them out (get_api_data)
+        'medianEngaged' => $median(array_filter($cur['engaged'] ?? [], fn ($seconds) => (int) $seconds > 0, ARRAY_FILTER_USE_KEY)),
+        'previousMedianEngaged' => $median(array_filter($prev['engaged'] ?? [], fn ($seconds) => (int) $seconds > 0, ARRAY_FILTER_USE_KEY)),
         'firstLast' => array_values(array_map(fn ($k, $r) => ['path' => (string) $k, 'entries' => $r['entries'], 'bounces' => $r['bounces'], 'exits' => $r['exits']], array_keys($cur['path'] ?? []), $cur['path'] ?? [])),
         'browsers' => $counts('browser', false),
         'devices' => $counts('device', false),
@@ -1937,12 +1938,15 @@ function get_api_data(array $config, array $user): string
 
     // Engaged time per visitor: the median of each visitor's measured pageviews summed, the row at
     // n/2 as above. Visits of one page count too. With a path filter it is the time on that page.
-    // Null when no pageview in the period was measured (before v33, or from an older script)
+    // A visitor with not a second on screen is left out: a page never shown (a background tab, a
+    // prerender, a program that loads and leaves) is no reader, and on a small site such visitors
+    // held the median at 0 s. Null when no visitor in the period had a measured second (before v33,
+    // or from an older script)
     if ($fig) {
         $medianEngaged = $fig['medianEngaged'];
         $previousMedianEngaged = $fig['previousMedianEngaged'];
     } else {
-        $engagedSql = fn (string $where) => "SELECT seconds FROM (SELECT seconds, ROW_NUMBER() OVER (ORDER BY seconds) AS rn, COUNT(*) OVER () AS n FROM (SELECT " . engaged_seconds_sql() . " as seconds FROM pageviews WHERE {$where} AND engaged_ms IS NOT NULL GROUP BY visitor_hash)) WHERE rn = n / 2 + 1";
+        $engagedSql = fn (string $where) => "SELECT seconds FROM (SELECT seconds, ROW_NUMBER() OVER (ORDER BY seconds) AS rn, COUNT(*) OVER () AS n FROM (SELECT " . engaged_seconds_sql() . " as seconds FROM pageviews WHERE {$where} AND engaged_ms IS NOT NULL GROUP BY visitor_hash HAVING SUM(engaged_ms) >= 1000)) WHERE rn = n / 2 + 1";
         $stmt = $db->prepare($engagedSql("{$dateFilter} {$siteFilter} {$pathFilter} {$channelFilter}"));
         $stmt->execute(array_merge($dateParams, $siteParams, $pathParams, $channelParams));
         $median = $stmt->fetchColumn();

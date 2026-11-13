@@ -851,7 +851,7 @@ test('api median session length is the middle visit, computed in SQL', function 
     expect($data['medianSessionSeconds'])->toBe(60);
 });
 
-test('api median engaged time is per visitor, counts visits of one page, and is the time on a page under a path filter', function () {
+test('api median engaged time is per visitor, counts visits of one page, leaves out visitors who never had a page on screen, and is the time on a page under a path filter', function () {
     $site = 'engaged-api-' . uniqid();
     $db = getTestDb();
     $stmt = $db->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash, engaged_ms) VALUES (?, ?, ?, ?, ?)');
@@ -864,15 +864,22 @@ test('api median engaged time is per visitor, counts visits of one page, and is 
     expect($read()['medianEngagedSeconds'])->toBeNull()
         ->and($read()['previousMedianEngagedSeconds'])->toBeNull();
 
-    // a: two pages, 30 s and 90 s; b: one page for 5 min; c: one page left in under a second
+    // c and d only: measured, but never a second on screen (a background tab, a program that loads
+    // and leaves), so there is no time to give yet
+    $stmt->execute([$at, $site, '/', 'c', 0]);
+    $stmt->execute([$at, $site, '/', 'd', 400]);
+    expect($read()['medianEngagedSeconds'])->toBeNull();
+
+    // a: two pages, 30 s and 90 s; b: one page for 5 min; e: one page for 45 s
     $stmt->execute([$at, $site, '/', 'a', 30000]);
     $stmt->execute([$at, $site, '/pricing', 'a', 90000]);
     $stmt->execute([$at, $site, '/', 'b', 300000]);
-    $stmt->execute([$at, $site, '/', 'c', 0]);
-    // Sorted 0, 120, 300: the middle is a's two pages together
+    $stmt->execute([$at, $site, '/', 'e', 45000]);
+    // Sorted 45, 120, 300 without c and d: the middle is a's two pages together. With them it
+    // would be 0, 0, 45, 120, 300 and the middle 45
     expect($read()['medianEngagedSeconds'])->toBe(120)
-        // On / alone: 0, 30, 300
-        ->and($read('&path=%2F')['medianEngagedSeconds'])->toBe(30)
+        // On / alone: 30, 45, 300
+        ->and($read('&path=%2F')['medianEngagedSeconds'])->toBe(45)
         ->and($read('&path=%2Fpricing')['medianEngagedSeconds'])->toBe(90);
 });
 

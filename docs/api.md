@@ -81,7 +81,7 @@ Every response compares with the previous period of the same length, in the `pre
 | `totals`, `previousTotals` | `{views, visitors}` |
 | `pageviews`, `previousPageviews` | One row per day: `[{date, views, visitors}]` |
 | `bounceRate`, `previousBounceRate` | Percentage of visitors with a single pageview. `0` with `path`, which does not measure it |
-| `medianEngagedSeconds`, `previousMedianEngagedSeconds` | Median engaged time per visitor in a day, visits of one page included ([engaged time](integrations.md#engaged-time)). With `path`, the time on that page. Whole seconds under a minute, then steps of 5 s to ten minutes, 30 s to an hour and 5 minutes after. `null` when no pageview in the period was measured |
+| `medianEngagedSeconds`, `previousMedianEngagedSeconds` | Median engaged time per visitor in a day, visits of one page included ([engaged time](integrations.md#engaged-time)), of the visitors who had a page on screen for at least a second: a page never shown (a background tab, a prerender, a program that loads and leaves) is no reader. With `path`, the time on that page. Whole seconds under a minute, then steps of 5 s to ten minutes, 30 s to an hour and 5 minutes after. `null` when no visitor in the period had a measured second |
 | `medianSessionSeconds`, `previousMedianSessionSeconds` | The earlier measure, which the dashboard no longer shows: median time between first and last pageview, for visitors with more than one, so on a site of one page mostly the time between two visits. Kept for scripts that read it. `0` when no visitor had more than one, and with `path` |
 | `pages`, `pagesTotal` | `[{path, views, visitors}]` and the number of distinct paths |
 | `entryPages` | `[{path, entries, bounces, bounceRate}]` |
