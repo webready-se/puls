@@ -5,6 +5,7 @@
  * Usage: php scripts/seed-demo.php [db_path] [--token=<token>] [--group=<name>] [--refresh | --top-up]
  *
  *   --token=<token>  the share token to make, so a link stays the same from one reseed to the next
+ *                    (32 or more letters, digits or _, as Puls reads)
  *   --group=<name>   the three sites in a group, and the token reads the group (site picker, All sites)
  *   --refresh        reseed an existing database in place, in one transaction, rather than a new file:
  *                    a file replaced under an open WAL database can be broken by the old one's WAL, and
@@ -28,9 +29,10 @@ foreach (array_slice($argv, 1) as $arg) {
     }
     $opts[$name] = $value ?? true;
 }
-// The token is the demo's whole lock: a short one could be guessed
-if ($opts['token'] !== null && !preg_match('/^[A-Za-z0-9_]{16,}$/', $opts['token'])) {
-    fwrite(STDERR, "--token needs at least 16 letters, digits or _\n");
+// As long as Puls reads (find_share_token looks up none under 32 characters), so a link the seed
+// makes always works, and long enough that it cannot be guessed
+if ($opts['token'] !== null && !preg_match('/^[A-Za-z0-9_]{32,}$/', $opts['token'])) {
+    fwrite(STDERR, "--token needs at least 32 letters, digits or _, as Puls reads no shorter token\n");
     exit(1);
 }
 if ($opts['refresh'] && $opts['top-up']) {
