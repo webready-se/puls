@@ -885,6 +885,34 @@ async function main() {
       }
     }
 
+    // A page in the pages card filters on it too, as a channel does: the list stays whole, the page
+    // marked and the others stepped back, the channels are the page's, and a second click clears it
+    const pageRow = (path) => q(`.tab-panel[data-panel="popular"] [data-action="filter-path"][data-path="${path}"]`);
+    expect(pageRow('/pricing')?.getAttribute('role') === 'button' && pageRow('/pricing').getAttribute('aria-pressed') === 'false', 'a page in the pages card is a button that filters');
+    if (pageRow('/pricing')) {
+      pageRow('/pricing').click();
+      if (await waitFor(() => q('.path-filter-path')?.textContent === '/pricing' && pageRow('/pricing')?.getAttribute('aria-pressed') === 'true', 'a page filter from the pages card')) {
+        const others = [...document.querySelectorAll('.tab-panel[data-panel="popular"] [data-action="filter-path"]')].filter((r) => r.dataset.path !== '/pricing');
+        expect(pageRow('/pricing').classList.contains('is-picked') && others.length && others.every((r) => r.classList.contains('is-other')), 'under its filter the pages list stays whole, the page marked and the others stepped back');
+        expect(q('.trow[data-action="filter-channel"]'), 'under a page filter the channels show, the page\'s own');
+        pageRow('/pricing').click();
+        await waitFor(() => !q('.path-filter') && !q('.trow.is-other'), 'a second click on the page clears its filter');
+      }
+    }
+    // The channel filtered on is marked and the other channels step back, so the list says where
+    // the filter is set; a second click clears it
+    const channelRows = () => [...document.querySelectorAll('.trow[data-action="filter-channel"]')];
+    const chosen = channelRows()[1]?.dataset.channel;
+    if (chosen) {
+      channelRows()[1].click();
+      if (await waitFor(() => q('[data-island="filter-channel"]') && channelRows().some((r) => r.getAttribute('aria-pressed') === 'true'), 'a channel filter')) {
+        const rows = channelRows();
+        expect(rows.find((r) => r.dataset.channel === chosen)?.getAttribute('aria-pressed') === 'true' && rows.find((r) => r.dataset.channel === chosen).classList.contains('is-picked') && rows.filter((r) => r.dataset.channel !== chosen).every((r) => r.classList.contains('is-other') && r.getAttribute('aria-pressed') === 'false'), 'the channel filtered on is marked and the others step back');
+        rows.find((r) => r.dataset.channel === chosen).click();
+        await waitFor(() => !q('[data-island="filter-channel"]') && !q('.trow.is-other'), 'a second click on the channel clears its filter and the list');
+      }
+    }
+
     if (!await waitFor(() => q('#chart-card') && q('#goal-search'), 'logged-in dashboard')) return fails;
     const search = q('#goal-search');
     search.value = 'pwa_install';

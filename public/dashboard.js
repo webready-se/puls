@@ -108,6 +108,7 @@
     'close-overlay-outside': function(el, e) { if (e.target === el) closeOverlay(); },
     'clear-path-filter': function() { clearPathFilter(); },
     'filter-channel': function(el) { filterChannel(el.dataset.channel || ''); },
+    'filter-path': function(el) { filterPath(el.dataset.path || ''); },
     'blur-on-enter': function(el, e) { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } },
     'rename-breakdown': function(el) { renameBreakdown(el); },
     'card-drag': function(el, e) { startCardDrag(e, el); },
@@ -737,12 +738,11 @@
       island('summary', renderSummary(d.summary)) +
       renderGoals(d.goals);
 
-    if (!filtered) {
-      html += island('pages', '<div class="grid-2">' +
-        renderTabbedPages(d.pages, d.entryPages, d.exitPages, d.pagesTotal) +
-        renderChannels(d.channels) +
-      '</div>');
-    }
+    // Under a page filter too: the pages stay whole, to switch from, and the channels are the page's
+    html += island('pages', '<div class="grid-2">' +
+      renderTabbedPages(d.pages, d.entryPages, d.exitPages, d.pagesTotal) +
+      renderChannels(d.channels) +
+    '</div>');
     html += island('traffic', '<div class="grid-2">' +
       renderTabbedTraffic(d.referrers, d.utm, d.referrersTotal, d.utmTotal, d.events, d.eventsTotal, d.outbound, d.outboundTotal) +
       renderTabbedVisitors(d.browsers, d.devices, d.languages, d.countries) +
@@ -1771,7 +1771,9 @@
     if (el) el.focus({ preventScroll: true });
   }
 
-  function renderTableContent(rows, labelKey, valKey, color) {
+  // filterable: a row is a page that a click filters on (the pages card and its entry and exit
+  // lists), not a list of what bots read
+  function renderTableContent(rows, labelKey, valKey, color, filterable) {
     if (!rows || !rows.length) {
       return '<p class="muted fs-13 mt-12">No data yet</p>';
     }
@@ -1799,7 +1801,9 @@
       var stripped = prefix ? full.substring(prefix.length) : '';
       var label = prefix ? (stripped ? '/' + stripped : '/') : full;
       var bounce = r.bounceRate !== undefined ? ' <span class="trow-bounce faint fs-11" title="Share of visitors who entered here and saw only this page">' + r.bounceRate + '% bounce</span>' : '';
-      html += '<div class="trow">' +
+      html += (filterable
+        ? '<div class="trow trow-clickable' + pickClass(currentPath, r[labelKey]) + '" role="button" tabindex="0" aria-pressed="' + (currentPath === r[labelKey]) + '" data-action="filter-path" data-path="' + esc(r[labelKey]) + '">'
+        : '<div class="trow">') +
         '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + bounce + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="' + color + '"></div></div>' +
         '<span class="trow-val">' + num(r[valKey]) + '</span>' +
@@ -1831,8 +1835,8 @@
 
   var expandRenderers = {
     pages: function(d) { return renderPagesContent(d.pages); },
-    entryPages: function(d) { return renderTableContent(d.entryPages, 'path', 'entries', '#059669'); },
-    exitPages: function(d) { return renderTableContent(d.exitPages, 'path', 'exits', '#d97706'); },
+    entryPages: function(d) { return renderTableContent(d.entryPages, 'path', 'entries', '#059669', true); },
+    exitPages: function(d) { return renderTableContent(d.exitPages, 'path', 'exits', '#d97706', true); },
     referrers: function(d) { return renderTableContent(d.referrers, 'source', 'visitors', '#19acca'); },
     utm: function(d) { return renderUtmContent(d.utm); },
     events: function(d) { return renderEventsContent(d.events); },
@@ -1863,7 +1867,7 @@
 
     tabs.forEach(function(t, i) {
       html += '<div class="tab-panel" data-panel="' + t.id + '"' + (i !== 0 ? ' hidden' : '') + '>' +
-        renderTableContent(t.rows, 'path', t.valKey, t.color) +
+        renderTableContent(t.rows, 'path', t.valKey, t.color, true) +
         showAllBtn(t.total, t.expand, t.label + ' pages') +
       '</div>';
     });
@@ -2073,7 +2077,7 @@
       var pct = (+c.visitors / maxVisitors) * 100;
       var color = channelColors[c.channel] || 'var(--accent-tile)';
       var slug = channelSlugs[c.channel] || '';
-      html += '<div class="trow trow-clickable" role="button" tabindex="0" data-action="filter-channel" data-channel="' + slug + '">' +
+      html += '<div class="trow trow-clickable' + pickClass(currentChannel, slug) + '" role="button" tabindex="0" aria-pressed="' + (currentChannel === slug) + '" data-action="filter-channel" data-channel="' + slug + '">' +
         '<span class="trow-label">' + esc(c.channel) +
           ' <span class="faint fs-11">' + c.pages_per_visitor + ' p/v</span>' +
         '</span>' +
@@ -2088,6 +2092,22 @@
     currentChannel = currentChannel === slug ? '' : slug;
     load(currentDays);
   };
+
+  // A page in a list filters on it, as a channel does, and again clears it. The list stays whole,
+  // marked where the filter is set, so the reader stays where they clicked. From Show all too,
+  // which closes
+  window.filterPath = function(path) {
+    currentPath = currentPath === path ? '' : path;
+    if (document.getElementById('overlay').classList.contains('open')) closeOverlay();
+    load(currentDays);
+  };
+
+  // A row of a list that filters, which stays whole under its own filter: the one filtered on is
+  // marked and the others step back, so the list says where the filter is set, as the chart does
+  // for a picked day
+  function pickClass(picked, value) {
+    return picked ? (picked === value ? ' is-picked' : ' is-other') : '';
+  }
 
   // A campaign's source in words: Meta's ads fill utm_source with its own codes, and a cost per
   // click from Google is Google Ads. Only the label: the API and the exports keep what was sent,

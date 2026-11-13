@@ -61,8 +61,8 @@ All requests are `GET` with query parameters.
 | `days=30` | Period of 1 to 365 days ending today. Default 7 |
 | `from=2026-09-01&to=2026-09-30` | A fixed date range instead of `days` (both required, `YYYY-MM-DD`) |
 | `site=name` | One site. Implied with a token for one site or a user with a single site. A token for groups or a user with several sites picks one of theirs, by the name `?api&sites` lists |
-| `path=/pricing` | Only pageviews of this exact path (the page drill-down) |
-| `channel=paid` | Only visitors from one channel: `paid`, `ai`, `campaign`, `organic-search`, `social`, `referral`, `direct`. Goals are left out when `channel` or `path` is set |
+| `path=/pricing` | Only pageviews of this exact path (the page drill-down). The pages lists (`pages`, `entryPages`, `exitPages`) stay whole under it, as `channels` stays whole under `channel`, so a reader can switch from them; the page's own figures are in `totals` and the rest |
+| `channel=paid` | Only visitors from one channel: `paid`, `ai`, `campaign`, `organic-search`, `social`, `referral`, `direct`. `channels` stays whole under it. Goals are left out when `channel` or `path` is set |
 | `language=sv` | Only pageviews in one language (two letters, as in `languages`). Reads the rows, as `channel` and `path` do, and goals are left out here too |
 | `expand=pages` | Return up to 1,000 rows for one list instead of the top 10 (50 for `events`): `pages`, `referrers`, `entryPages`, `exitPages`, `utm`, `events`, `outbound`, `bots`, `botPages`, `botActivity` |
 | `bots=summary` | Leave out `botPages`, `botPagesTotal`, `botActivity` and `botKeptDays`, which read every bot visit of the period. The bot totals stay. Faster on a site with many crawler visits |
