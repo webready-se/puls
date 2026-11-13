@@ -510,10 +510,24 @@ body {
 .chart-month::before { content: ''; position: absolute; left: 0; top: -15px; bottom: 0; border-left: 1px solid var(--line-strong); }
 .chart-pin { left: 4px; pointer-events: none; }
 .chart-pin[data-covered] { visibility: hidden; }
-/* A day opens its hours (renderHours in dashboard.js): the picked day's bar gets a ring and
-   its date the accent */
+/* A day opens its hours (renderHours in dashboard.js): the other days step back, so the picked one
+   stands out at a glance in both themes, and it is named above and below, its value and date in
+   the accent, its bar a half step deeper in the bars' own colour. Not a ring, and not the accent all
+   the way, which is heavy in light mode and glows in dark. The others are mixed toward the card
+   rather than made transparent, since a bar holds its own tooltip */
 .chart-col[data-date] { cursor: pointer; }
-.chart-col.selected .chart-bar:not(.chart-bar-prev) { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent-tile); }
+.chart-col.selected .chart-bar:not(.chart-bar-prev) { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 50%, var(--accent-tile)) 0%, var(--accent-tile) 100%); }
+.chart-col.selected .chart-val { color: var(--accent); }
+.chart:has(.chart-col.selected) .chart-col:not(.selected) .chart-bar:not(.chart-bar-prev) { background: linear-gradient(180deg, color-mix(in srgb, var(--accent-tile) 55%, var(--surface)) 0%, color-mix(in srgb, color-mix(in srgb, var(--accent-tile) 78%, #fff) 55%, var(--surface)) 100%); }
+/* Pointed at, a day that stepped back shows in full, where brighter would only make it paler */
+.chart:has(.chart-col.selected) .chart-col:not(.selected):hover .chart-bar:not(.chart-bar-prev) { background: linear-gradient(180deg, var(--accent-tile) 0%, color-mix(in srgb, var(--accent-tile) 78%, #fff) 100%); filter: none; }
+/* Closing the hours redraws the chart, so the way back is an animation on the new bars (closeHours
+   adds .undim and .unpick): a veil of the card that lifts, the step back undone over a moment
+   rather than at once. Once, so Reduce Motion's reset ends it at the start */
+.chart-col:is(.undim, .unpick) .chart-bar:not(.chart-bar-prev)::after { content: ''; position: absolute; inset: 0; border-radius: inherit; opacity: 0; pointer-events: none; animation: chart-unveil 0.35s ease-out; }
+.chart-col.undim .chart-bar:not(.chart-bar-prev)::after { background: var(--surface); --veil: 0.45; }
+.chart-col.unpick .chart-bar:not(.chart-bar-prev)::after { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 50%, var(--accent-tile)) 0%, var(--accent-tile) 100%); --veil: 1; }
+@keyframes chart-unveil { from { opacity: var(--veil); } to { opacity: 0; } }
 .chart-col.selected .chart-date { color: var(--accent); font-weight: 600; }
 /* Open, the hours hang from the chart: one card with a hairline between, since they are the
    chart's day opened up, not a section of their own */
