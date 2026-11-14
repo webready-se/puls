@@ -68,10 +68,11 @@
 
   // A strict Content Security Policy allows no inline style attribute, so rendering code puts a
   // bar's width or height and a colour in data attributes (data-w in percent, data-h in pixels,
-  // data-bg, data-color), and they are applied here through the CSSOM, which the policy allows.
+  // data-bg, data-color; data-tint is a row's own colour, as --tint for its styles), and they are
+  // applied here through the CSSOM, which the policy allows.
   // Every element added to the page passes through the observer, so no caller has to remember it
   function applyStyles(root) {
-    var sel = '[data-w],[data-h],[data-bg],[data-color]';
+    var sel = '[data-w],[data-h],[data-bg],[data-color],[data-tint]';
     var els = root.querySelectorAll ? [].slice.call(root.querySelectorAll(sel)) : [];
     if (root.nodeType === 1 && root.matches(sel)) els.push(root);
     els.forEach(function(el) {
@@ -80,6 +81,7 @@
       if (d.h !== undefined) el.style.height = d.h + 'px';
       if (d.bg !== undefined) el.style.background = d.bg;
       if (d.color !== undefined) el.style.color = d.color;
+      if (d.tint !== undefined) el.style.setProperty('--tint', d.tint);
     });
   }
   new MutationObserver(function(records) {
@@ -1802,7 +1804,7 @@
       var label = prefix ? (stripped ? '/' + stripped : '/') : full;
       var bounce = r.bounceRate !== undefined ? ' <span class="trow-bounce faint fs-11" title="Share of visitors who entered here and saw only this page">' + r.bounceRate + '% bounce</span>' : '';
       html += (filterable
-        ? '<div class="trow trow-clickable' + pickClass(currentPath, r[labelKey]) + '" role="button" tabindex="0" aria-pressed="' + (currentPath === r[labelKey]) + '" data-action="filter-path" data-path="' + esc(r[labelKey]) + '">'
+        ? '<div class="trow trow-clickable' + pickClass(currentPath, r[labelKey]) + '" role="button" tabindex="0" aria-pressed="' + (currentPath === r[labelKey]) + '" data-tint="' + color + '" data-action="filter-path" data-path="' + esc(r[labelKey]) + '">'
         : '<div class="trow">') +
         '<span class="trow-label" title="' + esc(full) + '">' + esc(label) + bounce + '</span>' +
         '<div class="trow-bar"><div class="trow-fill" data-w="' + pct + '" data-bg="' + color + '"></div></div>' +
@@ -2077,7 +2079,7 @@
       var pct = (+c.visitors / maxVisitors) * 100;
       var color = channelColors[c.channel] || 'var(--accent-tile)';
       var slug = channelSlugs[c.channel] || '';
-      html += '<div class="trow trow-clickable' + pickClass(currentChannel, slug) + '" role="button" tabindex="0" aria-pressed="' + (currentChannel === slug) + '" data-action="filter-channel" data-channel="' + slug + '">' +
+      html += '<div class="trow trow-clickable' + pickClass(currentChannel, slug) + '" role="button" tabindex="0" aria-pressed="' + (currentChannel === slug) + '" data-tint="' + color + '" data-action="filter-channel" data-channel="' + slug + '">' +
         '<span class="trow-label">' + esc(c.channel) +
           ' <span class="faint fs-11">' + c.pages_per_visitor + ' p/v</span>' +
         '</span>' +
