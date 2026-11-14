@@ -96,9 +96,10 @@ it('tops up the visits since the last one, and none after now', function () use 
     expect((int) $db->query('SELECT COUNT(*) FROM pageviews')->fetchColumn())->toBeLessThanOrEqual($total + 3);
 });
 
-it('refuses an unknown option and a token too short to keep private', function () use ($seed) {
+it('refuses an unknown option and a token shorter than Puls reads', function () use ($seed) {
     $unknown = $seed($this->db, ['--tokn=' . $this->token]);
-    $short = $seed($this->db, ['--token=abc']);
+    // Puls looks up no token under 32 characters: one the seed took would be a link that never works
+    $short = $seed($this->db, ['--token=puls_' . str_repeat('a', 26)]);
 
     expect($unknown['exit'])->toBe(1)
         ->and($unknown['output'])->toContain('--tokn')
