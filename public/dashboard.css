@@ -877,6 +877,7 @@ body {
 .menu-fold-body[hidden] { display: none; }
 .menu-link { font-size: 12px; color: var(--text-3); text-align: center; }
 .menu-link:hover { color: var(--accent); }
+.menu-text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); }
 .menu-label { font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 
 /* Theme toggle */

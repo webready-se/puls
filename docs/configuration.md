@@ -72,7 +72,7 @@ A name Puls has not seen a visit from is refused, since it is most often a typo.
 
 ## Share links
 
-A share link shows a dashboard read-only, without a login, and also opens the [read API](api.md) for the same data. It covers one site, or the sites in one or more groups, with a site picker in the dashboard:
+A share link shows a dashboard read-only, without a login, and also opens the [read API](api.md) for the same data. It covers one site, or the sites in one or more groups, with a site picker in the dashboard. Its menu holds what works without a login: the theme, the export of what is on screen, and what the link shows and until when. What needs a login (goals, chart notes, excluded IPs) is left out:
 
 ```bash
 php puls share:create example.com --label="Client Q1" --expires=2026-06-30
