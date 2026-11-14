@@ -407,8 +407,8 @@ $db->prepare('INSERT INTO goals (site, path, label, created_at) VALUES (?, ?, ?,
    ->execute([$site, '/signup', 'Signup conversion', date('Y-m-d H:i:s')]);
 
 // Posts a tool on the same server would hand over (php puls posts:add), a dot on their day. The
-// table as migration v34 makes it, since this database starts on the old schema. All over a week
-// ago: the smoke test seeds its own in the last seven days and counts them
+// table as migration v34 makes it, since this database starts on the old schema. Two in the last
+// seven days, the period a shared link opens on, so the live demo shows its dots at first sight
 $db->exec('CREATE TABLE IF NOT EXISTS posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     site TEXT NOT NULL,
@@ -422,11 +422,11 @@ $db->exec('CREATE TABLE IF NOT EXISTS posts (
 $postStmt = $db->prepare('INSERT INTO posts (site, post_id, at, sources, text, url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
 foreach ([
     [26, '08:30', 'instagram,facebook', 'Spring collection: a first look'],
-    [22, '19:10', 'facebook', 'Open late on Thursday'],
-    [18, '12:05', 'instagram', 'Behind the scenes in the workshop'],
-    [15, '08:45', 'instagram,facebook', '20% off linen this weekend'],
-    [11, '17:30', 'rss', 'New on the blog: how we choose our fabrics'],
-    [8, '09:15', 'instagram', 'Back in stock'],
+    [21, '19:10', 'facebook', 'Open late on Thursday'],
+    [16, '12:05', 'instagram', 'Behind the scenes in the workshop'],
+    [11, '08:45', 'instagram,facebook', '20% off linen this weekend'],
+    [5, '17:30', 'rss', 'New on the blog: how we choose our fabrics'],
+    [2, '09:15', 'instagram', 'Back in stock'],
 ] as $n => [$daysAgo, $time, $sources, $text]) {
     $at = date('Y-m-d', strtotime("-{$daysAgo} days")) . " {$time}:00";
     $postStmt->execute([$site, "demo:{$n}", $at, $sources, $text, "https://example.com/p/{$n}", $at]);

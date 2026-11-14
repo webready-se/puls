@@ -120,7 +120,9 @@ async function main() {
     $note->execute([date('Y-m-d', strtotime('-2 days')), null, 'Say "hi" <b>bold</b>']);
     $note->execute([date('Y-m-d'), null, 'Smoke film']);
     // Posts: two on one day (one with markup and a script link, which must stay text), one on
-    // another day and one before the period. Inserted as rows, so the dashboard's own guard is tested
+    // another day and one before the period. Inserted as rows, so the dashboard's own guard is tested.
+    // The seed's own posts go first, since two of them are in the period and the steps below count dots
+    $db->exec('DELETE FROM posts');
     $postRow = $db->prepare("INSERT INTO posts (site, post_id, at, sources, text, url, created_at) VALUES ('demo.example.com', ?, ?, ?, ?, ?, '$now')");
     $postRow->execute(['instagram:smoke-1', date('Y-m-d', strtotime('-3 days')) . ' 08:15:00', 'instagram,facebook', 'Smoke autumn post', 'https://example.com/p/1']);
     $postRow->execute(['facebook:smoke-2', date('Y-m-d', strtotime('-3 days')) . ' 19:40:00', 'facebook', 'Say "hi" <b>bold</b>', 'javascript:alert(1)']);
