@@ -9,6 +9,8 @@
 Self-hosted web analytics in a single PHP file and SQLite.<br>
 Upload it to any PHP host and see your traffic in minutes, without a cookie banner.
 
+**[Try the live demo](https://demo.puls.webready.se)** - no account, made-up data
+
 [![Tests](https://github.com/webready-se/puls/actions/workflows/tests.yml/badge.svg)](https://github.com/webready-se/puls/actions/workflows/tests.yml)
 [![Latest release](https://img.shields.io/github/v/release/webready-se/puls)](https://github.com/webready-se/puls/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
