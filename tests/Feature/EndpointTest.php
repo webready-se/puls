@@ -725,6 +725,43 @@ test('dashboard config is injected once, after the page title, as a JSON data bl
         ->and(json_decode(preg_replace('#^.*?' . preg_quote($block, '#') . '(.*?)</script>.*$#s', '$1', $dashboard), true)['share'])->toBeNull();
 });
 
+test('a shared page carries the tracking script of the Puls named in TRACK_SHARED_URL, and the login page does not', function () {
+    $port = freePort();
+    $pid = startServer($port, $GLOBALS['test_env'] + ['TRACK_SHARED_URL' => 'https://puls.example.com/', 'TRACK_SHARED_SITE' => 'demo "site"']);
+    try {
+        $shared = http('GET', '/?share=' . createTestShareToken('tracked-' . uniqid()), [], $port);
+        $csp = collect($shared['headers'])->first(fn ($h) => stripos($h, 'Content-Security-Policy:') === 0);
+        // The page is always "/" and no query is sent, so the token stays where it is; the next
+        // page's referrer is the origin alone, for the same reason
+        expect($shared['body'])->toContain('<script defer src="https://puls.example.com/?js" data-site="demo &quot;site&quot;" data-path="/" data-query="none"></script>')
+            ->and($csp)->toContain("script-src 'self' https://puls.example.com;")
+            ->and($csp)->toContain("connect-src 'self' https://puls.example.com;")
+            ->and($csp)->not->toContain('unsafe-inline')
+            ->and($shared['headers'])->toContain('Referrer-Policy: strict-origin');
+
+        $login = http('GET', '/', [], $port);
+        $csp = collect($login['headers'])->first(fn ($h) => stripos($h, 'Content-Security-Policy:') === 0);
+        expect($login['body'])->not->toContain('puls.example.com')
+            ->and($csp)->toContain("script-src 'self';");
+    } finally {
+        stopServer($pid);
+    }
+});
+
+test('TRACK_SHARED_URL that is not a plain web address is left out', function (string $url) {
+    $port = freePort();
+    $pid = startServer($port, $GLOBALS['test_env'] + ['TRACK_SHARED_URL' => $url]);
+    try {
+        $shared = http('GET', '/?share=' . createTestShareToken('untracked-' . uniqid()), [], $port);
+        $csp = collect($shared['headers'])->first(fn ($h) => stripos($h, 'Content-Security-Policy:') === 0);
+        expect($shared['status'])->toBe(200)
+            ->and($csp)->toContain("script-src 'self';")
+            ->and($shared['body'])->not->toContain('example.com');
+    } finally {
+        stopServer($pid);
+    }
+})->with(['javascript:alert(1)', "https://puls.example.com; script-src *", 'https://puls.example.com/"><script>', 'puls.example.com', '']);
+
 test('the dashboard, the shared dashboard and the login page carry a strict CSP and no inline script or style', function () {
     $pages = [
         'login' => http('GET', '/'),

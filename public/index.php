@@ -180,8 +180,8 @@ if ($shareToken !== null) {
             'sites' => $shareSites,
             // The last day the link works, for its menu to say; null when it has none
             'expires' => $share['expires_at'] ? substr($share['expires_at'], 0, 10) : null,
-        ]) . agent_hint($config));
-        respond($html, 200, 'text/html', security_headers());
+        ]) . agent_hint($config) . shared_tracker_tag($config));
+        respond($html, 200, 'text/html', security_headers(shared_tracker_origin($config)));
     }
     respond('Dashboard file not found.', 404, 'text/plain');
 }
@@ -2733,19 +2733,41 @@ function agent_hint(array $config): string
     return '<link rel="help" type="text/plain" title="For AI agents: how to read this" href="https://raw.githubusercontent.com/webready-se/puls/main/llms.txt">';
 }
 
+// A shared page can carry the tracking script of a Puls named in TRACK_SHARED_URL, so a public
+// demo knows how many came and from where. Only shared pages: someone logged in to their own
+// install is never counted. The page is always "/" and the query is left out, so the token in the
+// address is not sent, and nothing but that one origin is added to the policy
+function shared_tracker_origin(array $config): ?string
+{
+    if (!$config['track_shared_url']) return null;
+    $u = parse_url($config['track_shared_url']);
+    return $u['scheme'] . '://' . $u['host'] . (isset($u['port']) ? ':' . $u['port'] : '');
+}
+
+function shared_tracker_tag(array $config): string
+{
+    if (!$config['track_shared_url']) return '';
+    $site = $config['track_shared_site'] !== '' ? ' data-site="' . htmlspecialchars($config['track_shared_site'], ENT_QUOTES) . '"' : '';
+    return '<script defer src="' . $config['track_shared_url'] . '/?js"' . $site . ' data-path="/" data-query="none"></script>';
+}
+
 function inject_after_title(string $html, string $markup): string
 {
     $at = strpos($html, '</title>');
     return $at === false ? $html : substr_replace($html, $markup, $at + strlen('</title>'), 0);
 }
 
-function security_headers(): array
+// $tracker is the origin a shared page's tracking script comes from and reports to (see
+// shared_tracker_origin). With it the referrer is the origin alone even to the page's own site,
+// so a page opened from a shared link never hands the script an address with the token in it
+function security_headers(?string $tracker = null): array
 {
+    $also = $tracker ? ' ' . $tracker : '';
     return [
-        'Content-Security-Policy' => "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'",
+        'Content-Security-Policy' => "default-src 'none'; script-src 'self'{$also}; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'{$also}; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'",
         'X-Content-Type-Options' => 'nosniff',
         'X-Frame-Options' => 'DENY',
-        'Referrer-Policy' => 'strict-origin-when-cross-origin',
+        'Referrer-Policy' => $tracker ? 'strict-origin' : 'strict-origin-when-cross-origin',
         'Permissions-Policy' => 'camera=(), microphone=(), geolocation=()',
     ];
 }

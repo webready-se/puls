@@ -28,6 +28,8 @@ BOT_RETENTION_DAYS=90       # Days to keep each bot visit, 0 = forever. The coun
 TIMEZONE=                   # Time zone for days and hours, e.g. Europe/Stockholm; empty = php.ini's
 TIME_FORMAT=24h             # Clock times in the dashboard: 24h (14:00) or 12h (2 PM)
 FOOTER_CREDIT=true          # "Made by Webready in Sweden" in the dashboard footer, false = off
+TRACK_SHARED_URL=           # Another Puls that counts visits to this one's shared pages, see Share links
+TRACK_SHARED_SITE=          # The site name it files them under; empty = this install's host name
 ```
 
 `TRUSTED_PROXIES` matters when Puls runs behind a reverse proxy, Cloudflare or a load balancer: see [reverse proxies](integrations.md#behind-a-reverse-proxy-docker-cloudflare-load-balancers).
@@ -80,6 +82,17 @@ php puls share:create --groups=Shops,Private --label="Reporting tool"
 ```
 
 A link works for 90 days unless you give another last day, or `--expires=never`. See [share tokens](api.md#share-tokens) for how they work.
+
+### Counting visits to a shared page
+
+A shared link that is public, a demo for instance, can be counted by a Puls like any other page. Name the Puls that counts in `.env`, and add this install's domain to that Puls's `ALLOWED_ORIGINS` if it has one:
+
+```env
+TRACK_SHARED_URL=https://puls.example.com
+TRACK_SHARED_SITE=demo
+```
+
+Shared pages then carry that Puls's tracking script, and the page's policy lets that one address through and nothing else. Every visit is stored as the page `/` with no query, and a page opened from a shared link gets only the domain as its referrer, so the token in the address never leaves the install. Only shared pages are counted: the dashboard behind the login and the login page never carry the script. An address that is not a plain `http` or `https` one is ignored.
 
 ## Excluding your own visits
 

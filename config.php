@@ -69,6 +69,11 @@ return [
 
     'users_file' => resolve_path($_ENV['USERS_FILE'] ?? 'users.json'),
 
+    // The Puls that counts visits to this install's shared pages (a public demo, say), and the site
+    // name it files them under. Off unless it is a plain web address, since it goes into a header
+    'track_shared_url' => preg_match('#^https?://[a-z0-9.-]+(:\d+)?(/[a-z0-9._~/-]*)?$#i', $trackShared = trim($_ENV['TRACK_SHARED_URL'] ?? '')) ? rtrim($trackShared, '/') : null,
+    'track_shared_site' => trim($_ENV['TRACK_SHARED_SITE'] ?? ''),
+
     'allowed_origins' => array_filter(explode(',', $_ENV['ALLOWED_ORIGINS'] ?? '')),
 
     'session_lifetime' => (int) ($_ENV['SESSION_LIFETIME'] ?? 2592000),
