@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-11-19
+
 ### Added
 
 - **Each release is a Docker image, `ghcr.io/webready-se/puls`, so Docker runs Puls without building it.** For amd64 and arm64 (a Raspberry Pi or an ARM server too), tagged `latest`, the minor version and the exact version, and started and checked for a healthy answer before it is published. `docker-compose.yml` runs the image instead of building the checkout, and [Docker](docs/install.md#docker) shows a first start with a long random password for the login, shown once. Building it yourself still works.
@@ -683,6 +685,7 @@ First public release.
 - GitHub Actions on PHP 8.3 / 8.4 / 8.5
 - Pre-push hook — tests run before every push
 
+[1.32.0]: https://github.com/webready-se/puls/releases/tag/v1.32.0
 [1.31.0]: https://github.com/webready-se/puls/releases/tag/v1.31.0
 [1.30.0]: https://github.com/webready-se/puls/releases/tag/v1.30.0
 [1.29.0]: https://github.com/webready-se/puls/releases/tag/v1.29.0
