@@ -20,6 +20,10 @@ RUN mkdir -p data
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# PHP's built-in server runs one request at a time unless it has workers, so a long dashboard
+# request would hold up every tracking request behind it
+ENV PHP_CLI_SERVER_WORKERS=4
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s \
