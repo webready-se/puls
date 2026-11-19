@@ -43,6 +43,22 @@ it('writes a checked, compressed copy of the database that only its owner can re
         ->and(fileperms($this->dir) & 0777)->toBe(0700);
 });
 
+it('leaves the day\'s salt out of the copy, so its hashes cannot be computed again from it', function () {
+    $db = new PDO('sqlite:' . $this->dbPath);
+    $db->exec('CREATE TABLE salts (date TEXT PRIMARY KEY, salt TEXT NOT NULL)');
+    $db->prepare('INSERT INTO salts (date, salt) VALUES (?, ?)')->execute([date('Y-m-d'), str_repeat('5a17', 16)]);
+
+    $result = runCli($this->tmpDir, 'backup', [$this->dir]);
+    $file = glob("{$this->dir}/puls-*")[0];
+    $copy = unpackBackup($file);
+
+    expect($result['exit'])->toBe(0)
+        ->and((int) $copy->query('SELECT COUNT(*) FROM salts')->fetchColumn())->toBe(0)
+        ->and(file_get_contents(dirname($file, 2) . '/unpacked.sqlite'))->not->toContain(str_repeat('5a17', 16))
+        ->and((int) $copy->query('SELECT COUNT(*) FROM pageviews')->fetchColumn())->toBe(1)
+        ->and($db->query('SELECT salt FROM salts')->fetchColumn())->toBe(str_repeat('5a17', 16));
+});
+
 it('writes to backups next to the database without a folder', function () {
     $result = runCli($this->tmpDir, 'backup');
 

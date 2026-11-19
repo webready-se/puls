@@ -2127,9 +2127,11 @@ function backup(array $config, array $argv): void
 /**
  * Writes a copy of the database to $dir with VACUUM INTO, which reads one moment while tracking
  * goes on writing, and leaves the free space out. Only the owner can read it, since it holds every
- * site's history. The copy is checked, then compressed with gzip where PHP has zlib, and the
- * compressed file is read back against the copy. Only then are the backups beyond the newest $keep
- * removed; a copy that fails a check is removed instead.
+ * site's history. The day's salt is deleted from the copy: with it, a backup kept for days and the
+ * web server's access log could compute that day's visitor hashes again, which the salt deleted
+ * each day is there to prevent. The copy is checked, then compressed with gzip where PHP has zlib,
+ * and the compressed file is read back against the copy. Only then are the backups beyond the
+ * newest $keep removed; a copy that fails a check is removed instead.
  *
  * It is written under a name that starts with a dot and takes its own name when whole, so a job
  * that copies puls-* off the server never takes half a backup. What a backup that was stopped left
@@ -2160,6 +2162,12 @@ function backupDatabase(PDO $db, string $dir, int $keep, ?bool $compress = null)
     $umask = umask(0077);
     try {
         $db->prepare('VACUUM INTO ?')->execute([$copy]);
+        $copied = new PDO('sqlite:' . $copy);
+        if ($copied->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'salts'")->fetchColumn()) {
+            $copied->exec('PRAGMA secure_delete = ON');
+            $copied->exec('DELETE FROM salts');
+        }
+        $copied = null;
         $check = (new PDO('sqlite:' . $copy))->query('PRAGMA integrity_check')->fetchColumn();
         if ($check !== 'ok') {
             throw new RuntimeException("The copy failed its check ({$check}), so it was removed and older backups kept.");
