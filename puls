@@ -2135,7 +2135,7 @@ function backup(array $config, array $argv): void
  *
  * It is written under a name that starts with a dot and takes its own name when whole, so a job
  * that copies puls-* off the server never takes half a backup. What a backup that was stopped left
- * behind is removed after a day.
+ * behind is removed after a day. Two runs at once take turns on .lock in $dir.
  *
  * @return array{path: string, bytes: int, unpacked: ?int, removed: int}
  */
@@ -2146,56 +2146,70 @@ function backupDatabase(PDO $db, string $dir, int $keep, ?bool $compress = null)
     if ((!is_dir($dir) && !@mkdir($dir, 0700, true)) || !is_dir($dir) || !is_writable($dir)) {
         throw new RuntimeException("Cannot write backups to {$dir}.");
     }
-    $name = 'puls-' . date('Y-m-d-His') . '.sqlite';
-    $path = "{$dir}/{$name}" . ($compress ? '.gz' : '');
-    if (file_exists("{$dir}/{$name}") || file_exists("{$dir}/{$name}.gz")) {
-        throw new RuntimeException("A backup from this second is there already: {$path}");
+    // Two runs at once (two scheduled jobs at the same minute) take turns: in the same second they
+    // share a temporary name, and the clean-up of one removed the copy of the other
+    $lock = fopen("{$dir}/.lock", 'c');
+    if ($lock === false || !flock($lock, LOCK_EX)) {
+        throw new RuntimeException("Cannot lock {$dir}/.lock.");
     }
-
-    foreach (glob("{$dir}/.puls-*") as $left) {
-        if (filemtime($left) < time() - 86400) unlink($left);
-    }
-
-    $copy = "{$dir}/.{$name}";
-    $packed = "{$copy}.gz";
-    $unpacked = null;
-    $umask = umask(0077);
     try {
-        $db->prepare('VACUUM INTO ?')->execute([$copy]);
-        $copied = new PDO('sqlite:' . $copy);
-        if ($copied->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'salts'")->fetchColumn()) {
-            $copied->exec('PRAGMA secure_delete = ON');
-            $copied->exec('DELETE FROM salts');
+        $name = 'puls-' . date('Y-m-d-His') . '.sqlite';
+        $path = "{$dir}/{$name}" . ($compress ? '.gz' : '');
+        if (file_exists("{$dir}/{$name}") || file_exists("{$dir}/{$name}.gz")) {
+            throw new RuntimeException("A backup from this second is there already: {$path}");
         }
-        $copied = null;
-        $check = (new PDO('sqlite:' . $copy))->query('PRAGMA integrity_check')->fetchColumn();
-        if ($check !== 'ok') {
-            throw new RuntimeException("The copy failed its check ({$check}), so it was removed and older backups kept.");
-        }
-        if ($compress) {
-            if (!copy($copy, "compress.zlib://{$packed}")
-                || hash_file('xxh128', "compress.zlib://{$packed}") !== hash_file('xxh128', $copy)) {
-                throw new RuntimeException('The copy could not be compressed, so it was removed and older backups kept.');
-            }
-            $unpacked = (int) filesize($copy);
-        }
-        rename($compress ? $packed : $copy, $path);
-        chmod($path, 0600);
-    } finally {
-        umask($umask);
-        foreach ([$copy, $packed] as $temp) {
-            if (file_exists($temp)) unlink($temp);
-        }
-    }
 
-    // puls-2026-11-12-030000.sqlite.gz, so the newest sorts last; without zlib it ends in .sqlite
-    $backups = array_values(array_filter(scandir($dir), fn ($file) => preg_match('/^puls-\d{4}-\d{2}-\d{2}-\d{6}\.sqlite(\.gz)?$/', $file)));
-    rsort($backups);
-    $removed = 0;
-    foreach (array_slice($backups, max(1, $keep)) as $old) {
-        if (unlink("{$dir}/{$old}")) $removed++;
+        foreach (glob("{$dir}/.puls-*") as $left) {
+            if (filemtime($left) < time() - 86400) unlink($left);
+        }
+
+        $copy = "{$dir}/.{$name}";
+        $packed = "{$copy}.gz";
+        $unpacked = null;
+        $umask = umask(0077);
+        try {
+            $db->prepare('VACUUM INTO ?')->execute([$copy]);
+            $copied = new PDO('sqlite:' . $copy);
+            if ($copied->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'salts'")->fetchColumn()) {
+                $copied->exec('PRAGMA secure_delete = ON');
+                $copied->exec('DELETE FROM salts');
+            }
+            $copied = null;
+            $check = (new PDO('sqlite:' . $copy))->query('PRAGMA integrity_check')->fetchColumn();
+            if ($check !== 'ok') {
+                throw new RuntimeException("The copy failed its check ({$check}), so it was removed and older backups kept.");
+            }
+            if ($compress) {
+                // hash_file() is false for a file that is not there, and false equals false
+                $read = copy($copy, "compress.zlib://{$packed}") ? hash_file('xxh128', "compress.zlib://{$packed}") : false;
+                if ($read === false || $read !== hash_file('xxh128', $copy)) {
+                    throw new RuntimeException('The copy could not be compressed, so it was removed and older backups kept.');
+                }
+                $unpacked = (int) filesize($copy);
+            }
+            if (!rename($compress ? $packed : $copy, $path) || !chmod($path, 0600)) {
+                if (file_exists($path)) unlink($path);
+                throw new RuntimeException("The backup could not be put in place as {$path}, so it was removed and older backups kept.");
+            }
+        } finally {
+            umask($umask);
+            foreach ([$copy, $packed] as $temp) {
+                if (file_exists($temp)) unlink($temp);
+            }
+        }
+
+        // puls-2026-11-12-030000.sqlite.gz, so the newest sorts last; without zlib it ends in .sqlite
+        $backups = array_values(array_filter(scandir($dir), fn ($file) => preg_match('/^puls-\d{4}-\d{2}-\d{2}-\d{6}\.sqlite(\.gz)?$/', $file)));
+        rsort($backups);
+        $removed = 0;
+        foreach (array_slice($backups, max(1, $keep)) as $old) {
+            if (unlink("{$dir}/{$old}")) $removed++;
+        }
+        return ['path' => $path, 'bytes' => (int) filesize($path), 'unpacked' => $unpacked, 'removed' => $removed];
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
     }
-    return ['path' => $path, 'bytes' => (int) filesize($path), 'unpacked' => $unpacked, 'removed' => $removed];
 }
 
 /** A file's size in the words people use: 512 bytes, 48 KB, 12.5 MB */
