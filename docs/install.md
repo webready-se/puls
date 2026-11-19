@@ -182,7 +182,7 @@ The repository also has configs for [Railway](https://railway.app) (`railway.tom
 
 Everything Puls knows is in the database (`data/puls.sqlite`), with `users.json` and `.env` beside it, which only change when you add a user or change a setting: keep a copy of them then.
 
-`php puls backup` writes a copy of the database to `backups/` next to it (`data/backups/` by default), checks it, compresses it with gzip and keeps the newest 7 (`--keep=N`). A database of visits shrinks about four times. Without PHP's zlib the copy is kept as it is, uncompressed. It reads one moment while tracking goes on writing, so it can run at any time. Only the owner can read the copies, since they hold every site's history. Run it once a day from cron. On Forge, under Scheduler, as the forge user, daily, with the PHP version the site uses:
+`php puls backup` writes a copy of the database to `backups/` next to it (`data/backups/` by default), checks it, compresses it with gzip and keeps the newest 7 (`--keep=N`). A database of visits shrinks about four times. Without PHP's zlib the copy is kept as it is, uncompressed. It reads one moment while tracking goes on writing, so it can run at any time. Only the owner can read the copies, since they hold every site's history. They leave out the day's salt for the visitor hash, so a copy kept for days cannot be used with the web server's access log to compute that day's hashes again. Run it once a day from cron. On Forge, under Scheduler, as the forge user, daily, with the PHP version the site uses:
 
 ```text
 php8.4 /home/forge/<site>/current/puls backup
@@ -212,15 +212,23 @@ php8.4 /home/forge/<site>/current/puls backup && /home/forge/bin/rclone copy /ho
 
 ### Restoring
 
-To restore one, first stop everything that writes to the database: the Scheduler jobs, and the site itself, since Puls writes on every tracking request. A process still open could write to the old file, or a new one pick up an old `-wal`. Where PHP serves other sites too, as on Forge, let Nginx answer the Puls site with 503 meanwhile (a `return 503;` first in its `location /`): visits in that time are not counted. Then replace the database with the copy and remove `data/puls.sqlite-wal` and `data/puls.sqlite-shm`, as the user PHP runs as, so the database stays its own:
+To restore one, first stop everything that writes to the database: the Scheduler jobs, and the site itself, since Puls writes on every tracking request. A process still open could write to the old file, or a new one pick up an old `-wal`. Where PHP serves other sites too, as on Forge, let Nginx answer the Puls site with 503 meanwhile (a `return 503;` first in its `location /`): visits in that time are not counted. Then unpack the copy beside the database and check it before anything else is touched, so a wrong file name leaves the database as it is (a shell writing `> data/puls.sqlite` empties it before `gunzip` has even found the file):
 
 ```bash
-gunzip -c data/backups/puls-2026-11-12-030000.sqlite.gz > data/puls.sqlite
-chmod 600 data/puls.sqlite
-rm -f data/puls.sqlite-wal data/puls.sqlite-shm
+gunzip -c data/backups/puls-2026-11-12-030000.sqlite.gz > data/restore.sqlite
+php -r '$db = new PDO("sqlite:data/restore.sqlite"); echo $db->query("PRAGMA integrity_check")->fetchColumn(), ", ", $db->query("SELECT COUNT(*) FROM pageviews")->fetchColumn(), " pageviews\n";'
 ```
 
-A copy from off the server comes back first with `rclone copy backups:puls/puls-2026-11-12-030000.sqlite.gz data/backups/`. One that ends in `.sqlite` (without zlib) is copied as it is, with `cp`. Then start them again.
+It should say `ok` and about as many pageviews as you expect; an error about a missing table means the file was empty. Then move the database aside with its `-wal` and `-shm` rather than removing them, and put the copy in its place, as the user PHP runs as, so the database stays its own:
+
+```bash
+mkdir -m 700 -p data/before-restore
+mv data/puls.sqlite* data/before-restore/
+mv data/restore.sqlite data/puls.sqlite
+chmod 600 data/puls.sqlite
+```
+
+Remove `data/before-restore/` once Puls runs well on the copy. A copy from off the server comes back first with `rclone copy backups:puls/puls-2026-11-12-030000.sqlite.gz data/backups/`. One that ends in `.sqlite` (without zlib) is copied as it is to `data/restore.sqlite`, with `cp`. Then start them again. The copy has no salt, so Puls makes a new one: restored on the day it was taken, a visitor from before the backup who comes back counts as a new one that day.
 
 ## Upgrading
 
