@@ -1,6 +1,8 @@
 services:
   puls:
-    build: .
+    image: ghcr.io/webready-se/puls:latest
+    # Or build it from this checkout instead of pulling it:
+    # build: .
     ports:
       - "8080:8080"
     environment:

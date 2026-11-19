@@ -36,7 +36,7 @@ fi
 
 # Warn if no users exist
 if [ ! -f "$USERS_FILE" ]; then
-    echo "⚠ No users configured. Set ADMIN_PASSWORD or run: docker exec <container> php puls user:add admin"
+    echo "⚠ No users configured. Set ADMIN_PASSWORD or run: docker exec -it <container> php puls user:add admin"
 fi
 
 exec "$@"

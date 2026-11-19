@@ -153,19 +153,22 @@ In the site's `…` menu, choose **Edit Nginx configuration** and the file **Gen
 
 ## Docker
 
+Every release is published as an image for amd64 and arm64, `ghcr.io/webready-se/puls`, tagged `latest`, the minor version (`1.32`) and the exact version (`1.32.0`). The first start creates the login `admin` with the password in `ADMIN_PASSWORD`. A long random one, shown once for you to keep:
+
 ```bash
-git clone https://github.com/webready-se/puls.git
-cd puls
-docker compose up
+export ADMIN_PASSWORD="$(openssl rand -base64 18)" && echo "Password for admin: $ADMIN_PASSWORD"
+docker run -d --name puls -p 8080:8080 -e ADMIN_PASSWORD -v puls-data:/app/data ghcr.io/webready-se/puls
 ```
 
-Open `http://localhost:8080` and log in as `admin` with the password from `ADMIN_PASSWORD` in `docker-compose.yml` (`changeme`: change it before you expose the port). The database lives in the `puls-data` volume.
+Open `http://localhost:8080` and log in. The database lives in the `puls-data` volume, and `ADMIN_PASSWORD` is only read while there is no login yet. Without it the container starts with no login, and `docker exec -it puls php puls user:add admin` makes one, with a generated password if you press Enter.
 
-Without Compose:
+With Compose, `docker-compose.yml` in the repository runs the same image. Set `ADMIN_PASSWORD` in it before the first `docker compose up -d` (it says `changeme`: never expose the port with that).
+
+To build the image yourself instead, from a checkout or straight from GitHub:
 
 ```bash
 docker build -t puls https://github.com/webready-se/puls.git
-docker run -p 8080:8080 -e ADMIN_PASSWORD=changeme -v puls-data:/app/data puls
+docker run -d --name puls -p 8080:8080 -e ADMIN_PASSWORD -v puls-data:/app/data puls
 ```
 
 Behind a reverse proxy, set `TRUSTED_PROXIES` so visitors are told apart by their own address: see [reverse proxies](integrations.md#behind-a-reverse-proxy-docker-cloudflare-load-balancers).
@@ -232,7 +235,7 @@ Remove `data/before-restore/` once Puls runs well on the copy. A copy from off t
 
 ## Upgrading
 
-Replace the files with the ones from the new release and keep `data/`, `users.json` and `.env`. The database is migrated on the first request after the upgrade. Read the [changelog](../CHANGELOG.md) first: it says when something needs your attention.
+Replace the files with the ones from the new release and keep `data/`, `users.json` and `.env`. In Docker, pull the new image and start the container again from it with the same volume (`docker compose pull && docker compose up -d`). The database is migrated on the first request after the upgrade. Read the [changelog](../CHANGELOG.md) first: it says when something needs your attention.
 
 Releases are gathered, so an install is not asked to upgrade every few days: a minor release about every one or two weeks, holding the features and fixes since the last one, and a patch release at once for a security fix, data loss or a broken install or upgrade. To hear about them, watch the repository on GitHub for releases only (Watch, Custom, Releases).
 
