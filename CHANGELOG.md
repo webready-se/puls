@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **A share link pasted into a chat shows the site it opens, that it is view only, and an image.** A preview (Slack, Teams, iMessage, WhatsApp) reads the page without running its script, so it showed the title Puls and a description of the tool written for a developer, on a white-labelled install too. The title now starts with the site, or the groups (`shop.example – website statistics`), the description says the link is view only, with no sign-up or login, and that only people with the link can open it, and the image is the mark and "Your website's visitors" over the day bars, the same for every link and readable in the square a chat crops it to. It holds no figures, since a preview service keeps the image on its own servers and shows it to everyone in a channel. Only an install with an `APP_NAME` of its own names itself as the site, since a chat otherwise shows the install's address, which the reader may know, and one with its own `APP_NAME` or `APP_ACCENT` shows no image. The image's address comes from `APP_URL`, else the address the page was opened on, with `https` from `X-Forwarded-Proto` when the proxy is in `TRUSTED_PROXIES` ([when a link is pasted](docs/configuration.md#when-a-link-is-pasted)).
+
+### Changed
+
+- **A share link is never indexed by a search engine.** Every answer to a share token, the dashboard and the API, carries `X-Robots-Tag: noindex`, and the page a `robots` meta tag, so a link that ends up on a public page does not put a site's statistics in a search engine. The live demo is a share link, so it is left out too.
+
 ## [1.32.0] - 2026-11-19
 
 ### Added

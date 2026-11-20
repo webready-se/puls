@@ -796,6 +796,72 @@ test('share endpoint sets security headers', function () {
         ->and($headers)->toContain('X-Frame-Options: DENY');
 });
 
+test('a shared link previews as its site, read-only, from the server', function () {
+    $r = http('GET', '/?share=' . createTestShareToken('shop.example'));
+    expect($r['body'])->toContain('<title>shop.example – Puls</title>')
+        ->toContain('<meta property="og:title" content="shop.example – website statistics">')
+        ->toContain('<meta name="description" content="Visitors, top pages and where they came from. View only: no sign-up, no login. Only people with this link can open it.">')
+        ->toContain('<meta name="robots" content="noindex">')
+        ->toContain('<meta name="twitter:card" content="summary_large_image">')
+        // Without a name of its own, a chat shows the install's address, which the reader may know
+        ->not->toContain('og:site_name')
+        ->not->toContain('Cookieless, lightweight');
+    // The version in the address, so a preview service fetches the image again after a release redraws it
+    expect(preg_match('#<meta property="og:image" content="http://localhost:\d+/og\.png\?v=' . preg_quote(PULS_VERSION, '#') . '">#', $r['body']))->toBe(1);
+    // The config block still follows the first </title>
+    expect(strpos($r['body'], '</title><script type="application/json" id="puls-config">'))->not->toBeFalse();
+});
+
+test('a token for groups previews as its groups', function () {
+    $body = http('GET', '/?share=' . createTestGroupToken(['Shops', 'Private']))['body'];
+    expect($body)->toContain('<title>Shops, Private – Puls</title>')
+        ->toContain('content="Shops, Private – website statistics"');
+});
+
+test('a site name cannot break out of the preview tags', function () {
+    $body = http('GET', '/?share=' . createTestShareToken('a"<b>&c'))['body'];
+    expect($body)->toContain('content="a&quot;&lt;b&gt;&amp;c – website statistics"')
+        ->not->toContain('a"<b>');
+    // $0 and \1 are what a regex replacement reads as the match
+    expect(http('GET', '/?share=' . createTestShareToken('shop$0\1'))['body'])
+        ->toContain('<title>shop$0\1 – Puls</title>')
+        ->toContain('content="shop$0\1 – website statistics"');
+});
+
+test('the share preview image is served at 1200 x 630', function () {
+    $r = http('GET', '/og.png');
+    expect($r['status'])->toBe(200)
+        ->and(array_slice(getimagesizefromstring($r['body']), 0, 2))->toBe([1200, 630]);
+});
+
+test('every answer to a share token asks not to be indexed', function () {
+    $token = createTestShareToken('shop.example');
+    $expired = createTestShareToken('shop.example', '2000-01-01 00:00:00');
+    foreach (['/?share=' . $token, '/?api&days=7&share=' . $token, '/?share=' . bin2hex(random_bytes(32)), '/?share=' . $expired] as $url) {
+        expect(http('GET', $url)['headers'])->toContain('X-Robots-Tag: noindex');
+    }
+    expect(http('GET', '/?login')['headers'])->not->toContain('X-Robots-Tag: noindex');
+});
+
+test('the preview image address comes from APP_URL, and a bad one is ignored', function () {
+    $port = freePort();
+    $pid = startServer($port, $GLOBALS['test_env'] + ['APP_URL' => 'https://puls.example.com/']);
+    try {
+        expect(http('GET', '/?share=' . createTestShareToken('shop.example'), [], $port)['body'])
+            ->toContain('<meta property="og:image" content="https://puls.example.com/og.png?v=' . PULS_VERSION . '">');
+    } finally {
+        stopServer($pid);
+    }
+    $port = freePort();
+    $pid = startServer($port, $GLOBALS['test_env'] + ['APP_URL' => 'javascript:alert(1)']);
+    try {
+        expect(http('GET', '/?share=' . createTestShareToken('shop.example'), [], $port)['body'])
+            ->not->toContain('javascript:')->toContain('/og.png?v=');
+    } finally {
+        stopServer($pid);
+    }
+});
+
 test('share API returns data scoped to site', function () {
     $token = createTestShareToken('test');
     $r = http('GET', '/?api&days=7&share=' . $token);
@@ -1426,8 +1492,14 @@ test('a white-labelled install does not point at Puls in its source', function (
     if (!isset($GLOBALS['white_label_server'])) {
         $GLOBALS['white_label_server'] = startServer(8094, $GLOBALS['test_env'] + ['APP_NAME' => 'Acme Stats']);
     }
-    $page = http('GET', '/?share=' . createTestShareToken('hint-wl-' . uniqid()), [], 8094)['body'];
+    $site = 'hint-wl-' . uniqid();
+    $page = http('GET', '/?share=' . createTestShareToken($site), [], 8094)['body'];
     expect($page)->not->toContain('rel="help"')->not->toContain('llms.txt');
+    // Its own name in a pasted link's preview, and no image, since the image says Puls
+    expect($page)->toContain("<title>{$site} – Acme Stats</title>")
+        ->toContain('<meta property="og:site_name" content="Acme Stats">')
+        ->toContain('<meta name="twitter:card" content="summary">')
+        ->not->toContain('og:image');
     // The dashboard's script hides the menu's link when the install has a name of its own
     expect(file_get_contents(__DIR__ . '/../../public/dashboard.js'))->toContain("getElementById('agents-link').hidden = true");
 });

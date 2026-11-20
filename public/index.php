@@ -34,10 +34,10 @@ const ENGAGED_MAX_MS = 1_800_000;
 // ROUTING
 // =====================================================================
 
-// Serve PWA icons, reject other static file requests
+// Serve PWA icons and a shared link's preview image, reject other static file requests
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 if ($uri !== '/' && str_contains($uri, '.')) {
-    if (preg_match('#^/icon-\d+\.png$#', $uri) && file_exists(__DIR__ . $uri)) {
+    if (preg_match('#^/(icon-\d+|og)\.png$#', $uri) && file_exists(__DIR__ . $uri)) {
         respond(file_get_contents(__DIR__ . $uri), 200, 'image/png', ['Cache-Control' => 'public, max-age=604800']);
     }
     http_response_code(404);
@@ -142,6 +142,8 @@ if (isset($_GET['csrf'])) {
 
 $shareToken = $_GET['share'] ?? (isset($_GET['api']) ? bearer_token($_SERVER) : null);
 if ($shareToken !== null) {
+    // A link can end up on a public page, and nothing a token answers is for a search engine
+    header('X-Robots-Tag: noindex');
     $share = find_share_token($config, $shareToken);
     if (!$share) {
         // ?share=TOKEN?api&days=30 reads ?api as part of the token, and the address looks right
@@ -173,6 +175,7 @@ if ($shareToken !== null) {
     $dashboard = __DIR__ . '/dashboard.html';
     if (file_exists($dashboard)) {
         $html = str_replace('__PULS_VERSION__', PULS_VERSION, file_get_contents($dashboard));
+        $html = share_preview_head($html, $config, $share, public_origin($config, $_SERVER));
         $html = inject_after_title($html, config_block($config, [
             'token' => $share['token'],
             'site' => $share['site'],
@@ -2731,6 +2734,73 @@ function agent_hint(array $config): string
 {
     if ($config['app_name'] !== 'Puls') return '';
     return '<link rel="help" type="text/plain" title="For AI agents: how to read this" href="https://raw.githubusercontent.com/webready-se/puls/main/llms.txt">';
+}
+
+// What a share token reads, named as its dashboard names it: its site, or its groups
+function share_scope_name(array $share): string
+{
+    return $share['site'] !== '' ? $share['site'] : implode(', ', share_token_groups($share));
+}
+
+// A name or an accent of its own. Wider than the rest of the install's white-label, which goes by
+// the name: here it decides the share image, which is coral and says Puls
+function is_white_labelled(array $config): bool
+{
+    return $config['app_name'] !== 'Puls' || strtolower($config['app_accent']) !== '#f16272';
+}
+
+// This install's address, for the image in a pasted link's preview: APP_URL, else the host the page
+// was asked for when it is a plain one, https as the request or a trusted proxy says (a container
+// behind Caddy or Traefik is asked over http). Null for anything else, since it goes into the page
+function public_origin(array $config, array $server): ?string
+{
+    if (!empty($config['app_url'])) return $config['app_url'];
+    $host = $server['HTTP_HOST'] ?? '';
+    if (!preg_match('/^[a-z0-9.-]+(:\d+)?$/i', $host)) return null;
+    $https = !empty($server['HTTPS']) && strtolower($server['HTTPS']) !== 'off';
+    foreach ($config['trusted_proxies'] ?? [] as $range) {
+        if (ip_in_range($server['REMOTE_ADDR'] ?? '', $range)) {
+            $https = $https || strtolower(trim($server['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+            break;
+        }
+    }
+    return ($https ? 'https' : 'http') . '://' . $host;
+}
+
+/**
+ * A shared page's head for a pasted link's preview, which reads the HTML and never runs the
+ * dashboard's script: the site or groups first in the title (a chat may cut it short), what the
+ * link opens and that nobody signs up for anything, and Puls's image unless the install has a brand
+ * of its own. Only a brand of its own is named as the site: a chat shows the install's address
+ * otherwise, which the reader may know where "Puls" says nothing. The tags take the description's
+ * place, so the config block still follows the first </title>. A callback replaces, since a name
+ * may hold $1 or \1
+ */
+function share_preview_head(string $html, array $config, array $share, ?string $origin): string
+{
+    $e = fn (string $s) => htmlspecialchars($s, ENT_QUOTES);
+    $scope = share_scope_name($share);
+    $description = 'Visitors, top pages and where they came from. View only: no sign-up, no login. Only people with this link can open it.';
+    $tags = [
+        '<meta name="description" content="' . $description . '">',
+        '<meta name="robots" content="noindex">',
+        '<meta property="og:type" content="website">',
+        '<meta property="og:title" content="' . $e("{$scope} – website statistics") . '">',
+        '<meta property="og:description" content="' . $description . '">',
+    ];
+    if ($config['app_name'] !== 'Puls') $tags[] = '<meta property="og:site_name" content="' . $e($config['app_name']) . '">';
+    $image = $origin !== null && !is_white_labelled($config);
+    if ($image) {
+        // The version in the address, as the dashboard's files have it: a preview service keeps an
+        // image by its address, and would show the old one after a release draws it again
+        $tags[] = '<meta property="og:image" content="' . $e("{$origin}/og.png?v=" . PULS_VERSION) . '">';
+        $tags[] = '<meta property="og:image:width" content="1200">';
+        $tags[] = '<meta property="og:image:height" content="630">';
+        $tags[] = '<meta property="og:image:alt" content="Puls: your website’s visitors">';
+    }
+    $tags[] = '<meta name="twitter:card" content="' . ($image ? 'summary_large_image' : 'summary') . '">';
+    $html = preg_replace_callback('#<meta name="description" content="[^"]*">#', fn () => implode("\n", $tags), $html, 1);
+    return preg_replace_callback('#<title>.*?</title>#s', fn () => '<title>' . $e("{$scope} – {$config['app_name']}") . '</title>', $html, 1);
 }
 
 // A shared page can carry the tracking script of a Puls named in TRACK_SHARED_URL, so a public

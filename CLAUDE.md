@@ -48,7 +48,7 @@ Single PHP entry point (`public/index.php`) handles all routing:
 | `POST /?exclude_remove` | Yes | Count an excluded IP or range again |
 | `GET /?logout` | Yes | End session |
 
-Static file requests (anything with `.` in path) return 404 early to prevent routing conflicts (e.g. favicon.ico triggering CSRF token regeneration).
+Static file requests (anything with `.` in path) return 404 early to prevent routing conflicts (e.g. favicon.ico triggering CSRF token regeneration), except the PWA icons and `og.png` where a server sends every request to PHP.
 
 ### Files
 
@@ -60,6 +60,7 @@ public/dashboard.js     - The dashboard's script: fetches the API, renders islan
 public/theme.js         - Runs in <head> on the dashboard and the login page: theme before the first paint, the install's accent from the config block
 public/login.css, login.js - The login page's styles and its CSRF refresh
 public/fonts/           - Figtree (variable woff2) and its SIL Open Font License, copied from the design kit
+public/og.png           - The image a pasted share link shows (1200x630), drawn by scripts/og-image.mjs; left out under white-label
 llms.txt                - For an AI agent: how to read an install. In the repository, not served by one; the dashboard and a shared link point at it from their <head> unless white-labelled
 config.php              — Configuration (loads .env, auto-detects Forge paths)
 .env.example            — Environment template (checked in)
@@ -69,7 +70,7 @@ users.json              — User credentials (bcrypt hashed, auto-created by CLI
 data/puls.sqlite        — SQLite database (auto-created, gitignored)
 composer.json           — Platform requirements (PHP 8.3+, pdo_sqlite) + dev dependencies (Pest)
 phpunit.xml             — Test configuration (Pest)
-tests/                  — Pest test suite (564 tests, unit + feature)
+tests/                  — Pest test suite (577 tests, unit + feature)
 docs/integrations.md    - Tracking setup: script attributes, events, keeping personal data out of URLs, excluding own visits, reverse proxies
 docs/api.md             - Read API reference (JSON/CSV, share tokens)
 docs/install.md         - Install and run: release download, shared hosting, Nginx, Apache, Forge, Docker, upgrading
@@ -80,6 +81,7 @@ scripts/hooks/real-names - Shared by the name hooks: prints lines that match .pr
 scripts/build-release.sh — Builds release zip with runtime files only
 scripts/readme-media.mjs - Generates every README image, the drill-down GIF and the social preview (headless Chrome over DevTools protocol + demo DB, ffmpeg)
 scripts/smoke.mjs       — Dashboard smoke test: headless Chrome over DevTools protocol, fails on JS errors (no npm deps)
+scripts/og-image.mjs    - Draws public/og.png with headless Chrome; run again when the mark or the tagline changes
 scripts/seed-demo.php   — Seeds a demo SQLite database with realistic fake data; for the live demo `--token`, `--group`, `--refresh` (reseed in place) and `--top-up`
 scripts/seed-benchmark.php - Seeds a benchmark database: 2M pageviews over a year, the same every run (schema from index.php)
 scripts/benchmark.php   - Times the dashboard API on a database as the dashboard asks for it, with query plans (`--explain`)
