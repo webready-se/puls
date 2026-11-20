@@ -69,6 +69,10 @@ return [
 
     'users_file' => resolve_path($_ENV['USERS_FILE'] ?? 'users.json'),
 
+    // This install's own address, for the image a shared link shows when pasted. Off unless it is a
+    // plain web address, since it goes into the page
+    'app_url' => preg_match('#^https?://[a-z0-9.-]+(:\d+)?(/[a-z0-9._~/-]*)?$#i', $appUrl = trim($_ENV['APP_URL'] ?? '')) ? rtrim($appUrl, '/') : null,
+
     // The Puls that counts visits to this install's shared pages (a public demo, say), and the site
     // name it files them under. Off unless it is a plain web address, since it goes into a header
     'track_shared_url' => preg_match('#^https?://[a-z0-9.-]+(:\d+)?(/[a-z0-9._~/-]*)?$#i', $trackShared = trim($_ENV['TRACK_SHARED_URL'] ?? '')) ? rtrim($trackShared, '/') : null,
