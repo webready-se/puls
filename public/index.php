@@ -2791,7 +2791,9 @@ function share_preview_head(string $html, array $config, array $share, ?string $
     if ($config['app_name'] !== 'Puls') $tags[] = '<meta property="og:site_name" content="' . $e($config['app_name']) . '">';
     $image = $origin !== null && !is_white_labelled($config);
     if ($image) {
-        $tags[] = '<meta property="og:image" content="' . $e("{$origin}/og.png") . '">';
+        // The version in the address, as the dashboard's files have it: a preview service keeps an
+        // image by its address, and would show the old one after a release draws it again
+        $tags[] = '<meta property="og:image" content="' . $e("{$origin}/og.png?v=" . PULS_VERSION) . '">';
         $tags[] = '<meta property="og:image:width" content="1200">';
         $tags[] = '<meta property="og:image:height" content="630">';
         $tags[] = '<meta property="og:image:alt" content="Puls: your website’s visitors">';

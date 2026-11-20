@@ -806,7 +806,8 @@ test('a shared link previews as its site, read-only, from the server', function 
         // Without a name of its own, a chat shows the install's address, which the reader may know
         ->not->toContain('og:site_name')
         ->not->toContain('Cookieless, lightweight');
-    expect(preg_match('#<meta property="og:image" content="http://localhost:\d+/og\.png">#', $r['body']))->toBe(1);
+    // The version in the address, so a preview service fetches the image again after a release redraws it
+    expect(preg_match('#<meta property="og:image" content="http://localhost:\d+/og\.png\?v=' . preg_quote(PULS_VERSION, '#') . '">#', $r['body']))->toBe(1);
     // The config block still follows the first </title>
     expect(strpos($r['body'], '</title><script type="application/json" id="puls-config">'))->not->toBeFalse();
 });
@@ -847,7 +848,7 @@ test('the preview image address comes from APP_URL, and a bad one is ignored', f
     $pid = startServer($port, $GLOBALS['test_env'] + ['APP_URL' => 'https://puls.example.com/']);
     try {
         expect(http('GET', '/?share=' . createTestShareToken('shop.example'), [], $port)['body'])
-            ->toContain('<meta property="og:image" content="https://puls.example.com/og.png">');
+            ->toContain('<meta property="og:image" content="https://puls.example.com/og.png?v=' . PULS_VERSION . '">');
     } finally {
         stopServer($pid);
     }
@@ -855,7 +856,7 @@ test('the preview image address comes from APP_URL, and a bad one is ignored', f
     $pid = startServer($port, $GLOBALS['test_env'] + ['APP_URL' => 'javascript:alert(1)']);
     try {
         expect(http('GET', '/?share=' . createTestShareToken('shop.example'), [], $port)['body'])
-            ->not->toContain('javascript:')->toContain('/og.png"');
+            ->not->toContain('javascript:')->toContain('/og.png?v=');
     } finally {
         stopServer($pid);
     }
