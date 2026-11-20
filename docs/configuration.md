@@ -85,7 +85,9 @@ A link works for 90 days unless you give another last day, or `--expires=never`.
 
 ### When a link is pasted
 
-A chat or a social site shows a preview of a pasted link, read from the page without running its script. A share link's preview names what it opens (`Statistics for shop.example`, or the groups), says it is read-only and needs no login, and shows Puls's image: the mark and the tagline, the same for every link, with no figures from the site, since a preview service keeps the image and shows it to everyone in a channel. The image's address is built from `APP_URL`, else from the address the page was opened on: set `APP_URL` when a proxy in front of Puls changes the scheme or the host. A white-labelled install shows its own name and no image.
+A chat or a social site shows a preview of a pasted link, read from the page without running its script. A share link's preview names what it opens (`shop.example – website statistics`, or the groups), says it is view only with no sign-up or login and that only people with the link can open it, and shows Puls's image: the mark and "Your website's visitors", the same for every link, with no figures from the site, since a preview service keeps the image and shows it to everyone in a channel. The image's address is built from `APP_URL`, else from the address the page was opened on, with `https` from `X-Forwarded-Proto` when the proxy in front is in `TRUSTED_PROXIES`: set `APP_URL` when a proxy changes the host. An install with an `APP_NAME` of its own is named by it in the preview, and one with its own `APP_NAME` or `APP_ACCENT` shows no image, since the image is coral and says Puls.
+
+The person you send a link to sees the site's or the groups' names, in the preview first of all: name a group you share as you would to them (`Acme Shop`, not `Shops` or `clients-2026`).
 
 Every answer to a share token asks search engines not to index it (`X-Robots-Tag: noindex`), so a link that ends up on a public page does not put a site's statistics in a search engine.
 
@@ -134,7 +136,7 @@ APP_TAGLINE=Your custom tagline
 APP_ACCENT=#e11d48
 ```
 
-This changes the login page, dashboard header, PWA manifest and favicon. `APP_ACCENT` colours the logo, the bars and the charts. Links and buttons use it only where it is readable as text (a contrast of 4.5:1 against the background, checked for light and dark mode separately); otherwise they keep Puls's red, so a pale brand colour never makes links hard to read. Under white-label the footer says "Powered by Puls". Without it, the footer says "Made by Webready in Sweden"; `FOOTER_CREDIT=false` turns that off. A pasted share link shows `APP_NAME` and leaves out Puls's image ([when a link is pasted](#when-a-link-is-pasted)).
+This changes the login page, dashboard header, PWA manifest and favicon. `APP_ACCENT` colours the logo, the bars and the charts. Links and buttons use it only where it is readable as text (a contrast of 4.5:1 against the background, checked for light and dark mode separately); otherwise they keep Puls's red, so a pale brand colour never makes links hard to read. Under white-label the footer says "Powered by Puls". Without it, the footer says "Made by Webready in Sweden"; `FOOTER_CREDIT=false` turns that off. A pasted share link shows `APP_NAME`, and leaves out Puls's image when `APP_NAME` or `APP_ACCENT` is set ([when a link is pasted](#when-a-link-is-pasted)).
 
 ## CLI reference
 

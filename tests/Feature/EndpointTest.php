@@ -799,11 +799,12 @@ test('share endpoint sets security headers', function () {
 test('a shared link previews as its site, read-only, from the server', function () {
     $r = http('GET', '/?share=' . createTestShareToken('shop.example'));
     expect($r['body'])->toContain('<title>shop.example – Puls</title>')
-        ->toContain('<meta property="og:title" content="Statistics for shop.example">')
-        ->toContain('<meta name="description" content="Visitors, pages and where they came from. Read-only, no login needed.">')
-        ->toContain('<meta property="og:site_name" content="Puls">')
+        ->toContain('<meta property="og:title" content="shop.example – website statistics">')
+        ->toContain('<meta name="description" content="Visitors, top pages and where they came from. View only: no sign-up, no login. Only people with this link can open it.">')
         ->toContain('<meta name="robots" content="noindex">')
         ->toContain('<meta name="twitter:card" content="summary_large_image">')
+        // Without a name of its own, a chat shows the install's address, which the reader may know
+        ->not->toContain('og:site_name')
         ->not->toContain('Cookieless, lightweight');
     expect(preg_match('#<meta property="og:image" content="http://localhost:\d+/og\.png">#', $r['body']))->toBe(1);
     // The config block still follows the first </title>
@@ -813,17 +814,17 @@ test('a shared link previews as its site, read-only, from the server', function 
 test('a token for groups previews as its groups', function () {
     $body = http('GET', '/?share=' . createTestGroupToken(['Shops', 'Private']))['body'];
     expect($body)->toContain('<title>Shops, Private – Puls</title>')
-        ->toContain('content="Statistics for Shops, Private"');
+        ->toContain('content="Shops, Private – website statistics"');
 });
 
 test('a site name cannot break out of the preview tags', function () {
     $body = http('GET', '/?share=' . createTestShareToken('a"<b>&c'))['body'];
-    expect($body)->toContain('content="Statistics for a&quot;&lt;b&gt;&amp;c"')
+    expect($body)->toContain('content="a&quot;&lt;b&gt;&amp;c – website statistics"')
         ->not->toContain('a"<b>');
     // $0 and \1 are what a regex replacement reads as the match
     expect(http('GET', '/?share=' . createTestShareToken('shop$0\1'))['body'])
         ->toContain('<title>shop$0\1 – Puls</title>')
-        ->toContain('content="Statistics for shop$0\1"');
+        ->toContain('content="shop$0\1 – website statistics"');
 });
 
 test('the share preview image is served at 1200 x 630', function () {
@@ -834,7 +835,8 @@ test('the share preview image is served at 1200 x 630', function () {
 
 test('every answer to a share token asks not to be indexed', function () {
     $token = createTestShareToken('shop.example');
-    foreach (['/?share=' . $token, '/?api&days=7&share=' . $token, '/?share=' . bin2hex(random_bytes(32))] as $url) {
+    $expired = createTestShareToken('shop.example', '2000-01-01 00:00:00');
+    foreach (['/?share=' . $token, '/?api&days=7&share=' . $token, '/?share=' . bin2hex(random_bytes(32)), '/?share=' . $expired] as $url) {
         expect(http('GET', $url)['headers'])->toContain('X-Robots-Tag: noindex');
     }
     expect(http('GET', '/?login')['headers'])->not->toContain('X-Robots-Tag: noindex');
