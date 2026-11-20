@@ -826,6 +826,12 @@ test('a site name cannot break out of the preview tags', function () {
         ->toContain('content="Statistics for shop$0\1"');
 });
 
+test('the share preview image is served at 1200 x 630', function () {
+    $r = http('GET', '/og.png');
+    expect($r['status'])->toBe(200)
+        ->and(array_slice(getimagesizefromstring($r['body']), 0, 2))->toBe([1200, 630]);
+});
+
 test('every answer to a share token asks not to be indexed', function () {
     $token = createTestShareToken('shop.example');
     foreach (['/?share=' . $token, '/?api&days=7&share=' . $token, '/?share=' . bin2hex(random_bytes(32))] as $url) {
