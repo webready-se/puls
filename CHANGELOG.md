@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **A share link pasted into a chat shows the site it opens, that it is read-only, and Puls's image.** A preview (Slack, Teams, iMessage, WhatsApp) reads the page without running its script, so it showed the title Puls and a description of the tool written for a developer, on a white-labelled install too. The title now names the site, or the groups (`Statistics for shop.example`), the description says the link is read-only and needs no login, and the image is the mark and the tagline over the day bars, the same for every link. It holds no figures, since a preview service keeps the image on its own servers and shows it to everyone in a channel. A white-labelled install shows its own name and no image. The image's address comes from `APP_URL`, else the address the page was opened on ([when a link is pasted](docs/configuration.md#when-a-link-is-pasted)).
+
+### Changed
+
+- **A share link is never indexed by a search engine.** Every answer to a share token, the dashboard and the API, carries `X-Robots-Tag: noindex`, and the page a `robots` meta tag, so a link that ends up on a public page does not put a site's statistics in a search engine. The live demo is a share link, so it is left out too.
+
 ## [1.32.0] - 2026-11-19
 
 ### Added
