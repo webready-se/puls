@@ -483,6 +483,9 @@ body {
   border-top-color: var(--text);
 }
 .chart-bar:hover .tip { display: block; }
+/* A day or an hour without visits, or a day without the event: a faint bar. The colour fades,
+   not the element, since the tooltip inside it would fade with it */
+.chart-bar.bar-zero { background: color-mix(in srgb, var(--accent-tile) 35%, transparent); }
 .chart-col-compare { position: relative; }
 .chart-col-compare > .tip {
   display: none; position: absolute; bottom: calc(100% + 14px); left: 50%;
@@ -542,7 +545,6 @@ body {
 .hour-col:hover { z-index: 10; }
 .hour-label { font-size: 10px; color: var(--text-3); white-space: nowrap; }
 .hour-minor { visibility: hidden; }
-.hour-zero { opacity: 0.35; }
 .hour-col.tip-start .chart-bar > .tip { left: 0; transform: none; }
 .hour-col.tip-start .chart-bar > .tip::after { left: 50cqw; }
 .hour-col.tip-end .chart-bar > .tip { left: auto; right: 0; transform: none; }

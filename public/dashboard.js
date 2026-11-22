@@ -1377,11 +1377,17 @@
   // Posts show unless a viewer turned them off: they take no room, and whoever set them up wants them
   var postsMode = localStorage.getItem('puls-posts') !== '0';
 
+  // The API lists every day of a period, a day without visits as 0, so a period with days is not
+  // yet one with visits: Compare is offered only when the previous period had some
+  function hasVisits(days) {
+    return !!days && days.some(function(p) { return +p.views > 0; });
+  }
+
   function renderChart(d) {
     if (hourOpen) hourDay = hourDayIn(d);
     if (!d.pageviews || !d.pageviews.length) return '';
     var siteName = currentSite || 'all sites';
-    var hasCompare = d.previousPageviews && d.previousPageviews.length > 0;
+    var hasCompare = hasVisits(d.previousPageviews);
 
     return '<div class="card" id="chart-card">' +
       '<div class="card-header">' +
@@ -1509,7 +1515,7 @@
   function buildBars(pageviews, previousPageviews) {
     var key = chartMode === 'visitors' ? 'visitors' : 'views';
     var marks = marksFor(lastData, pageviews.map(function(p) { return p.date; })).byDate;
-    var showCompare = compareMode && previousPageviews && previousPageviews.length > 0;
+    var showCompare = compareMode && hasVisits(previousPageviews);
     var allVals = pageviews.map(function(p) { return +p[key]; });
     if (showCompare) {
       allVals = allVals.concat(previousPageviews.map(function(p) { return +p[key]; }));
@@ -1521,6 +1527,8 @@
     var bars = '';
     pageviews.forEach(function(p, i) {
       var h = Math.max(4, (+p[key] / maxVal) * 128);
+      // A day without visits keeps its place and its 0, as a faint bar
+      var zero = +p[key] ? '' : ' bar-zero';
       var label = formatDay(p.date);
       var picked = hourOpen && p.date === hourDay;
       var posts = marks[p.date] ? marks[p.date].posts : [];
@@ -1557,7 +1565,7 @@
           '<div class="chart-bars">' +
             '<div class="chart-bar-wrap">' +
               '<span class="chart-val">' + num(p[key]) + '</span>' +
-              '<div class="chart-bar" data-h="' + h + '"></div>' +
+              '<div class="chart-bar' + zero + '" data-h="' + h + '"></div>' +
             '</div>' +
             '<div class="chart-bar-wrap">' +
               '<span class="chart-val-prev">' + (prev ? num(prev[key]) : '0') + '</span>' +
@@ -1570,7 +1578,7 @@
         bars += '<div class="chart-col' + (marks[p.date] ? marks[p.date].cls : '') + (picked ? ' selected' : '') + '"' + day + '>' +
           (marks[p.date] ? marks[p.date].html : '') +
           '<span class="chart-val">' + num(p[key]) + '</span>' +
-          '<div class="chart-bar" data-h="' + h + '">' +
+          '<div class="chart-bar' + zero + '" data-h="' + h + '">' +
             '<div class="tip">' + label + ': ' + num(p.views) + ' views, ' + num(p.visitors) + ' visitors' + hint + '</div>' +
           '</div>' +
           axisDate(p.date) +
@@ -1682,7 +1690,7 @@
           return '<div class="hour-col' + (h < 6 ? ' tip-start' : h > 17 ? ' tip-end' : '') + (postHours[h] ? ' has-post' : '') + '">' +
             // An hour without visits is a faint line without a number, so the night stays quiet
             (h <= last ? (r[key] ? '<span class="chart-val hour-val">' + num(r[key]) + '</span>' : '') +
-              '<div class="chart-bar' + (r[key] ? '' : ' hour-zero') + '" data-h="' + Math.max(3, r[key] / max * 90) + '"><div class="tip">' + span(h) + ': ' + num(r.views) + ' views, ' + num(r.visitors) + ' visitors</div></div>' : '') +
+              '<div class="chart-bar' + (r[key] ? '' : ' bar-zero') + '" data-h="' + Math.max(3, r[key] / max * 90) + '"><div class="tip">' + span(h) + ': ' + num(r.views) + ' views, ' + num(r.visitors) + ' visitors</div></div>' : '') +
             '<span class="hour-label' + (h % 3 ? ' hour-minor' : '') + '">' + clock(h) + '</span>' +
           '</div>';
         }).join('') +
@@ -3008,7 +3016,7 @@
     var labelOffset = Math.floor(labelStep / 2);
     var bars = '';
     series.forEach(function(row, i) {
-      var v = val(row), h = Math.max(3, (v / maxVal) * 60), label = formatDay(row.date);
+      var v = val(row), h = Math.max(3, (v / maxVal) * 60), label = formatDay(row.date), zero = v ? '' : ' bar-zero';
       var tipBody = num(row.count) + ' events, ' + num(row.visitors) + ' visitors';
       // Dense ranges: no per-bar values, about six date labels, tooltip keeps the detail
       var valHtml = dense ? '' : '<span class="chart-val">' + fmt(v) + '</span>';
@@ -3024,7 +3032,7 @@
             (p ? '<div class="tip-prev">vs ' + formatDay(p.date) + ': ' + num(p.count) + ' / ' + num(p.visitors) + '</div>' : '') +
           '</div>' +
           '<div class="chart-bars">' +
-            '<div class="chart-bar-wrap">' + valHtml + '<div class="chart-bar" data-h="' + h + '"></div></div>' +
+            '<div class="chart-bar-wrap">' + valHtml + '<div class="chart-bar' + zero + '" data-h="' + h + '"></div></div>' +
             '<div class="chart-bar-wrap">' + (dense ? '' : '<span class="chart-val-prev">' + fmt(pv) + '</span>') + '<div class="chart-bar chart-bar-prev" data-h="' + ph + '"></div></div>' +
           '</div>' +
           dateHtml +
@@ -3033,7 +3041,7 @@
         bars += '<div class="chart-col' + (marks[row.date] ? marks[row.date].cls : '') + '">' +
           (marks[row.date] ? marks[row.date].html : '') +
           valHtml +
-          '<div class="chart-bar" data-h="' + h + '"><div class="tip">' + label + ': ' + tipBody + '</div></div>' +
+          '<div class="chart-bar' + zero + '" data-h="' + h + '"><div class="tip">' + label + ': ' + tipBody + '</div></div>' +
           dateHtml +
         '</div>';
       }
