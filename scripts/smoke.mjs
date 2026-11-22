@@ -594,6 +594,25 @@ async function main() {
       window.fetch = realFetch;
     }
 
+    // Today before its first visit, on a site that has had visits: it says so and that the page
+    // updates itself, rather than asking for the tracking snippet as a site never tracked does
+    {
+      const realFetch = window.fetch;
+      window.fetch = (url, ...rest) => /\?api&days=1(&|$)/.test(String(url))
+        ? realFetch(url, ...rest).then((r) => r.json()).then((d) => {
+          d.totals = { views: 0, visitors: 0 };
+          d.pageviews.forEach((p) => Object.assign(p, { views: 0, visitors: 0 }));
+          return new Response(JSON.stringify(d), { headers: { 'Content-Type': 'application/json' } });
+        })
+        : realFetch(url, ...rest);
+      q('.period-btn[data-days="1"]').click();
+      if (await waitFor(() => q('#app .empty'), 'Today without visits')) {
+        const text = q('#app .empty').textContent;
+        expect(/^No visits yet today\. The page updates by itself\.$/.test(text) && !q('#snippet-code'), `Today without visits says so, without the tracking snippet (says "${text}")`);
+      }
+      window.fetch = realFetch;
+    }
+
     // A slow answer for an earlier choice never replaces the view chosen after it
     const realFetch = window.fetch, mainApi = (url, days) => new RegExp('\\?api&days=' + days + '(&|$)').test(String(url));
     let slowDone = false;
@@ -1092,6 +1111,28 @@ async function main() {
     window.openMenu();
     if (!q('#excluded-body').hidden) fails.push('Settings folds again the next time it opens');
     window.closeMenu();
+
+    // A tracked site with no visits in a whole period: whoever runs the install is told where to
+    // look, since a script taken off the site looks just like this
+    {
+      const realFetch = window.fetch;
+      window.fetch = (url, ...rest) => /\?api&days=30(&|$)/.test(String(url))
+        ? realFetch(url, ...rest).then((r) => r.json()).then((d) => {
+          d.totals = { views: 0, visitors: 0 };
+          return new Response(JSON.stringify(d), { headers: { 'Content-Type': 'application/json' } });
+        })
+        : realFetch(url, ...rest);
+      q('.period-btn[data-days="30"]').click();
+      if (await waitFor(() => q('#app .empty'), 'a period without visits')) {
+        const text = q('#app .empty').textContent;
+        if (!/^No visits in the last 30 days\. If the site had visitors, check that the tracking script is still on its pages\.$/.test(text) || q('#snippet-code')) {
+          fails.push(`a period without visits says where to look, without the snippet (says "${text}")`);
+        }
+      }
+      window.fetch = realFetch;
+      q('.period-btn[data-days="30"]').click();
+      await waitFor(() => q('#chart-card'), 'the dashboard back after a period without visits');
+    }
     return fails;
   };
   const result2 = await send('Runtime.evaluate', { expression: `(${loggedIn.toString()})()`, awaitPromise: true, returnByValue: true });
@@ -1495,7 +1536,7 @@ async function main() {
     failures.forEach((f) => console.error('  - ' + f));
     process.exitCode = 1;
   } else {
-    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), posts (a dot on their day in the main and event chart, how many in the tooltip\'s hint line, which keeps its height so the tallest day\'s fits, the count in the day\'s label, a Posts button only when the period has one, off remembered across a reload; the day\'s posts in its hours card with a link only to a web address and a dot under their hour), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, a day without visits (a faint bar that says 0, its tooltip at full strength, no Compare without visits before), chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab, a post\'s time on a 12-hour install, a shared page\'s tracking script from another Puls, Reduce Motion (no animation repeats forever, no smooth scroll). No JS errors.');
+    console.log('Dashboard smoke test passed: load, section order, islands kept across a refresh, bots, pages to fix and tools folded with a summary (a click opens and is remembered), release markers (newest by number, tip on hover or tap, one line), posts (a dot on their day in the main and event chart, how many in the tooltip\'s hint line, which keeps its height so the tallest day\'s fits, the count in the day\'s label, a Posts button only when the period has one, off remembered across a reload; the day\'s posts in its hours card with a link only to a web address and a dot under their hour), breakdown card (count, sparkline, Show all) and its details, arranging cards (keys, drag), renaming a card in place (Enter, saved on blur), undo for card and goal removal, hostile event, path and site names render as text, entry page bounce, annotations (shared view, add, relabel, remove), excluding your own address in Settings, Settings as an overview (folded with a summary that follows changes, the note hint opens Chart notes, folded again on the next open), keyboard drill-down, group by version, funnel incl. unseen event, compare, 90 days, a day without visits (a faint bar that says 0, its tooltip at full strength, no Compare without visits before), chart tab remembered, times in the configured zone (named in the footer for a viewer elsewhere), Today period wording, a period without visits on a tracked site (Today says the page updates by itself, a longer one where to look, no snippet), light theme, All sites (site picker: list under its button, arrow keys, Home and End, typing a name, the mouse moving the one highlight, Escape, a click outside and CMD+K close it; site overview, a row opens the site and is remembered; sites under their group in the picker and the overview, a group\'s header sums its sites, Other sites only counted, a group folds on its header and is remembered, headers on one line at phone width), sites in CMD+K (listed at once, filtered with names that start with the query first, a group\'s name matching its sites, / for pages only, Enter opens the first), a dash for Time / session and Bounce rate under a page filter, logged-in goal for an unseen event (dimmed tile, target bar), tabs pattern, dialog focus trap, status announcements, the tracking script\'s puls.page() (queued, the current URL once, a path or a full URL through data-query and the id rule, another site ignored; engaged time sent when hidden and before the next pageview, once per total, nothing under a second, two minutes at most after the last input, a playing video as input), a white-labelled install\'s name in a shared link\'s tab, a post\'s time on a 12-hour install, a shared page\'s tracking script from another Puls, Reduce Motion (no animation repeats forever, no smooth scroll). No JS errors.');
   }
 }
 

@@ -653,6 +653,19 @@
   function periodLabel() {
     return currentDays === 1 && !(currentFrom && currentTo) ? 'today' : 'last ' + currentDays + ' days';
   }
+  // A period without visits. Today early on is no cause for worry, and the page fetches again by
+  // itself; a whole period is how a script taken off a site looks, so whoever runs Puls is told
+  // where to look
+  function noVisits() {
+    if (currentFrom && currentTo) {
+      return currentFrom === currentTo ? 'No visits on ' + formatDateLabel(currentFrom) + '.'
+        : 'No visits from ' + formatDateLabel(currentFrom) + ' to ' + formatDateLabel(currentTo) + '.';
+    }
+    if (currentDays === 1) return 'No visits yet today. The page updates by itself.';
+    return 'No visits in the last ' + currentDays + ' days.' + (isShared ? '' : currentSite
+      ? ' If the site had visitors, check that the tracking script is still on its pages.'
+      : ' If the sites had visitors, check that the tracking script is still on their pages.');
+  }
   function render(d) {
     lastData = d;
     if (pendingAnnouncement && d && d.totals) {
@@ -675,6 +688,12 @@
 
     var hasData = d.totals && +d.totals.views > 0;
 
+    // A period without visits on a site that has had some (the site list holds only those) is
+    // told as such: the snippet is for a viewer with no tracked site at all, never a shared link
+    if (!hasData && (sites.length || isShared)) {
+      app.innerHTML = '<div class="empty">' + icons.chart + '<p>' + esc(noVisits()) + '</p></div>' + renderFooter();
+      return;
+    }
     if (!hasData) {
       app.innerHTML = '<div class="empty">' + icons.chart +
         '<p>No data yet. Add the tracking snippet below to start collecting visitor stats.</p></div>' +

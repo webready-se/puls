@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **A day nobody visited is in the chart as a faint bar that says 0.** It was left out, so the days around it stood side by side as if they followed each other, the month's name went missing when its 1st had no visits, and Compare paired days by their place in the list: after a day without visits, each day was compared with the wrong one in the previous period. The API's `pageviews` and `previousPageviews` now list every day of the period up to today, a day without pageviews as 0, and Compare is offered when the previous period had visits. An hour without visits, or a day without the event in an event's chart, is the same faint bar, and an hour's tooltip is no longer faded with it.
 
+- **Today before its first visit says so, instead of asking for the tracking snippet.** A period without visits showed what a new install shows, "No data yet. Add the tracking snippet below", on a site that had visits the day before. Today now says there have been no visits yet and that the page updates by itself. A longer period without visits says so too, and tells whoever runs the install to check that the tracking script is still on the site's pages, since a script taken off a site looks just like that. A shared link never shows the snippet, and an install with no visits at all still gets it.
+
 ## [1.32.0] - 2026-11-19
 
 ### Added
