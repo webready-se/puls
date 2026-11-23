@@ -1133,7 +1133,7 @@ function summary_figures(PDO $db, array $sites, string $since, string $end, stri
         }
         return $out;
     };
-    // One row per day with pageviews, as the chart wants
+    // One row per day with pageviews; the API fills in the days without
     $days = function (string $from, string $to) use ($db, $sites, $in, $last, $open): array {
         $stmt = $db->prepare("SELECT date, SUM(views) as views, SUM(visitors) as visitors FROM daily WHERE site IN ({$in}) AND kind = 'day' AND date >= ? AND date < ? AND date <= ? GROUP BY date HAVING SUM(views) > 0 ORDER BY date");
         $stmt->execute(array_merge($sites, [$from, $to, $last]));
@@ -1714,6 +1714,10 @@ function get_api_data(array $config, array $user): string
         $stmt->execute(array_merge([$prevSince, $since], $siteParams, $pathParams, $channelParams));
         $previousPageviews = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+    // Every day of both periods, a day without pageviews as zero, so the chart's days are the
+    // calendar's and the previous period lines up with the current one day by day
+    $byDay = fill_days($byDay, $since, $days, ['views', 'visitors']);
+    $previousPageviews = fill_days($previousPageviews, $prevSince, $days, ['views', 'visitors']);
 
     // Event drill-down (?event=<name>): answered here with only what the panel
     // needs, so a click does not re-run every dashboard query.
@@ -2615,10 +2619,6 @@ function report_markdown(array $d): string
 // =====================================================================
 
 /**
- * Expand sparse per-day rows into one entry per day over a period, with
- * zero counts for missing days. Rows carry a 'date' (Y-m-d) plus count columns.
- */
-/**
  * Clean a client-supplied app version: max 50 chars of letters, digits and . - + _
  * Returns null when nothing usable is left.
  */
@@ -2681,7 +2681,12 @@ function event_group_days(PDO $db, string $eventName, string $groupKey, string $
     return array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'count', 'date'));
 }
 
-function fill_days(array $rows, string $start, int $days): array
+/**
+ * Expand sparse per-day rows into one entry per day over a period, with zero counts for
+ * missing days: a day nobody came is a day in the chart, not a gap. Rows carry a 'date'
+ * (Y-m-d) plus the count columns in $fields. No day after today, which has not happened yet.
+ */
+function fill_days(array $rows, string $start, int $days, array $fields = ['count', 'visitors']): array
 {
     $byDate = [];
     foreach ($rows as $row) {
@@ -2689,14 +2694,13 @@ function fill_days(array $rows, string $start, int $days): array
     }
     $out = [];
     $t = strtotime($start);
+    $today = date('Y-m-d');
     for ($i = 0; $i < $days; $i++) {
         $date = date('Y-m-d', strtotime("+{$i} days", $t));
-        $row = $byDate[$date] ?? [];
-        $out[] = [
-            'date' => $date,
-            'count' => (int) ($row['count'] ?? 0),
-            'visitors' => (int) ($row['visitors'] ?? 0),
-        ];
+        if ($date > $today) break;
+        $row = ['date' => $date];
+        foreach ($fields as $f) $row[$f] = (int) ($byDate[$date][$f] ?? 0);
+        $out[] = $row;
     }
     return $out;
 }

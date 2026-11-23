@@ -894,6 +894,41 @@ test('api current and previous periods have equal length for days=N', function (
     }
 });
 
+test('api lists every day of both periods, a day without pageviews as zero', function () {
+    // A day nobody visited is a day in the chart, not a gap that pulls the next day in beside
+    // the one before; and the previous period lines up with the current one day by day
+    $site = 'empty-days-' . uniqid();
+    $token = createTestShareToken($site);
+    $stmt = getTestDb()->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash) VALUES (?, ?, ?, ?)');
+    foreach ([0, 2, 5, 8, 12] as $ago) {
+        $stmt->execute([date('Y-m-d 12:00:00', strtotime("-{$ago} days")), $site, '/', "v{$ago}"]);
+    }
+    $dates = fn (int $from) => array_map(fn ($i) => date('Y-m-d', strtotime('-' . ($from - $i) . ' days')), range(0, 6));
+
+    // From the daily summary, and from the rows under a page filter
+    foreach (['', '&path=/'] as $filter) {
+        $data = json_decode(http('GET', "/?api&days=7{$filter}&share={$token}")['body'], true);
+        expect(array_column($data['pageviews'], 'date'))->toBe($dates(6), "current days{$filter}")
+            ->and(array_column($data['pageviews'], 'views'))->toBe([0, 1, 0, 0, 1, 0, 1], "current views{$filter}")
+            ->and(array_column($data['pageviews'], 'visitors'))->toBe([0, 1, 0, 0, 1, 0, 1], "current visitors{$filter}")
+            ->and(array_column($data['previousPageviews'], 'date'))->toBe($dates(13), "previous days{$filter}")
+            ->and(array_column($data['previousPageviews'], 'views'))->toBe([0, 1, 0, 0, 0, 1, 0], "previous views{$filter}");
+    }
+});
+
+test('api never lists a day after today, even when the range reaches past it', function () {
+    $site = 'future-days-' . uniqid();
+    $token = createTestShareToken($site);
+    getTestDb()->prepare('INSERT INTO pageviews (created_at, site, path, visitor_hash) VALUES (?, ?, ?, ?)')
+        ->execute([date('Y-m-d 12:00:00'), $site, '/', 'v']);
+    $from = date('Y-m-d', strtotime('-2 days'));
+    $to = date('Y-m-d', strtotime('+3 days'));
+
+    $data = json_decode(http('GET', "/?api&from={$from}&to={$to}&share={$token}")['body'], true);
+    expect(array_column($data['pageviews'], 'date'))->toBe([$from, date('Y-m-d', strtotime('-1 day')), date('Y-m-d')])
+        ->and($data['previousPageviews'])->toHaveCount(6);
+});
+
 test('api entry pages include bounces that add up to the site bounce rate', function () {
     $site = 'entry-bounce-' . uniqid();
     $db = getTestDb();
