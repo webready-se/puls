@@ -38,7 +38,7 @@ Add one line to every site you want to track:
 <script src="https://stats.example.com/?js" data-site="example.com" defer></script>
 ```
 
-That's it. Docker, Nginx, Laravel Forge and shared hosting without SSH are covered in [Install and run](docs/install.md).
+That's it. Docker, Nginx, Laravel Forge and shared hosting without SSH are covered in [Install and run](docs/install.md). Where the line goes on your site: [WordPress](docs/integrations.md#wordpress), [Next.js](docs/integrations.md#nextjs), [Astro](docs/integrations.md#astro), [Laravel](docs/integrations.md#laravel-blade), [Statamic](docs/integrations.md#statamic), [React](docs/integrations.md#react-spa-vite--create-react-app), and on [any other site](docs/integrations.md#static-html) in its HTML or a site builder's field for custom code.
 
 ## Why Puls
 
@@ -51,7 +51,7 @@ That's it. Docker, Nginx, Laravel Forge and shared hosting without SSH are cover
 
 ### See who reads your site besides people
 
-Bots are counted apart from your visitors: AI crawlers such as GPTBot, ClaudeBot and PerplexityBot, search engines, SEO tools, social previews, uptime monitors and browsers run by a program, with the pages they read. Behind Nginx, Puls also logs 404s and redirects as **pages to fix**, with the pages that link to them. Both sections stay folded until you open them, and their headers say what is inside ("1,128 visits from 8 bots", "2 not found, 3 redirects"), so you can tell when one is worth a look.
+Bots are counted apart from your visitors: AI crawlers such as GPTBot, ClaudeBot and PerplexityBot, search engines, SEO tools, social previews, uptime monitors and browsers run by a program, with the pages they read. Most crawlers run no script, so Puls sees them through the Nginx of the site you track, with settings `php puls nginx:config` writes for you, and the same settings log 404s and redirects as **pages to fix**, with the pages that link to them. Both sections stay folded until you open them, and their headers say what is inside ("1,128 visits from 8 bots", "2 not found, 3 redirects"), so you can tell when one is worth a look.
 
 ![Bots and crawlers, grouped as monitor, search engine, AI and social, with the most crawled pages, the latest bot activity and pages to fix](docs/screenshots/bots.png)
 
@@ -95,27 +95,35 @@ A goal is a page or an event. Its tile shows the visitors who converted, their s
 
 ## How Puls compares
 
-| | What you run | Database | Cookies | Hosted version | License |
-|---|---|---|---|---|---|
-| **Puls** | One PHP file on any PHP 8.3 host, or Docker | SQLite, built in | None | No | MIT |
-| [GoatCounter](https://www.goatcounter.com) | One Go binary | SQLite or PostgreSQL | None | Free, donation-supported | EUPL (modified) |
-| [Umami](https://umami.is) | Node.js app, or Docker | PostgreSQL | None | Free tier and paid plans | MIT |
-| [Plausible CE](https://github.com/plausible/community-edition) | Docker Compose, 2 GB RAM recommended | PostgreSQL and ClickHouse | None | Paid | AGPL-3.0 |
-| [Matomo](https://matomo.org) | PHP app | MySQL or MariaDB | Yes by default, can be turned off | Paid | GPL-3.0 |
-| Google Analytics | Nothing, Google hosts it | Google's servers | Yes | Free | Proprietary |
+Fathom and Simple Analytics count without cookies as a service, from $15 and €20 a month. Puls does it for free on a PHP host you may already have, but you install and update it yourself.
 
-<sub>From each project's own documentation, October 2026. Corrections are welcome as issues or pull requests.</sub>
+| | Where it runs | Database | Cookies | Bots and AI crawlers | Hosted | License |
+|---|---|---|---|---|---|---|
+| **Puls** | Any PHP 8.3+ host, shared too, or Docker | SQLite, built in | None | Filtered out and listed per bot, with its pages (see below) | No | MIT |
+| [GoatCounter](https://www.goatcounter.com) | Own server, one Go binary | SQLite or PostgreSQL | None | Filtered out | Free | EUPL (modified) |
+| [Umami](https://umami.is) | Own server, Node.js or Docker | PostgreSQL | None | Filtered out | Free tier, paid | MIT |
+| [Plausible CE](https://github.com/plausible/community-edition) | Own server, Docker, 2 GB RAM | PostgreSQL, ClickHouse | None | Filtered out | Paid | AGPL-3.0 |
+| [Rybbit](https://rybbit.com) | Own server, Docker, 2 GB RAM | PostgreSQL, ClickHouse, Redis | None | Filtered out, listed if they run its script | Paid | AGPL-3.0 |
+| [Matomo](https://matomo.org) | A PHP host | MySQL or MariaDB | Yes, can be turned off | Filtered out; AI assistants with a server setup | Paid | GPL-3.0 |
+| [Fathom](https://usefathom.com) | Hosted only | - | None | Filtered out, with a total | Paid | Proprietary |
+| [Simple Analytics](https://www.simpleanalytics.com) | Hosted only | - | None | Filtered out | Free for hobby sites, paid | Proprietary |
+| Google Analytics | Hosted only | - | Yes | Filtered out | Free | Proprietary |
+
+Most crawlers, GPTBot among them, run no scripts, so a tool that counts through its script never sees them. Puls sees them when the tracked site runs on Nginx you can configure, which shared hosting usually does not allow ([how](docs/integrations.md#server-side-bot-tracking-nginx-mirror)). Otherwise it sees the ones that run its script or load its pixel.
+
+<sub>From each project's own documentation and pricing page, November 2026. Corrections are welcome as issues or pull requests.</sub>
 
 **When to pick something else.** Puls is made for small and medium sites that you run yourself.
 
-- You would rather not run anything: Plausible and Umami have hosted plans, and GoatCounter has a free hosted service.
-- Millions of pageviews a month on one site: a database built for analytics, like Plausible's ClickHouse, stays fast at that size. Puls reads a summary per site and day, so with 2 million pageviews a year a 30-day view takes about 0.1 s and a year 0.5 s on a laptop (`scripts/benchmark.php`), but a view filtered to one page or channel still reads every pageview of the period and takes seconds there.
-- E-commerce reports, heatmaps or session recordings: Matomo does that, Puls doesn't.
+- Nothing to run: Fathom or Simple Analytics, or the hosted plans of Plausible, Umami and GoatCounter.
+- Millions of pageviews a month on one site: a database built for analytics, like ClickHouse in Plausible and Rybbit, stays fast at that size. Puls reads a summary per site and day, so 30 days of a site with 2 million pageviews a year take about 0.1 s (`scripts/benchmark.php`), but a view filtered to one page or channel reads every pageview and takes seconds.
+- Session recordings, page speed (web vitals) or error tracking: Rybbit.
+- E-commerce reports or heatmaps: Matomo.
 
 ## Privacy
 
 - **No cookies**, ever
-- **No IP addresses stored:** the visitor id is a hash of IP and user agent with a random salt that is deleted after the day
+- **No IP addresses stored:** the visitor id is a hash of IP, user agent and site with a random salt that is deleted after the day
 - **No fingerprinting:** no canvas, font or WebGL tricks
 - **Collected:** page path, referrer domain, browser, device type, UTM parameters, language and country (from the `Accept-Language` header)
 - **Kept:** pageviews until you delete them, custom events for 400 days (`EVENTS_RETENTION_DAYS`), bot visits for 90 days (`BOT_RETENTION_DAYS`, the count per day stays) and broken links for 30 days after the last hit
@@ -125,7 +133,7 @@ You decide what your sites send. [Keeping personal data out of URLs](docs/integr
 ## Documentation
 
 - [Install and run](docs/install.md): release download, shared hosting, Nginx, Apache, Laravel Forge, Docker, upgrading
-- [Tracking and integrations](docs/integrations.md): script attributes, custom events, frameworks (Next.js, Astro, Laravel, Statamic, React), auto events, server-side bot tracking, reverse proxies
+- [Tracking and integrations](docs/integrations.md): script attributes, custom events, WordPress and frameworks (Next.js, Astro, Laravel, Statamic, React), auto events, server-side bot tracking, reverse proxies
 - [Configuration and CLI](docs/configuration.md): `.env` settings, users and access, share links, excluding your own visits, white-label, every CLI command
 - [Read API](docs/api.md): JSON and CSV with a share token, also for [your AI assistant](docs/api.md#use-it-from-an-ai-assistant)
 - [Changelog](CHANGELOG.md) and [roadmap](ROADMAP.md)
