@@ -93,6 +93,33 @@ php puls sites:clean-paths my-app --query --ids --tokens
 
 ## Framework Examples
 
+### WordPress
+
+WordPress has no setting for a script tag, and a tag added to a theme is lost when the theme is updated or changed. A must-use plugin keeps it: create `wp-content/mu-plugins/puls.php` (make the `mu-plugins` folder if it is not there), and WordPress loads it on every page, with nothing to activate. It shows under Plugins > Must-Use, and deleting the file removes it.
+
+```php
+<?php
+// Puls tracking. Visitors are counted, the site's own writers are not
+defined('ABSPATH') || exit;
+
+add_action('wp_footer', function () {
+    if (current_user_can('edit_posts')) return;
+    $path = wp_parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+    ?>
+    <script defer src="https://your-puls-domain/?js" data-site="my-site" data-outbound></script>
+    <noscript><img src="https://your-puls-domain/?pixel&s=my-site&p=<?= esc_attr($path) ?>" alt="" width="1" height="1"></noscript>
+    <?php
+});
+```
+
+Anyone logged in who can write posts is left out (administrators, editors, authors, contributors and WooCommerce shop managers), so writing and previewing does not count. Customers and subscribers are counted. The pixel is optional ([more](#bot-tracking-pixel-optional)).
+
+- **A page cache** stores the page a visitor without a login gets, tag included, and builds a fresh page for anyone logged in, so the rule holds with a cache. Clear the cache once the file is in place: pages cached before it have no tag until they expire. If the cache plugin delays JavaScript until the first click or scroll, exclude `your-puls-domain` from that, or visitors who only read are not counted.
+- **To check it**, open the site in a private window and search the page source for `your-puls-domain`. Logged in as an editor you will not find it, as intended.
+- **A shop** sends more than pages: WooCommerce's order confirmation address carries the order number and its key (`/checkout/order-received/4711/?key=...`), and a search carries what the customer typed (`/?s=...`). Add `data-collapse-ids data-query="none"` to the script tag, or name the parameters to keep ([more](#keeping-personal-data-out-of-urls)). Campaigns are still detected.
+
+Without access to the files, a code snippets plugin can run the block above as a PHP snippet, without its first line (`<?php`), and keeps the rule. One that only takes HTML for the footer takes the `<script>` line as it stands, but counts every visit, your own included: [exclude your own visits](#excluding-your-own-visits) by IP or per browser.
+
 ### Next.js
 
 **Pages Router** (`_document.tsx`):
@@ -463,7 +490,7 @@ Add a `<noscript>` pixel to log crawlers that load images but don't run JavaScri
 
 The image is a transparent GIF, so it needs no inline style to hide it, and a strict [CSP](#content-security-policy-csp) has none to block. If the line it takes at the end of the page matters, hide it with a class from your own stylesheet.
 
-For server-rendered frameworks (Astro, Laravel, Statamic), you can inject the current path dynamically — see the framework examples above.
+For server-rendered sites (WordPress, Astro, Laravel, Statamic), you can inject the current path dynamically — see the framework examples above.
 
 ## Automated Browsers
 
