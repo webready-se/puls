@@ -125,6 +125,25 @@ test('pixel logs a bot and counts no person', function () {
     }
 });
 
+test('the pixel stores an encoded plus as a plus, as a pageview does', function () {
+    $db = getTestDb();
+    $path = function (string $p) use ($db) {
+        $db->exec("DELETE FROM bot_visits WHERE site = 'pixel-plus'");
+        http('GET', "/?pixel&s=pixel-plus&p={$p}", ['header' => 'User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)']);
+        return $db->query("SELECT path FROM bot_visits WHERE site = 'pixel-plus'")->fetchColumn();
+    };
+    try {
+        // As a template writes the path, and as encodeURIComponent does
+        expect($path('/c%2B%2B'))->toBe('/c++')
+            ->and($path('%2Fc%2B%2B'))->toBe('/c++')
+            // A path that was percent-encoded before it was put in the URL is still decoded
+            ->and($path('%2Fcaf%25C3%25A9'))->toBe('/café')
+            ->and($path('/caf%C3%A9'))->toBe('/café');
+    } finally {
+        $db->exec("DELETE FROM bot_visits WHERE site = 'pixel-plus'");
+    }
+});
+
 test('collect endpoint accepts POST', function () {
     $r = http('POST', '/?collect', [
         'header' => "Content-Type: application/json\r\nUser-Agent: Mozilla/5.0 Chrome/120.0\r\nAccept-Language: sv",

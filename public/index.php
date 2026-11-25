@@ -2996,7 +2996,9 @@ function handle_pixel(array $config): void
     if (is_ignored_bot($ua, $config['ignored_bots'] ?? [])) return;
 
     $db = get_db($config['db_path']);
-    $path = normalize_path(urldecode($_GET['p'] ?? '/'));
+    // PHP has decoded the query once; a path that was percent-encoded before it was put in the
+    // URL needs a second time, but as a path, where a plus is a plus and not a space
+    $path = normalize_path(rawurldecode($_GET['p'] ?? '/'));
     $site = normalize_site($_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown'));
 
     $stmt = $db->prepare('INSERT INTO bot_visits (site, path, bot_name, bot_category, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)');
