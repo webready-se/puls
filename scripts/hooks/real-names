@@ -5,8 +5,12 @@
 # .claude/hooks/no-real-names.sh. The list is gitignored, so the names never
 # reach git; without it, nothing is checked. See .claude/rules/no-real-names.md.
 root="${PULS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
-list="$root/.private/real-names.txt"
-[ -f "$list" ] || exit 0
+# A worktree has no list of its own, since the list is gitignored: the main checkout, which holds
+# the git directory they share, has it. Both are read when both exist.
+common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+lists="$root/.private/real-names.txt"
+[ -n "$common" ] && [ "${common%/*}" != "$root" ] && lists="$lists
+${common%/*}/.private/real-names.txt"
 # Names and text are compared in one Unicode form (NFC): "ö" can also be written as
 # "o" plus a combining diaeresis (NFD), as macOS often does, and would not match
 nfc() {
@@ -15,7 +19,9 @@ nfc() {
 patterns=$(mktemp)
 trap 'rm -f "$patterns"' EXIT
 # An empty line would match everything: keep only names
-grep -v -e '^#' -e '^[[:space:]]*$' "$list" | nfc > "$patterns"
+printf '%s\n' "$lists" | while IFS= read -r list; do
+    [ -f "$list" ] && grep -v -e '^#' -e '^[[:space:]]*$' "$list" | nfc
+done > "$patterns"
 [ -s "$patterns" ] || exit 0
 nfc | grep -n -i -F -f "$patterns"
 exit 0
