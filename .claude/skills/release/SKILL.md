@@ -97,15 +97,22 @@ Leave it out for anyone who asks not to be credited (security reporters often do
    ```
    The GitHub Action will automatically build the zip and create the release.
 
-6. **Webready's product page for Puls:** when the release changes something the page
-   says or should say (a feature, the script's size, the requirements, a screenshot),
-   update it in the webready.se repository: `src/pages/open-source/puls.astro`, the
-   card in `src/data/tools.js` and the images in `src/assets/screenshots/puls/`, in
-   every language the page has. Puls owns that page; the layout and Webready's offer
-   block at the end belong to the site, and its CLAUDE.md says how it is built and
-   released. Why: the page was written from a sketch and went live saying things the
-   README does not (that IP addresses are never collected, when they are hashed and
-   never stored), and a page that no release touches drifts further from the product.
+6. **Webready's product pages for Puls**, Swedish and English: when the release changes
+   something they say or should say (a feature, the script's size, the requirements, a
+   screenshot), update them in the webready.se repository: the text in
+   `src/data/puls/sv.js` and `en.js` (change both), the page in
+   `src/components/PulsPage.astro`, the card in `src/data/tools.js`, the images in
+   `src/assets/screenshots/puls/` and the line in `public/llms.txt`. Puls owns the pages;
+   the layout and Webready's offer block at the end belong to the site, and its CLAUDE.md
+   says how it is built and released. Why: the page was written from a sketch and went
+   live saying things the README does not (that IP addresses are never collected, when
+   they are hashed and never stored), and a page that no release touches drifts further
+   from the product.
+
+   **Not only at a release:** a PR that changes the README's comparison, privacy or get
+   started, or what Puls stores and for how long, changes what the pages should say too.
+   Why: #209 changed the comparison and the bots section without a release, and the pages
+   were behind until someone happened to look.
 
 ## Files
 
