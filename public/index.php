@@ -2970,7 +2970,7 @@ function handle_log(array $config): void
     }
 
     $db = get_db($config['db_path']);
-    $path = normalize_path(urldecode($_GET['p'] ?? '/'));
+    $path = normalize_path(rawurldecode($_GET['p'] ?? '/')); // a plus is a plus, as in handle_pixel
     $site = normalize_site($_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown'));
     $path = substr($path, 0, 500);
     $now = date('Y-m-d H:i:s');
@@ -3759,7 +3759,7 @@ function handle_status_log(array $config): void
     if ($status < 300 || $status === 304) return;
 
     $db = get_db($config['db_path']);
-    $path = normalize_path(urldecode($_GET['p'] ?? '/'));
+    $path = normalize_path(rawurldecode($_GET['p'] ?? '/')); // a plus is a plus, as in handle_pixel
     $site = normalize_site($_GET['s'] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown'));
     $path = substr($path, 0, 500);
 

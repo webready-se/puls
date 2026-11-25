@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **Today before its first visit says so, instead of asking for the tracking snippet.** A period without visits showed what a new install shows, "No data yet. Add the tracking snippet below", on a site that had visits the day before. Today now says there have been no visits yet and that the page updates by itself. A longer period without visits says so too, and tells whoever runs the install to check that the tracking script is still on the site's pages, since a script taken off a site looks just like that. A shared link never shows the snippet, and an install with no visits at all still gets it.
 
-- **The pixel stores a `%2B` in a path as a plus.** It decoded the path a second time as form data, where a plus is a space, so a crawler's visit to `/c%2B%2B` was filed under `/c  ` in Bots, beside the pageviews' `/c++`. A path that was percent-encoded before it was put in the pixel's URL is still decoded.
+- **A `%2B` in a path is a plus from the pixel and Nginx too.** The pixel, the Nginx mirror and the status log decoded the path a second time as form data, where a plus is a space, so a crawler's visit to `/c%2B%2B` was filed under `/c  ` in Bots and Pages to fix, beside the pageviews' `/c++`. A path that was percent-encoded before it was put in the URL is still decoded.
 
 ## [1.32.0] - 2026-11-19
 
