@@ -1,7 +1,7 @@
 (function() {
   // --- Config ---
   const API = '/';
-  const COLORS = ['#f16272','#19acca','#f59e0b','#22c55e','#8b5cf6','#94a3b8'];
+  const COLORS = ['#f16272','#19acca','#f59e0b','#22c55e','#2563eb','#94a3b8'];
   // Branding and, on a shared link, the share come from PHP as a JSON data block in <head>:
   // data, not script, so a strict Content Security Policy has nothing to allow
   const pulsConfig = JSON.parse(document.getElementById('puls-config').textContent);
@@ -2102,8 +2102,8 @@
     'Social': 'social', 'Referral': 'referral', 'Direct': 'direct'
   };
   var channelColors = {
-    'Paid': '#ef4444', 'AI': '#6366f1', 'Campaign': '#f59e0b', 'Organic search': '#22c55e',
-    'Social': '#8b5cf6', 'Referral': '#06b6d4', 'Direct': '#6b7280'
+    'Paid': '#ef4444', 'AI': 'var(--cat-ai)', 'Campaign': '#f59e0b', 'Organic search': '#22c55e',
+    'Social': 'var(--cat-social)', 'Referral': '#06b6d4', 'Direct': '#6b7280'
   };
 
   function renderChannelsContent(channels) {
@@ -2251,7 +2251,7 @@
     var badges = '';
     cats.forEach(function(c) {
       var color = botCatColors[c.category] || botCatColors['Other'];
-      badges += '<span class="bot-badge" data-bg="' + color + '15" data-color="' + color + '">' +
+      badges += '<span class="bot-badge" data-bg="color-mix(in srgb, ' + color + ' 8%, transparent)" data-color="' + color + '">' +
         esc(c.category) + ' <span class="op-70">' + num(c.visits) + '</span></span> ';
     });
 
@@ -2293,7 +2293,7 @@
     if (fold && fold.getAttribute('data-fold') === 'bots' && !body.hidden) fetchBotDetail();
   });
 
-  var botCatColors = { 'AI': '#dc2626', 'Search engine': '#2563eb', 'Social': '#7c3aed', 'SEO': '#d97706', 'Monitor': '#059669', 'Other': '#94a3b8' };
+  var botCatColors = { 'AI': '#dc2626', 'Search engine': '#2563eb', 'Social': 'var(--cat-social)', 'SEO': '#d97706', 'Monitor': '#059669', 'Other': '#94a3b8' };
 
   function renderBotTableContent(bots) {
     if (!bots || !bots.length) {

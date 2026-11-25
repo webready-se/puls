@@ -269,6 +269,24 @@ async function main() {
     expect(fold('bots').querySelector('.fold-body').getAnimations().some((a) => a.animationName === 'drop-in'), 'an opened section eases in');
     expect(/Loading/.test(q('#bot-pages')?.textContent || ''), 'the crawled pages say they are loading until they arrive');
     await waitFor(() => q('.bot-row-time')?.offsetParent, 'the bots\' latest activity');
+    // No colour that stands for a kind is violet: hue 250 to 320, and not a grey
+    const isViolet = (colour) => {
+      const [r, g, b] = (/^rgba?\(([\d.]+), ([\d.]+), ([\d.]+)/.exec(colour) || []).slice(1).map(Number);
+      const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+      if (!(d > 25)) return false;
+      const hue = 60 * (max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4);
+      return hue >= 250 && hue <= 320;
+    };
+    const violets = () => [...document.querySelectorAll('#app [data-bg], #app [data-color], #app path[fill], #app circle[fill]')]
+      .filter((el) => { const c = getComputedStyle(el); return isViolet(c.backgroundColor) || isViolet(c.color) || isViolet(c.fill); });
+    const social = [...document.querySelectorAll('.bot-badge')].find((el) => el.textContent.startsWith('Social'));
+    expect(social && getComputedStyle(social).color !== getComputedStyle(document.body).color && getComputedStyle(social).backgroundColor !== 'rgba(0, 0, 0, 0)', 'the Social badge has its colour and its tint');
+    for (const theme of ['light', 'dark']) {
+      document.documentElement.setAttribute('data-theme', theme);
+      await sleep(400);
+      expect(violets().length === 0, `no violet in the ${theme} theme (${violets().length} elements, first: ${violets()[0]?.outerHTML.slice(0, 120)})`);
+    }
+    document.documentElement.removeAttribute('data-theme');
     expect(!/Loading/.test(q('#bot-pages')?.textContent || '') && document.activeElement?.classList.contains('fold-toggle'), 'the lists arrive and the button keeps its focus');
     window.fetch = fetched;
     const shownAgo = q('.bot-row-time')?.textContent;

@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **A share link is never indexed by a search engine.** Every answer to a share token, the dashboard and the API, carries `X-Robots-Tag: noindex`, and the page a `robots` meta tag, so a link that ends up on a public page does not put a site's statistics in a search engine. The live demo is a share link, so it is left out too.
 
+- **The channels AI and Social can be told apart, and nothing is violet.** Both were violet, with a difference of 6 where 15 is the least for two colours to be told apart, and almost none for a colour-blind reader. AI is blue and Social wine, pale pink in dark mode, in the channels, and Social the same in Bots. The fifth slice of a donut is blue too. Each still has its name and number beside it.
+
 ### Fixed
 
 - **A day nobody visited is in the chart as a faint bar that says 0.** It was left out, so the days around it stood side by side as if they followed each other, the month's name went missing when its 1st had no visits, and Compare paired days by their place in the list: after a day without visits, each day was compared with the wrong one in the previous period. The API's `pageviews` and `previousPageviews` now list every day of the period up to today, a day without pageviews as 0, and Compare is offered when the previous period had visits. An hour without visits, or a day without the event in an event's chart, is the same faint bar, and an hour's tooltip is no longer faded with it.
