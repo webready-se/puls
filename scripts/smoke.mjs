@@ -269,6 +269,17 @@ async function main() {
     expect(fold('bots').querySelector('.fold-body').getAnimations().some((a) => a.animationName === 'drop-in'), 'an opened section eases in');
     expect(/Loading/.test(q('#bot-pages')?.textContent || ''), 'the crawled pages say they are loading until they arrive');
     await waitFor(() => q('.bot-row-time')?.offsetParent, 'the bots\' latest activity');
+    // Social has a colour per theme, through a token: its badge takes it, with a tint of it behind
+    const social = () => [...document.querySelectorAll('.bot-badge')].find((el) => el.textContent.startsWith('Social'));
+    const socialColours = [];
+    for (const theme of ['light', 'dark']) {
+      document.documentElement.setAttribute('data-theme', theme);
+      await sleep(400);
+      expect(social() && getComputedStyle(social()).color !== getComputedStyle(document.body).color && getComputedStyle(social()).backgroundColor !== 'rgba(0, 0, 0, 0)', `the Social badge has its colour and its tint in the ${theme} theme`);
+      socialColours.push(social() && getComputedStyle(social()).color);
+    }
+    expect(socialColours[0] !== socialColours[1], `Social is lighter in dark mode (${socialColours.join(', ')})`);
+    document.documentElement.removeAttribute('data-theme');
     expect(!/Loading/.test(q('#bot-pages')?.textContent || '') && document.activeElement?.classList.contains('fold-toggle'), 'the lists arrive and the button keeps its focus');
     window.fetch = fetched;
     const shownAgo = q('.bot-row-time')?.textContent;

@@ -146,6 +146,11 @@
 :root { --note: #0e7490; --note-band: rgba(25,172,202,0.10); --post: var(--accent); }
 :root[data-theme="dark"] { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --note: #22d3ee; --note-band: rgba(34,211,238,0.10); } }
+/* Puls's own: the channel AI, and Social in channels and bots. Both were violet and told apart by nobody
+   (a difference of 6 where 15 is the least). Lighter in dark mode */
+:root { --cat-ai: #2563eb; --cat-social: #831843; }
+:root[data-theme="dark"] { --cat-ai: #3b82f6; --cat-social: #fbcfe8; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cat-ai: #3b82f6; --cat-social: #fbcfe8; } }
 /* Figtree, self-hosted (the kit's docs/type.md): one variable file, SIL Open Font License in fonts/OFL.txt */
 @font-face {
   font-family: "Figtree";
